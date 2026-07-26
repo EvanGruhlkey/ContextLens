@@ -28,7 +28,25 @@ The intended answer is not merely “what costs tokens?” but:
 ContextLens is in its initial design and implementation phase. The first
 milestone defines a provider-neutral trace format and clean boundaries between
 recording, replay, evaluation, and reporting. See
-[docs/architecture.md](docs/architecture.md) and [ROADMAP.md](ROADMAP.md).
+[docs/architecture.md](docs/architecture.md),
+[docs/trace-format.md](docs/trace-format.md), and [ROADMAP.md](ROADMAP.md).
+
+The trace model and local JSONL recorder are available:
+
+```python
+from pathlib import Path
+from contextlens.trace import ContextSource, SourceKind, TraceWriter
+
+with TraceWriter(Path("trace.jsonl")) as trace:
+    trace.add(
+        "request-1",
+        ContextSource(
+            kind=SourceKind.AGENT_INSTRUCTION,
+            name="AGENTS.md",
+            content="Run tests.",
+        ),
+    )
+```
 
 ## Proposed quick start
 
