@@ -69,6 +69,10 @@ report = ContextProfiler().profile(
 Profiler results are always labeled `observed` and `causal: false`. See
 [docs/one-run-profiler.md](docs/one-run-profiler.md).
 
+Controlled replays can run context variants concurrently in isolated temporary
+workspaces, with limits on attempts, context tokens, estimated cost, and time.
+See [docs/replay-workers.md](docs/replay-workers.md).
+
 ## Proposed quick start
 
 The target user experience for the MVP is:

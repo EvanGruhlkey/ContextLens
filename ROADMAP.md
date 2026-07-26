@@ -38,7 +38,7 @@ Deliver useful results without rerunning the task.
 - Define optional model-internals adapters for log-probability, attention, or
   gradient signals while keeping the core compatible with black-box APIs.
 
-## Milestone 4 — Isolated replay workers
+## Milestone 4 — Isolated replay workers ✅
 
 Create trustworthy, reproducible counterfactual runs.
 
