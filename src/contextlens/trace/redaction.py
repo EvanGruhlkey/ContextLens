@@ -27,7 +27,12 @@ class RegexRedactor:
     def redact(self, source: ContextSource) -> ContextSource:
         if source.content is None:
             return source
-        content = re.sub(self.pattern, self.replacement, source.content, flags=self.flags)
+        content = re.sub(
+            self.pattern,
+            self.replacement,
+            source.content,
+            flags=self.flags,
+        )
         return ContextSource(
             source_id=source.source_id,
             kind=source.kind,
@@ -38,4 +43,3 @@ class RegexRedactor:
             provenance=source.provenance,
             tags=source.tags,
         )
-

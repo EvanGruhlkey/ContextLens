@@ -6,7 +6,11 @@ ContextLens is an experimentation framework, not an agent framework or prompt
 management system. It observes an agent's context boundary, produces controlled
 replays, evaluates their outcomes, and attributes changes to context sources.
 
-The MVP uses leave-one-source-out ablation:
+ContextLens separates one-run utilization signals from causal attribution.
+Observed signals can prioritize experiments, but a source is called helpful or
+harmful only after a controlled intervention.
+
+For a verified ablation:
 
 ```text
 effect(source) = score(full context) - score(context without source)
@@ -22,10 +26,13 @@ harmful. Reports must state this sign convention explicitly.
 Agent/runtime
     │ events
     ▼
-Recorder ──► versioned trace ──► Ablation planner
-                                      │ variants
+Recorder ──► versioned trace ──► One-run profiler
+                                      │ observed signals
                                       ▼
-Task suite ─────────────────────► Replay runner
+Task suite ─────────────────────► Adaptive planner
+                                      │ selected variants
+                                      ▼
+                                 Isolated workers
                                       │ outcomes
                                       ▼
 Evaluator ──────────────────────► Analysis ──► Reports
@@ -43,17 +50,24 @@ Persists immutable JSONL event streams plus a manifest. JSONL keeps traces
 streamable and inspectable; a schema version permits migrations. Large or
 binary payloads are stored as content-addressed artifacts.
 
-### Ablation planner
+### One-run profiler
 
-Selects removable units and creates experiment variants. The initial unit is a
-single context source. Later planners may remove groups, truncate histories, or
-sample coalitions to estimate interactions.
+Measures apparent utilization, duplication, provenance, position, and token
+cost during the original task. These signals are useful for prioritization but
+are not causal effects.
 
-### Replay runner
+### Adaptive planner
+
+Selects the next experiment using observed signals, prior results, expected
+information gain, and experiment cost. It starts with meaningful groups, splits
+only promising groups, and can fall back to individual leave-one-out tests.
+
+### Isolated replay workers
 
 Invokes an adapter with a task and an exact context variant. It owns
 concurrency, caching, seeds, timeouts, retries, and provider rate limits. An
-adapter must not silently inject unrecorded context.
+adapter must not silently inject unrecorded context. Every worker receives the
+same starting snapshot and an isolated mutable workspace.
 
 ### Evaluator
 
@@ -91,8 +105,9 @@ messages can share a kind while retaining distinct IDs and provenance.
 ```text
 src/contextlens/
   trace/         schema, events, serialization, redaction
+  profiler/      one-run usage and duplication signals
   adapters/      agent and provider integrations
-  experiments/   task suites, planning, replay, caching
+  experiments/   task suites, adaptive planning, workers, caching
   evaluators/    scoring contracts and built-ins
   analysis/      paired statistics and attribution
   reports/       terminal and export formats
@@ -129,8 +144,9 @@ Traces are sensitive by default. The implementation will:
 
 ## Important limitation
 
-Leave-one-out attribution can misrepresent correlated or interacting sources.
-If two sources duplicate the same fact, each may appear useless even though at
-least one is required. The MVP will document this limitation and retain enough
-run-level data for grouped or Shapley-style analysis later.
-
+Any one-run attribution can show apparent utilization but cannot establish that
+a source improved the result. Even controlled leave-one-out attribution can
+misrepresent correlated or interacting sources: if two sources duplicate the
+same fact, each may appear useless even though at least one is required.
+ContextLens therefore preserves evidence levels, grouped results, and run-level
+data for later interaction analysis.
