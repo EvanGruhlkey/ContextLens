@@ -90,7 +90,7 @@ Recommend the best context configuration for a chosen objective.
   recalibrating them.
 - Never promote predicted value to verified value without an intervention.
 
-## Milestone 8 — Reports and CLI
+## Milestone 8 — Reports and CLI ✅
 
 - Produce terminal, JSON, CSV, and self-contained HTML reports.
 - Show observed, predicted, and verified findings separately.
@@ -104,7 +104,7 @@ Target workflow:
 ```bash
 contextlens record --output traces/task-001.jsonl -- your-agent-command
 contextlens scan traces/task-001.jsonl
-contextlens optimize experiments/example.yaml --budget 20
+contextlens optimize experiments/example.json --format json --output runs/latest.json
 contextlens report runs/latest
 ```
 

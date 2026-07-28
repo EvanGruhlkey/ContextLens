@@ -234,6 +234,39 @@ class PairedAnalyzerTests(unittest.TestCase):
         self.assertEqual(effect.verdict, EffectVerdict.UNCERTAIN)
         self.assertTrue(effect.warnings)
 
+    def test_equivalence_interval_can_be_labeled_neutral(self) -> None:
+        values: list[Measurement] = []
+        for index in range(5):
+            values.extend(
+                (
+                    measurement(
+                        f"task-{index}",
+                        "trial",
+                        "baseline",
+                        1,
+                        tokens=100,
+                        cost=0.01,
+                    ),
+                    measurement(
+                        f"task-{index}",
+                        "trial",
+                        "ablated",
+                        1,
+                        tokens=50,
+                        cost=0.005,
+                    ),
+                )
+            )
+        effect = PairedAnalyzer(
+            bootstrap_samples=100,
+            equivalence_tolerance=0.01,
+        ).analyze(
+            tuple(values),
+            baseline_variant_id="baseline",
+            ablated_variant_id="ablated",
+        )
+        self.assertEqual(effect.verdict, EffectVerdict.NEUTRAL)
+
     def test_measurement_uses_recorded_usage_and_context_fallback(self) -> None:
         replay = result(
             "run",

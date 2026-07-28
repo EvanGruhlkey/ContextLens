@@ -43,12 +43,14 @@ class SubprocessAgentAdapter:
     def run(self, request: ReplayRequest) -> AgentOutcome:
         workspace = Path(request.workspace)
         request_path = workspace.parent / f"{request.run_id}.request.json"
+        result_path = workspace.parent / f"{request.run_id}.result.json"
         request_path.write_text(
             json.dumps(_request_dict(request), ensure_ascii=False),
             encoding="utf-8",
         )
         environment = os.environ.copy()
         environment["CONTEXTLENS_REQUEST"] = str(request_path)
+        environment["CONTEXTLENS_RESULT"] = str(result_path)
         try:
             completed = subprocess.run(
                 self.command,
@@ -68,10 +70,30 @@ class SubprocessAgentAdapter:
             raise RuntimeError(
                 f"agent exited with code {completed.returncode}: {stderr}"
             )
+        if result_path.exists():
+            value = json.loads(result_path.read_text(encoding="utf-8"))
+            if not isinstance(value, dict):
+                raise ValueError("CONTEXTLENS_RESULT must contain a JSON object")
+        else:
+            value = {}
+        metadata = dict(value.get("metadata", {}))
+        metadata.update(
+            {"stderr": completed.stderr, "returncode": completed.returncode}
+        )
         return AgentOutcome(
-            output_text=completed.stdout,
-            commands=(" ".join(self.command),),
-            metadata={"stderr": completed.stderr, "returncode": completed.returncode},
+            output_text=str(value.get("output_text", completed.stdout)),
+            commands=tuple(
+                str(item)
+                for item in value.get("commands", (" ".join(self.command),))
+            ),
+            test_results=tuple(
+                str(item)
+                for item in value.get("test_results", ())
+            ),
+            input_tokens=_optional_int(value.get("input_tokens")),
+            output_tokens=_optional_int(value.get("output_tokens")),
+            cost_usd=_optional_float(value.get("cost_usd")),
+            metadata=metadata,
         )
 
 
@@ -102,3 +124,10 @@ def _request_dict(request: ReplayRequest) -> dict[str, object]:
         "timeout_seconds": request.timeout_seconds,
     }
 
+
+def _optional_int(value: object) -> int | None:
+    return int(value) if value is not None else None
+
+
+def _optional_float(value: object) -> float | None:
+    return float(value) if value is not None else None

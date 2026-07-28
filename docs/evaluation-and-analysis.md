@@ -55,6 +55,7 @@ effect = baseline score - ablated score
 
 - Positive: the removed context was helpful.
 - Negative: the removed context was harmful.
+- An interval fully inside the configured equivalence tolerance: neutral.
 - An interval crossing zero: uncertain.
 
 With multiple tasks, ContextLens averages repeated trials within each task
@@ -109,4 +110,3 @@ usage = calculator.calculate(input_tokens=10_000, output_tokens=1_000)
 ContextLens does not bundle live provider prices. Experiment manifests should
 record the exact pricing values and date used so historical reports remain
 reproducible.
-

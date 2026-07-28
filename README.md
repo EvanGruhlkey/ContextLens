@@ -29,9 +29,9 @@ one-run relevance estimate is never presented as a causal performance claim.
 
 ## Project status
 
-ContextLens is in its initial design and implementation phase. The first
-milestone defines a provider-neutral trace format and clean boundaries between
-recording, replay, evaluation, and reporting. See
+ContextLens is a working pre-alpha library and CLI. Recording, one-run
+profiling, isolated replay, adaptive search, paired analysis, optimization, and
+multi-format reports are implemented. See
 [docs/architecture.md](docs/architecture.md),
 [docs/trace-format.md](docs/trace-format.md), and [ROADMAP.md](ROADMAP.md).
 
@@ -89,17 +89,20 @@ model. A lightweight predictor learns from verified experiments while periodic
 recalibration prevents predictions from silently becoming trusted facts. See
 [docs/context-optimization.md](docs/context-optimization.md).
 
-## Proposed quick start
+## Quick start
 
-The target user experience for the MVP is:
+The CLI workflows are available:
 
 ```bash
 contextlens record --output traces/task-001.jsonl -- your-agent-command
-contextlens run experiments/example.yaml
-contextlens report runs/latest
+contextlens scan traces/task-001.jsonl
+contextlens optimize experiment.json --format json --output runs/latest.json
+contextlens report runs/latest.json --format html --output runs/latest.html
 ```
 
-These commands document the intended interface; they are not implemented yet.
+The agent used with `record` must write the path provided in
+`CONTEXTLENS_TRACE`. See [docs/cli.md](docs/cli.md) for the instrumentation and
+subprocess worker contracts.
 
 ## Design principles
 

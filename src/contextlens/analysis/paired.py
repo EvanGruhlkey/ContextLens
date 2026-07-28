@@ -17,6 +17,7 @@ class EffectVerdict(StrEnum):
 
     HELPFUL = "helpful"
     HARMFUL = "harmful"
+    NEUTRAL = "neutral"
     UNCERTAIN = "uncertain"
 
 
@@ -132,14 +133,18 @@ class PairedAnalyzer:
         confidence: float = 0.95,
         bootstrap_samples: int = 2_000,
         random_seed: int = 0,
+        equivalence_tolerance: float = 0.0,
     ) -> None:
         if not 0 < confidence < 1:
             raise ValueError("confidence must be between zero and one")
         if bootstrap_samples < 100:
             raise ValueError("bootstrap_samples must be at least 100")
+        if equivalence_tolerance < 0:
+            raise ValueError("equivalence_tolerance cannot be negative")
         self.confidence = confidence
         self.bootstrap_samples = bootstrap_samples
         self.random_seed = random_seed
+        self.equivalence_tolerance = equivalence_tolerance
 
     def analyze(
         self,
@@ -177,6 +182,11 @@ class PairedAnalyzer:
         low, high = self._bootstrap_interval(differences)
         if len(differences) < 2:
             verdict = EffectVerdict.UNCERTAIN
+        elif (
+            low >= -self.equivalence_tolerance
+            and high <= self.equivalence_tolerance
+        ):
+            verdict = EffectVerdict.NEUTRAL
         elif low > 0:
             verdict = EffectVerdict.HELPFUL
         elif high < 0:
