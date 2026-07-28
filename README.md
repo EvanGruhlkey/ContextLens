@@ -83,6 +83,12 @@ bootstrap uncertainty, warns about unstable evidence, and reports quality,
 success, token, cost, and latency effects. See
 [docs/evaluation-and-analysis.md](docs/evaluation-and-analysis.md).
 
+Context optimization combines safe removals, optionally screens them with
+fixed-answer scoring, and verifies the complete configuration on the target
+model. A lightweight predictor learns from verified experiments while periodic
+recalibration prevents predictions from silently becoming trusted facts. See
+[docs/context-optimization.md](docs/context-optimization.md).
+
 ## Proposed quick start
 
 The target user experience for the MVP is:

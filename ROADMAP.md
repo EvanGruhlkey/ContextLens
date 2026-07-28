@@ -76,7 +76,7 @@ Find valuable context without naively running one worker per source.
 - Distinguish screening evidence from production-model verification.
 - Support repeated trials for nondeterministic models.
 
-## Milestone 7 — Context optimization
+## Milestone 7 — Context optimization ✅
 
 Recommend the best context configuration for a chosen objective.
 
