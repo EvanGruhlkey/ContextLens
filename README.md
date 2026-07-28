@@ -78,6 +78,11 @@ whose removal materially changes quality. This reduces unnecessary replay work
 while retaining an inspectable decision tree. See
 [docs/adaptive-search.md](docs/adaptive-search.md).
 
+Paired analysis compares matched baseline and ablated trials, calculates
+bootstrap uncertainty, warns about unstable evidence, and reports quality,
+success, token, cost, and latency effects. See
+[docs/evaluation-and-analysis.md](docs/evaluation-and-analysis.md).
+
 ## Proposed quick start
 
 The target user experience for the MVP is:

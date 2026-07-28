@@ -67,7 +67,7 @@ Find valuable context without naively running one worker per source.
 - Preserve grouped and interaction evidence so duplicated sources are not
   incorrectly declared useless.
 
-## Milestone 6 — Evaluation and statistics
+## Milestone 6 — Evaluation and statistics ✅
 
 - Support exact, programmatic, test-suite, human, and model-graded evaluators.
 - Track success, quality, latency, input/output tokens, and estimated cost.
