@@ -9,8 +9,8 @@ from contextlens.profiler import (
     ContextProfiler,
     EvidenceLevel,
     RunObservation,
-    UsageSignal,
     UsageLabel,
+    UsageSignal,
 )
 from contextlens.trace import (
     ArtifactStore,

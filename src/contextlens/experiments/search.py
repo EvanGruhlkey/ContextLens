@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import heapq
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import Mapping
 
 from contextlens.experiments.evaluation import Evaluation, Evaluator
 from contextlens.experiments.model import (
@@ -132,7 +132,7 @@ class AdaptiveAblationPlanner:
         self,
         context: tuple[ContextSource, ...],
         *,
-        config: SearchConfig = SearchConfig(),
+        config: SearchConfig | None = None,
         profiles: tuple[SourceProfile, ...] = (),
         groups: Mapping[str, frozenset[str]] | None = None,
     ) -> None:
@@ -142,7 +142,7 @@ class AdaptiveAblationPlanner:
         if len(ids) != len(set(ids)):
             raise ValueError("context source IDs must be unique")
         self.context = context
-        self.config = config
+        self.config = config or SearchConfig()
         self._by_id = {source.source_id: source for source in context}
         self._profile_by_id = {profile.source_id: profile for profile in profiles}
         unknown_profiles = set(self._profile_by_id) - set(self._by_id)

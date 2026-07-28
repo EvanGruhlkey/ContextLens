@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import sys
 import unittest
 from contextlib import redirect_stdout
@@ -171,6 +170,12 @@ class CliTests(unittest.TestCase):
                         "ablated",
                         "--bootstrap-samples",
                         "100",
+                        "--runs-per-day",
+                        "100",
+                        "--projection-days",
+                        "30",
+                        "--experiment-cost-usd",
+                        "5",
                         "--format",
                         "json",
                         "--output",
@@ -183,6 +188,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(
                 report["findings"][0]["evidence_level"],
                 "verified",
+            )
+            self.assertEqual(report["findings"][0]["action"], "keep")
+            self.assertEqual(
+                report["summary"]["projected_input_tokens_saved"],
+                0,
             )
 
     def test_record_runs_an_instrumented_agent(self) -> None:

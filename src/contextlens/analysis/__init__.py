@@ -8,6 +8,12 @@ from contextlens.analysis.paired import (
     PairedAnalyzer,
     PairedEffect,
 )
+from contextlens.analysis.savings import (
+    SavingsAction,
+    SavingsAnalyzer,
+    SavingsRecommendation,
+    Workload,
+)
 
 __all__ = [
     "CostCalculator",
@@ -17,5 +23,9 @@ __all__ = [
     "ModelPricing",
     "PairedAnalyzer",
     "PairedEffect",
+    "SavingsAction",
+    "SavingsAnalyzer",
+    "SavingsRecommendation",
     "UsageCost",
+    "Workload",
 ]

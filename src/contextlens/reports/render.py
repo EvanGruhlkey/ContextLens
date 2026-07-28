@@ -29,6 +29,14 @@ def render_csv(report: Report) -> str:
         "tokens_saved",
         "cost_saved_usd",
         "quality_per_1k_tokens",
+        "action",
+        "projected_runs",
+        "projected_input_tokens_saved",
+        "projected_cost_saved_usd",
+        "projected_net_cost_saved_usd",
+        "projected_latency_saved_seconds",
+        "break_even_runs",
+        "removal_quality_change",
         "detail",
     ]
     writer = csv.DictWriter(stream, fieldnames=fields, lineterminator="\n")
@@ -51,15 +59,26 @@ def render_terminal(report: Report) -> str:
             lines.append(f"{key.replace('_', ' ').title()}: {_display(value)}")
     if report.findings:
         lines.extend(("", "Findings", "--------"))
-        headers = ("Source", "Tokens", "Evidence", "Verdict", "Effect", "Interval")
+        headers = (
+            "Source",
+            "Tokens",
+            "Effect",
+            "Evidence",
+            "Verdict",
+            "Action",
+            "Projected tokens",
+            "Projected $",
+        )
         rows = [
             (
                 finding.name,
                 str(finding.tokens),
+                _number(finding.effect),
                 finding.evidence_level,
                 finding.verdict,
-                _number(finding.effect),
-                _interval(finding.confidence_low, finding.confidence_high),
+                finding.action or "—",
+                _whole(finding.projected_input_tokens_saved),
+                _money(finding.projected_net_cost_saved_usd),
             )
             for finding in report.findings
         ]
@@ -114,14 +133,13 @@ def render_html(report: Report) -> str:
         "<tr>"
         f"<td>{html.escape(finding.name)}</td>"
         f"<td>{finding.tokens}</td>"
-        f"<td><span class='badge'>{html.escape(finding.evidence_level)}</span></td>"
-        f"<td>{html.escape(finding.verdict)}</td>"
         f"<td>{html.escape(_number(finding.effect))}</td>"
-        "<td>"
-        + html.escape(
-            _interval(finding.confidence_low, finding.confidence_high)
-        )
-        + "</td></tr>"
+        f"<td>{html.escape(finding.verdict)}</td>"
+        f"<td>{html.escape(finding.action or '—')}</td>"
+        f"<td>{html.escape(_whole(finding.projected_input_tokens_saved))}</td>"
+        f"<td>{html.escape(_money(finding.projected_net_cost_saved_usd))}</td>"
+        f"<td><span class='badge'>{html.escape(finding.evidence_level)}</span></td>"
+        "</tr>"
         for finding in report.findings
     )
     tree = "".join(
@@ -174,8 +192,9 @@ padding:3px 7px;border-radius:10px}} section{{margin-top:28px}} li{{margin:7px}}
 <p>Generated {html.escape(report.generated_at)}</p>
 <div class="cards">{summary}</div>
 <section><h2>Findings</h2><table>
-<thead><tr><th>Source</th><th>Tokens</th><th>Evidence</th>
-<th>Verdict</th><th>Effect</th><th>Interval</th></tr></thead>
+<thead><tr><th>Source</th><th>Tokens</th><th>Effect</th>
+<th>Verdict</th><th>Action</th><th>Projected tokens</th>
+<th>Projected net savings</th><th>Evidence</th></tr></thead>
 <tbody>{rows}</tbody></table></section>
 <section><h2>Experiment tree</h2><ul>{tree}</ul></section>
 <section><h2>Replay runs</h2><table><thead><tr><th>Variant</th>
@@ -209,3 +228,11 @@ def _display(value: object) -> str:
     if isinstance(value, (dict, list, tuple)):
         return json.dumps(value, ensure_ascii=False)
     return str(value)
+
+
+def _whole(value: float | None) -> str:
+    return "—" if value is None else f"{value:,.0f}"
+
+
+def _money(value: float | None) -> str:
+    return "—" if value is None else f"${value:,.2f}"

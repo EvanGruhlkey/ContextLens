@@ -104,7 +104,11 @@ class ContextValuePredictor:
         matrix[0][0] += self.regularization * 0.01
         weights = _solve(matrix, vector)
         residuals = [
-            target - sum(weight * value for weight, value in zip(weights, row))
+            target
+            - sum(
+                weight * value
+                for weight, value in zip(weights, row, strict=True)
+            )
             for row, target in zip(rows, targets, strict=True)
         ]
         self._weights = tuple(weights)
@@ -145,14 +149,34 @@ class ContextValuePredictor:
     def from_dict(cls, value: dict[str, object]) -> ContextValuePredictor:
         if value.get("model_version") != "ridge-v1":
             raise ValueError("unsupported predictor model version")
-        if tuple(value.get("feature_kinds", ())) != _KINDS:
+        feature_kinds = value.get("feature_kinds")
+        feature_labels = value.get("feature_labels")
+        weights = value.get("weights")
+        regularization = value.get("regularization")
+        residual_sd = value.get("residual_sd")
+        training_examples = value.get("training_examples")
+        if not isinstance(feature_kinds, list):
+            raise ValueError("predictor feature_kinds must be a list")
+        if not isinstance(feature_labels, list):
+            raise ValueError("predictor feature_labels must be a list")
+        if not isinstance(weights, list):
+            raise ValueError("predictor weights must be a list")
+        if not isinstance(regularization, int | float):
+            raise ValueError("predictor regularization must be numeric")
+        if not isinstance(residual_sd, int | float):
+            raise ValueError("predictor residual_sd must be numeric")
+        if not isinstance(training_examples, int):
+            raise ValueError("predictor training_examples must be an integer")
+        if tuple(str(item) for item in feature_kinds) != _KINDS:
             raise ValueError("predictor source-kind schema does not match")
-        if tuple(value.get("feature_labels", ())) != _LABELS:
+        if tuple(str(item) for item in feature_labels) != _LABELS:
             raise ValueError("predictor usage-label schema does not match")
-        predictor = cls(regularization=float(value["regularization"]))
-        predictor._weights = tuple(float(item) for item in value["weights"])
-        predictor._residual_sd = float(value["residual_sd"])
-        predictor.training_examples = int(value["training_examples"])
+        if not all(isinstance(item, int | float) for item in weights):
+            raise ValueError("predictor weights must be numeric")
+        predictor = cls(regularization=float(regularization))
+        predictor._weights = tuple(float(item) for item in weights)
+        predictor._residual_sd = float(residual_sd)
+        predictor.training_examples = training_examples
         return predictor
 
 

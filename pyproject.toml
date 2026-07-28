@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "contextlens"
-version = "0.0.1"
+version = "0.1.0"
 description = "Measure which parts of an AI agent's context improve performance"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,9 +17,11 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Testing",
 ]
 dependencies = []
+keywords = ["agents", "context", "evaluation", "llm", "mcp"]
 
 [project.optional-dependencies]
 dev = [
@@ -40,6 +42,15 @@ packages = ["src/contextlens"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.coverage.run]
+branch = true
+source = ["contextlens"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
 
 [tool.ruff]
 target-version = "py311"

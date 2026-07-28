@@ -10,19 +10,23 @@ changes most likely to matter, rather than blindly rerunning every possible
 variant.
 
 ```text
-Context source             Tokens    Effect
-AGENTS.md                    4,820    +14%
-Git history                  7,430     +2%
-Unused MCP schemas          19,410     -8%
-Previous terminal output    11,220     -3%
-Architecture decisions       2,180    +21%
+Context source             Tokens   Effect   Action       Token savings
+AGENTS.md                    4,820    +14%    Keep                     0
+Git history                  7,430     +2%    Investigate              0
+Unused MCP schemas          19,410     -8%    Remove       1,941,000,000
+Previous terminal output    11,220     -3%    Remove       1,122,000,000
+Architecture decisions       2,180    +21%    Keep                     0
 ```
+
+The illustrative savings column assumes 100,000 production runs. Real reports
+use measured per-run usage and the agent's actual workload.
 
 The intended answer is not merely “what costs tokens?” but:
 
 - Which context improves performance?
 - Which context is redundant?
 - Which context actively makes the agent worse?
+- How many tokens, dollars, and seconds can safely be saved in production?
 
 Findings are labeled as **observed**, **predicted**, or **verified**, so a
 one-run relevance estimate is never presented as a causal performance claim.
@@ -88,6 +92,16 @@ fixed-answer scoring, and verifies the complete configuration on the target
 model. A lightweight predictor learns from verified experiments while periodic
 recalibration prevents predictions from silently becoming trusted facts. See
 [docs/context-optimization.md](docs/context-optimization.md).
+
+Verified effects can be converted into keep/remove/investigate decisions and
+projected across a real production workload, including experiment amortization
+and break-even runs. See
+[docs/production-savings.md](docs/production-savings.md).
+
+The deterministic planner benchmark uses 12 experiments instead of 33
+exhaustive runs on its 32-source fixture while retaining the critical source.
+This is a planner test, not a claim about expected savings on real model tasks.
+See [benchmarks/README.md](benchmarks/README.md).
 
 ## Quick start
 

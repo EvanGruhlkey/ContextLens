@@ -96,6 +96,7 @@ class ContextOptimizer:
                     "a fitted predictor is required to extend removals "
                     "for a token budget"
                 )
+            predictor = self.predictor
             candidates = [
                 source_id
                 for source_id in self._by_id
@@ -106,7 +107,7 @@ class ContextOptimizer:
             ranked = sorted(
                 candidates,
                 key=lambda source_id: (
-                    self.predictor.predict(
+                    predictor.predict(
                         self._profiles[source_id]
                     ).predicted_effect,
                     -_tokens(self._by_id[source_id]),

@@ -7,7 +7,7 @@ Unknown event types are rejected in version 1.0.
 ## Header
 
 ```json
-{"event":"trace_started","schema_version":"1.0","trace_id":"7de...","created_at":"2026-07-26T12:00:00+00:00","producer":"contextlens","producer_version":"0.0.1","metadata":{}}
+{"event":"trace_started","schema_version":"1.0","trace_id":"7de...","created_at":"2026-07-26T12:00:00+00:00","producer":"contextlens","producer_version":"0.1.0","metadata":{}}
 ```
 
 ## Context event
@@ -35,4 +35,3 @@ length and digest whenever content is read.
 Readers currently require an exact `1.0` schema match. Future compatible fields
 may be added in a new version, accompanied by migration tooling. Traces should
 be treated as immutable experimental inputs.
-

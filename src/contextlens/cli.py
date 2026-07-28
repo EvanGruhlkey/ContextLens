@@ -11,12 +11,18 @@ from pathlib import Path
 from typing import Any
 
 from contextlens import __version__
-from contextlens.analysis import EvidenceScope, Measurement, PairedAnalyzer
+from contextlens.analysis import (
+    EvidenceScope,
+    Measurement,
+    PairedAnalyzer,
+    SavingsAnalyzer,
+    Workload,
+)
 from contextlens.evaluators import ExactMatchEvaluator, TestResultsEvaluator
 from contextlens.experiments import (
-    AgentSettings,
     AdaptiveAblationPlanner,
     AdaptiveSearchRunner,
+    AgentSettings,
     DirectorySnapshot,
     MemoryReplayCache,
     ReplayCoordinator,
@@ -99,6 +105,9 @@ def _parser() -> argparse.ArgumentParser:
     analyze.add_argument("--bootstrap-samples", type=int, default=2_000)
     analyze.add_argument("--seed", type=int, default=0)
     analyze.add_argument("--equivalence-tolerance", type=float, default=0)
+    analyze.add_argument("--runs-per-day", type=float)
+    analyze.add_argument("--projection-days", type=int, default=30)
+    analyze.add_argument("--experiment-cost-usd", type=float, default=0)
     _format_arguments(analyze)
     analyze.set_defaults(handler=_analyze)
 
@@ -196,14 +205,25 @@ def _analyze(arguments: argparse.Namespace) -> int:
         baseline_variant_id=arguments.baseline,
         ablated_variant_id=arguments.ablated,
     )
-    report = (
-        ReportBuilder("ContextLens paired analysis")
-        .add_effect(
+    builder = ReportBuilder("ContextLens paired analysis").add_effect(
+        effect,
+        source_id=arguments.ablated,
+        name=arguments.label or arguments.ablated,
+    )
+    if arguments.runs_per_day is not None:
+        recommendation = SavingsAnalyzer().recommend(
             effect,
+            Workload(
+                runs_per_day=arguments.runs_per_day,
+                projection_days=arguments.projection_days,
+                experiment_cost_usd=arguments.experiment_cost_usd,
+            ),
             source_id=arguments.ablated,
             name=arguments.label or arguments.ablated,
         )
-        .metadata(
+        builder.add_savings(recommendation)
+    report = (
+        builder.metadata(
             baseline_variant_id=arguments.baseline,
             ablated_variant_id=arguments.ablated,
             confidence=arguments.confidence,

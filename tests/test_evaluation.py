@@ -9,12 +9,17 @@ from contextlens.analysis import (
     Measurement,
     ModelPricing,
     PairedAnalyzer,
+    SavingsAction,
+    SavingsAnalyzer,
+    Workload,
 )
 from contextlens.evaluators import (
     CallableEvaluator,
     ExactMatchEvaluator,
     RecordedEvaluator,
-    TestResultsEvaluator,
+)
+from contextlens.evaluators import (
+    TestResultsEvaluator as ResultsEvaluator,
 )
 from contextlens.experiments import (
     AgentOutcome,
@@ -67,7 +72,7 @@ class BuiltinEvaluatorTests(unittest.TestCase):
         self.assertTrue(evaluation.metadata["deterministic"])
 
     def test_test_results_preserve_failure_evidence(self) -> None:
-        evaluator = TestResultsEvaluator()
+        evaluator = ResultsEvaluator()
         evaluation = evaluator.evaluate(
             ReplayTask("task-1", "Fix tests."),
             result(
@@ -207,6 +212,23 @@ class PairedAnalyzerTests(unittest.TestCase):
         self.assertEqual(effect.verdict, EffectVerdict.HARMFUL)
         self.assertLess(effect.confidence_high, 0)
 
+        savings = SavingsAnalyzer().recommend(
+            effect,
+            Workload(
+                runs_per_day=100,
+                projection_days=30,
+                experiment_cost_usd=5,
+            ),
+            source_id="unused-schemas",
+            name="Unused MCP schemas",
+        )
+        self.assertEqual(savings.action, SavingsAction.REMOVE)
+        self.assertEqual(savings.projected_runs, 3_000)
+        self.assertAlmostEqual(savings.projected_gross_cost_saved_usd, 30)
+        self.assertAlmostEqual(savings.projected_net_cost_saved_usd, 25)
+        self.assertEqual(savings.break_even_runs, 500)
+        self.assertGreater(savings.removal_quality_change, 0)
+
     def test_single_pair_stays_uncertain_and_warns(self) -> None:
         values = (
             measurement(
@@ -266,6 +288,47 @@ class PairedAnalyzerTests(unittest.TestCase):
             ablated_variant_id="ablated",
         )
         self.assertEqual(effect.verdict, EffectVerdict.NEUTRAL)
+        recommendation = SavingsAnalyzer().recommend(
+            effect,
+            Workload(runs_per_day=10),
+        )
+        self.assertEqual(recommendation.action, SavingsAction.REMOVE)
+
+    def test_helpful_context_is_kept_without_claiming_savings(self) -> None:
+        values: list[Measurement] = []
+        for index in range(5):
+            values.extend(
+                (
+                    measurement(
+                        f"task-{index}",
+                        "trial",
+                        "baseline",
+                        1,
+                        tokens=100,
+                        cost=0.01,
+                    ),
+                    measurement(
+                        f"task-{index}",
+                        "trial",
+                        "ablated",
+                        0.5,
+                        tokens=50,
+                        cost=0.005,
+                    ),
+                )
+            )
+        effect = PairedAnalyzer(bootstrap_samples=100).analyze(
+            tuple(values),
+            baseline_variant_id="baseline",
+            ablated_variant_id="ablated",
+        )
+        recommendation = SavingsAnalyzer().recommend(
+            effect,
+            Workload(runs_per_day=100),
+        )
+        self.assertEqual(recommendation.action, SavingsAction.KEEP)
+        self.assertEqual(recommendation.projected_input_tokens_saved, 0)
+        self.assertEqual(recommendation.projected_net_cost_saved_usd, 0)
 
     def test_measurement_uses_recorded_usage_and_context_fallback(self) -> None:
         replay = result(

@@ -15,8 +15,8 @@ from contextlens.optimization.predictor import (
     ContextValuePredictor,
     RecalibrationPolicy,
     TrainingExample,
-    ValuePredictor,
     ValuePrediction,
+    ValuePredictor,
 )
 
 __all__ = [

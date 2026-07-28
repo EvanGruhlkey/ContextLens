@@ -126,8 +126,16 @@ def _request_dict(request: ReplayRequest) -> dict[str, object]:
 
 
 def _optional_int(value: object) -> int | None:
-    return int(value) if value is not None else None
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError("token counts must be integers")
+    return value
 
 
 def _optional_float(value: object) -> float | None:
-    return float(value) if value is not None else None
+    if value is None:
+        return None
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        raise ValueError("cost must be numeric")
+    return float(value)

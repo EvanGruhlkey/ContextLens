@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
-from typing import Any, Mapping
+from typing import Any
 
 from contextlens.analysis.paired import PairedEffect
+from contextlens.analysis.savings import SavingsRecommendation
 from contextlens.experiments.model import ReplayResult
 from contextlens.experiments.search import SearchReport
 from contextlens.optimization.model import VerifiedConfiguration
@@ -30,6 +32,14 @@ class Finding:
     tokens_saved: float | None = None
     cost_saved_usd: float | None = None
     quality_per_1k_tokens: float | None = None
+    action: str | None = None
+    projected_runs: float | None = None
+    projected_input_tokens_saved: float | None = None
+    projected_cost_saved_usd: float | None = None
+    projected_net_cost_saved_usd: float | None = None
+    projected_latency_saved_seconds: float | None = None
+    break_even_runs: int | None = None
+    removal_quality_change: float | None = None
     detail: str = ""
 
 
@@ -277,6 +287,61 @@ class ReportBuilder:
                 "estimated_experiment_cost_usd": report.estimated_cost_usd,
                 "search_stopping_reason": report.stopping_reason,
                 "recommended_removals": list(report.recommended_removals),
+            }
+        )
+        return self
+
+    def add_savings(
+        self,
+        recommendation: SavingsRecommendation,
+        *,
+        kind: str = "group",
+        tokens: int = 0,
+    ) -> ReportBuilder:
+        key = ("verified", recommendation.source_id)
+        existing = self._findings.get(key)
+        base = existing or Finding(
+            source_id=recommendation.source_id,
+            name=recommendation.name,
+            kind=kind,
+            evidence_level="verified",
+            verdict="uncertain",
+            tokens=tokens,
+        )
+        self._findings[key] = replace(
+            base,
+            action=recommendation.action.value,
+            projected_runs=recommendation.projected_runs,
+            projected_input_tokens_saved=(
+                recommendation.projected_input_tokens_saved
+            ),
+            projected_cost_saved_usd=(
+                recommendation.projected_gross_cost_saved_usd
+            ),
+            projected_net_cost_saved_usd=(
+                recommendation.projected_net_cost_saved_usd
+            ),
+            projected_latency_saved_seconds=(
+                recommendation.projected_latency_saved_seconds
+            ),
+            break_even_runs=recommendation.break_even_runs,
+            removal_quality_change=recommendation.removal_quality_change,
+            detail=recommendation.reason,
+        )
+        self._warnings.extend(recommendation.warnings)
+        self._summary.update(
+            {
+                "production_runs_projected": recommendation.projected_runs,
+                "projected_input_tokens_saved": (
+                    recommendation.projected_input_tokens_saved
+                ),
+                "projected_gross_cost_saved_usd": (
+                    recommendation.projected_gross_cost_saved_usd
+                ),
+                "projected_net_cost_saved_usd": (
+                    recommendation.projected_net_cost_saved_usd
+                ),
+                "break_even_runs": recommendation.break_even_runs,
             }
         )
         return self

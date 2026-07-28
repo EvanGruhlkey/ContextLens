@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 from uuid import uuid4
 
 SCHEMA_VERSION = "1.0"
@@ -151,7 +152,7 @@ class TraceHeader:
     trace_id: str = field(default_factory=lambda: str(uuid4()))
     created_at: str = field(default_factory=_now)
     producer: str = "contextlens"
-    producer_version: str = "0.0.1"
+    producer_version: str = "0.1.0"
     metadata: Mapping[str, Any] = field(default_factory=dict)
     schema_version: str = SCHEMA_VERSION
 
@@ -220,4 +221,3 @@ class ContextEvent:
             recorded_at=str(value["recorded_at"]),
             source=ContextSource.from_dict(value["source"]),
         )
-

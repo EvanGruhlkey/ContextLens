@@ -51,12 +51,20 @@ contextlens analyze measurements.json \
   --baseline baseline \
   --ablated without-tool-schemas \
   --label "Unused MCP schemas" \
+  --runs-per-day 10000 \
+  --projection-days 30 \
+  --experiment-cost-usd 25 \
   --format html \
   --output reports/tool-schemas.html
 ```
 
 The input is a JSON list of `Measurement` fields. Supported report formats are
 `terminal`, `json`, `csv`, and `html`.
+
+When production workload arguments are supplied, the report recommends
+`keep`, `remove`, or `investigate` and projects tokens, dollars, latency, net
+savings, and break-even runs. Project a combined candidate rather than summing
+individual source projections.
 
 ## Optimize
 
@@ -158,4 +166,3 @@ JSON reports are stable, rerenderable artifacts. HTML reports are
 self-contained. Reports include aggregate findings, adaptive decisions,
 stopping reasons, warnings, and compact per-worker drill-down without embedding
 raw model output.
-

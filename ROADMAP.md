@@ -108,13 +108,20 @@ contextlens optimize experiments/example.json --format json --output runs/latest
 contextlens report runs/latest
 ```
 
-## Milestone 9 — Open-source release
+## Milestone 9 — Open-source release preparation ✅
 
 - Ship deterministic fixtures and end-to-end examples.
 - Add CI, issue templates, and a code of conduct.
 - Document adapters, isolation requirements, and third-party data handling.
 - Benchmark adaptive search against exhaustive leave-one-out evaluation.
-- Publish the package and an initial tagged release under the MIT License.
+- Build and validate the initial MIT-licensed release artifacts.
+
+## Publication
+
+Maintainer action is still required to choose the final repository/package
+destinations, push `main`, create the `v0.1.0` tag, and publish the validated
+artifacts. ContextLens does not store publishing credentials or upload packages
+from local release validation.
 
 ## Product guardrails
 
@@ -124,4 +131,6 @@ contextlens report runs/latest
   model.
 - Workers must not share mutable task state.
 - Reports must include experiment cost alongside projected future savings.
+- Production savings require target-model evidence and a declared workload;
+  individual projections are not additive until the combined context is tested.
 - Users set hard limits for workers, concurrency, tokens, dollars, and time.
