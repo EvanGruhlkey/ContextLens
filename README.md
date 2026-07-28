@@ -73,6 +73,11 @@ Controlled replays can run context variants concurrently in isolated temporary
 workspaces, with limits on attempts, context tokens, estimated cost, and time.
 See [docs/replay-workers.md](docs/replay-workers.md).
 
+Adaptive search tests high-value context groups first and splits only groups
+whose removal materially changes quality. This reduces unnecessary replay work
+while retaining an inspectable decision tree. See
+[docs/adaptive-search.md](docs/adaptive-search.md).
+
 ## Proposed quick start
 
 The target user experience for the MVP is:

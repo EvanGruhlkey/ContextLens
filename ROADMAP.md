@@ -50,7 +50,7 @@ Create trustworthy, reproducible counterfactual runs.
 - Capture outputs, patches, commands, tests, tokens, latency, and errors.
 - Add concurrency, timeout, retry, caching, and spending controls.
 
-## Milestone 5 — Adaptive context search
+## Milestone 5 — Adaptive context search ✅
 
 Find valuable context without naively running one worker per source.
 

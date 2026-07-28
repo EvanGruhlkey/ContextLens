@@ -15,17 +15,33 @@ from contextlens.experiments.model import (
     ResourceLimits,
 )
 from contextlens.experiments.runner import ReplayCoordinator, ReplayWorker
+from contextlens.experiments.search import (
+    AblationGroup,
+    AdaptiveAblationPlanner,
+    AdaptiveSearchRun,
+    AdaptiveSearchRunner,
+    GroupDecision,
+    ScoreObservation,
+    SearchConfig,
+    SearchNode,
+    SearchReport,
+)
 from contextlens.experiments.workspace import DirectorySnapshot
 
 __all__ = [
     "AgentAdapter",
     "AgentOutcome",
     "AgentSettings",
+    "AblationGroup",
+    "AdaptiveAblationPlanner",
+    "AdaptiveSearchRun",
+    "AdaptiveSearchRunner",
     "ContextVariant",
     "DirectorySnapshot",
     "Evaluation",
     "Evaluator",
     "FileChange",
+    "GroupDecision",
     "MemoryReplayCache",
     "ReplayCoordinator",
     "ReplayCache",
@@ -35,5 +51,9 @@ __all__ = [
     "ReplayTask",
     "ReplayWorker",
     "ResourceLimits",
+    "ScoreObservation",
+    "SearchConfig",
+    "SearchNode",
+    "SearchReport",
     "SubprocessAgentAdapter",
 ]
