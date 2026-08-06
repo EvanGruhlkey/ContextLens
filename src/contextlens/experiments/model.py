@@ -8,6 +8,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 
+from contextlens.experiments.mutations import ContextMutation
 from contextlens.trace.model import ContextSource
 
 
@@ -55,12 +56,14 @@ class ContextVariant:
     removed_source_ids: frozenset[str] = frozenset()
     description: str = ""
     estimated_cost_usd: float | None = None
+    mutations: tuple[ContextMutation, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.variant_id:
             raise ValueError("variant_id cannot be empty")
         if self.estimated_cost_usd is not None and self.estimated_cost_usd < 0:
             raise ValueError("estimated_cost_usd cannot be negative")
+        object.__setattr__(self, "mutations", tuple(self.mutations))
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +77,7 @@ class ReplayRequest:
     settings: AgentSettings
     workspace: str
     timeout_seconds: float
+    lazy_context: tuple[ContextSource, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,29 +88,52 @@ class AgentOutcome:
     commands: tuple[str, ...] = ()
     test_results: tuple[str, ...] = ()
     input_tokens: int | None = None
+    cached_input_tokens: int | None = None
     output_tokens: int | None = None
     cost_usd: float | None = None
+    tool_calls: int = 0
+    retries: int = 0
+    lazy_loaded_source_ids: tuple[str, ...] = ()
+    retrieval_tokens: int = 0
+    retrieval_latency_ms: int = 0
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for name, value in (
             ("input_tokens", self.input_tokens),
+            ("cached_input_tokens", self.cached_input_tokens),
             ("output_tokens", self.output_tokens),
         ):
             if value is not None and value < 0:
                 raise ValueError(f"{name} cannot be negative")
         if self.cost_usd is not None and self.cost_usd < 0:
             raise ValueError("cost_usd cannot be negative")
+        if min(
+            self.tool_calls,
+            self.retries,
+            self.retrieval_tokens,
+            self.retrieval_latency_ms,
+        ) < 0:
+            raise ValueError("outcome counters cannot be negative")
         object.__setattr__(self, "commands", tuple(self.commands))
         object.__setattr__(self, "test_results", tuple(self.test_results))
+        object.__setattr__(
+            self,
+            "lazy_loaded_source_ids",
+            tuple(self.lazy_loaded_source_ids),
+        )
         object.__setattr__(self, "metadata", _mapping(self.metadata))
 
 
 class ReplayStatus(StrEnum):
     """Terminal state of one worker attempt."""
 
+    PENDING = "pending"
+    RUNNING = "running"
+    EVALUATING = "evaluating"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
     TIMED_OUT = "timed_out"
     CACHED = "cached"
 
@@ -139,6 +166,14 @@ class ReplayResult:
     file_changes: tuple[FileChange, ...] = ()
     error: str | None = None
     cache_key: str | None = None
+    workspace_id: str | None = None
+    workspace_path: str | None = None
+    started_at: str | None = None
+    ended_at: str | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "metadata", _mapping(self.metadata))
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,4 +199,3 @@ class ResourceLimits:
             and self.max_estimated_cost_usd < 0
         ):
             raise ValueError("max_estimated_cost_usd cannot be negative")
-

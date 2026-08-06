@@ -1,0 +1,12 @@
+{
+  "case_id": "spotify-luigi-bool-default",
+  "suite": "smoke",
+  "category": "bug_fix",
+  "repo": "spotify/luigi",
+  "commit": "5f4322cd479a120e4237a341770468637bad4986",
+  "task": "BoolParameter instances ignore a globally configured parsing mode because construction always forces implicit parsing. Make an omitted per-instance parsing option inherit the class-level mode, while an explicit option still overrides it and the normal default remains implicit.",
+  "setup": [],
+  "verification": {
+    "commands": [["uv", "run", "--no-project", "--isolated", "--with", "python-dateutil", "--with", "tornado", "--with", "tenacity", "--with", "typing-extensions", "python", "-c", "import luigi; B=luigi.BoolParameter; old=B.parsing;\ntry:\n B.parsing=B.EXPLICIT_PARSING; assert B().parsing == B.EXPLICIT_PARSING; assert B(parsing=B.IMPLICIT_PARSING).parsing == B.IMPLICIT_PARSING\nfinally: B.parsing=old\nassert B().parsing == B.IMPLICIT_PARSING"]]
+  }
+}

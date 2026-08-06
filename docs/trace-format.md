@@ -1,8 +1,19 @@
 # Trace format 1.0
 
 A ContextLens trace is UTF-8 JSON Lines. The first non-empty line is a
-`trace_started` record. Every subsequent line is a `context_added` record.
-Unknown event types are rejected in version 1.0.
+`trace_started` record. Version 1 streams three optional record families after
+the header:
+
+- `agent_trace`: task, agent/model identity, repository commit, lifecycle,
+  aggregate tokens, tool calls, runtime, score, and provider metadata;
+- `context_added`: one independently removable source with content hash,
+  insertion coordinates, URI, target agent/phase, provenance, and token count;
+- `trace_step`: an ordered model request/response, tool call/result, evaluation,
+  or system event with exact input context item IDs.
+
+Older version 1 traces containing only `context_added` records remain readable.
+`TraceReader.events()` ignores run and step records, while `read_trace()` and
+`steps()` expose the new records.
 
 ## Header
 

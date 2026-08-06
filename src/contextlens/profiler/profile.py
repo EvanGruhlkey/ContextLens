@@ -6,7 +6,7 @@ import math
 import re
 from collections import Counter
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from typing import Any
@@ -14,6 +14,7 @@ from typing import Any
 from contextlens.profiler.adapters import ContentSimilarity, ModelInternalsAdapter
 from contextlens.profiler.model import (
     EvidenceLevel,
+    ProfileReason,
     RunObservation,
     SourceProfile,
     UsageLabel,
@@ -135,7 +136,7 @@ class ContextProfiler:
         )
         current_time = now or datetime.now(UTC)
 
-        profiles = tuple(
+        raw_profiles = tuple(
             self._profile_source(
                 event=event,
                 content=contents[index],
@@ -149,7 +150,118 @@ class ContextProfiler:
             )
             for index, event in enumerate(ordered)
         )
+        maximum_tokens = max(profile.token_count for profile in raw_profiles) or 1
+        profiles = tuple(
+            self._score_profile(
+                profile,
+                event=ordered[index],
+                content=contents[index] or "",
+                observation=observation,
+                maximum_tokens=maximum_tokens,
+            )
+            for index, profile in enumerate(raw_profiles)
+        )
         return ProfileReport(request_id=ordered[0].request_id, profiles=profiles)
+
+    def _score_profile(
+        self,
+        profile: SourceProfile,
+        *,
+        event: ContextEvent,
+        content: str,
+        observation: RunObservation,
+        maximum_tokens: int,
+    ) -> SourceProfile:
+        source_tokens = _meaningful_tokens(content)
+        task_tokens = _meaningful_tokens(observation.task_text)
+        changed_tokens = _meaningful_tokens(" ".join(observation.changed_files))
+        task_relevance = _overlap(source_tokens, task_tokens) if task_tokens else 0.0
+        change_relevance = (
+            _overlap(source_tokens, changed_tokens) if changed_tokens else 0.0
+        )
+        relevance = min(
+            1.0,
+            max(profile.output_overlap or 0.0, task_relevance, change_relevance),
+        )
+        usage = {
+            UsageLabel.USED: 1.0,
+            UsageLabel.DUPLICATED: 0.5,
+            UsageLabel.UNCERTAIN: 0.25,
+            UsageLabel.UNUSED: 0.0,
+        }[profile.label]
+        redundancy = min(1.0, len(profile.duplicated_by) / 2)
+        contradiction = (
+            1.0 if event.source.provenance.get("contradicts") else 0.0
+        )
+        staleness = (
+            min(1.0, profile.age_seconds / (365 * 24 * 3600))
+            if profile.age_seconds is not None
+            else 0.0
+        )
+        token_cost = min(1.0, profile.token_count / maximum_tokens)
+        uncertainty = {
+            UsageLabel.USED: 0.35,
+            UsageLabel.UNUSED: 0.65,
+            UsageLabel.DUPLICATED: 0.8,
+            UsageLabel.UNCERTAIN: 1.0,
+        }[profile.label]
+        meaningful_effect = max(0.25, relevance, redundancy, contradiction)
+        priority = token_cost * uncertainty * meaningful_effect * 0.9
+        reasons = [
+            ProfileReason(
+                "token_cost",
+                "candidate token cost relative to the largest context item",
+                {"tokens": profile.token_count, "normalized": token_cost},
+            ),
+            ProfileReason(
+                "observed_usage",
+                "deterministic usage signals from the baseline trajectory",
+                {"label": profile.label.value, "score": usage},
+            ),
+        ]
+        if relevance:
+            reasons.append(
+                ProfileReason(
+                    "task_relevance",
+                    "lexical overlap with task, output, or changed files",
+                    {"score": relevance},
+                )
+            )
+        if redundancy:
+            reasons.append(
+                ProfileReason(
+                    "redundancy",
+                    "similar content exists in another context item",
+                    {"source_ids": list(profile.duplicated_by)},
+                )
+            )
+        if contradiction:
+            reasons.append(
+                ProfileReason(
+                    "declared_contradiction",
+                    "source provenance declares a conflicting context item",
+                    {"contradicts": event.source.provenance.get("contradicts")},
+                )
+            )
+        search_text = " ".join(observation.searched_queries).casefold()
+        if search_text and any(token in search_text for token in source_tokens):
+            reasons.append(
+                ProfileReason(
+                    "searched_despite_context",
+                    "the agent searched for terms already present in this item",
+                )
+            )
+        return replace(
+            profile,
+            relevance_score=round(relevance, 6),
+            observed_usage_score=usage,
+            redundancy_score=round(redundancy, 6),
+            contradiction_score=contradiction,
+            staleness_score=round(staleness, 6),
+            token_cost_score=round(token_cost, 6),
+            experiment_priority=round(priority, 6),
+            reasons=tuple(reasons),
+        )
 
     def _profile_source(
         self,

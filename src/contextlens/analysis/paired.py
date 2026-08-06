@@ -42,6 +42,8 @@ class Measurement:
     cost_usd: float
     latency_seconds: float
     evidence_scope: EvidenceScope = EvidenceScope.TARGET_MODEL
+    tool_calls: int = 0
+    retries: int = 0
 
     def __post_init__(self) -> None:
         if not self.task_id or not self.trial_id or not self.variant_id:
@@ -53,6 +55,8 @@ class Measurement:
             ("output_tokens", self.output_tokens),
             ("cost_usd", self.cost_usd),
             ("latency_seconds", self.latency_seconds),
+            ("tool_calls", self.tool_calls),
+            ("retries", self.retries),
         ):
             if value < 0:
                 raise ValueError(f"{name} cannot be negative")
@@ -94,6 +98,12 @@ class Measurement:
             ),
             latency_seconds=result.duration_seconds,
             evidence_scope=evidence_scope,
+            tool_calls=outcome.tool_calls if outcome is not None else 0,
+            retries=(
+                max(outcome.retries, result.attempt - 1)
+                if outcome is not None
+                else max(0, result.attempt - 1)
+            ),
         )
 
 
@@ -122,6 +132,10 @@ class PairedEffect:
     quality_per_1k_tokens: float | None
     warnings: tuple[str, ...]
     evidence_scope: EvidenceScope
+    variance: float = 0.0
+    tool_calls_saved_by_ablation: float = 0.0
+    evidence_quality: str = "inconclusive"
+    recommendation: str = "needs_more_evidence"
 
 
 class PairedAnalyzer:
@@ -212,6 +226,9 @@ class PairedAnalyzer:
             left.latency_seconds - right.latency_seconds
             for left, right in pairs
         )
+        tool_calls_saved = statistics.fmean(
+            left.tool_calls - right.tool_calls for left, right in pairs
+        )
         warnings = self._warnings(baseline, differences)
         relative = effect / abs(ablated_mean) if ablated_mean != 0 else None
         quality_per_tokens = (
@@ -221,6 +238,13 @@ class PairedAnalyzer:
         )
         baseline_success = statistics.fmean(item.success for item in baseline)
         ablated_success = statistics.fmean(item.success for item in ablated)
+        evidence_quality = _evidence_quality(len(pairs), verdict)
+        recommendation = {
+            EffectVerdict.HELPFUL: "retain",
+            EffectVerdict.HARMFUL: "remove",
+            EffectVerdict.NEUTRAL: "remove" if input_saved > 0 else "retain",
+            EffectVerdict.UNCERTAIN: "needs_more_evidence",
+        }[verdict]
         return PairedEffect(
             baseline_variant_id=baseline_variant_id,
             ablated_variant_id=ablated_variant_id,
@@ -243,6 +267,12 @@ class PairedAnalyzer:
             quality_per_1k_tokens=quality_per_tokens,
             warnings=warnings,
             evidence_scope=evidence_scope,
+            variance=(
+                statistics.variance(differences) if len(differences) > 1 else 0.0
+            ),
+            tool_calls_saved_by_ablation=tool_calls_saved,
+            evidence_quality=evidence_quality,
+            recommendation=recommendation,
         )
 
     @staticmethod
@@ -328,3 +358,13 @@ class PairedAnalyzer:
         if len(set(differences)) > 1 and statistics.stdev(differences) > 0.1:
             warnings.append("context effects vary substantially across trials")
         return tuple(warnings)
+
+
+def _evidence_quality(pair_count: int, verdict: EffectVerdict) -> str:
+    if pair_count < 2 or verdict is EffectVerdict.UNCERTAIN:
+        return "inconclusive"
+    if pair_count >= 8:
+        return "strong"
+    if pair_count >= 4:
+        return "moderate"
+    return "weak"

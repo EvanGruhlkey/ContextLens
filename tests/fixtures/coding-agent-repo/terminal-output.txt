@@ -1,0 +1,9 @@
+$ python -m unittest
+FAILED (failures=1)
+$ pwd
+/fixture
+$ dir
+AGENTS.md calculator.py docs git-history.txt test_calculator.py tool-schemas.json
+$ python --version
+Python 3.11
+$ echo retry retry retry retry retry retry retry retry retry retry

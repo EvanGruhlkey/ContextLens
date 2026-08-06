@@ -1,0 +1,12 @@
+{
+  "case_id": "aws-powertools-query-merge",
+  "suite": "smoke",
+  "category": "bug_fix",
+  "repo": "aws-powertools/powertools-lambda-python",
+  "commit": "cd8829bbe34dc4163bebd340ea671b9548325317",
+  "task": "ALBEvent and APIGatewayProxyEvent lose single-value query parameters whenever multi-value parameters are also present. Merge both collections, normalize single values to lists, and let multi-value entries win on duplicate keys. Preserve behavior when either collection is absent.",
+  "setup": [],
+  "verification": {
+    "commands": [["uv", "run", "--no-project", "--isolated", "--with", "jmespath", "--with", "typing-extensions", "python", "-c", "from aws_lambda_powertools.utilities.data_classes.alb_event import ALBEvent; from aws_lambda_powertools.utilities.data_classes.api_gateway_proxy_event import APIGatewayProxyEvent; raw={'queryStringParameters':{'status':'active','key':'single'},'multiValueQueryStringParameters':{'ids':['1','2'],'key':['multi']}}; expected={'status':['active'],'ids':['1','2'],'key':['multi']}; assert ALBEvent(raw).resolved_query_string_parameters == expected; assert APIGatewayProxyEvent(raw).resolved_query_string_parameters == expected"]]
+  }
+}

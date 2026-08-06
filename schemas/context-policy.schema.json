@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contextlens.dev/schemas/context-policy-v1.json",
+  "title": "ContextLens context policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "objective", "context"],
+  "properties": {
+    "version": {"const": 1},
+    "objective": {
+      "enum": [
+        "quality",
+        "cost_without_regression",
+        "latency_without_regression",
+        "balanced"
+      ]
+    },
+    "context": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*$": {
+          "type": "object",
+          "required": ["sources", "strategy"],
+          "properties": {
+            "sources": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"type": "string", "minLength": 1}
+            },
+            "strategy": {
+              "enum": [
+                "always_include",
+                "exclude",
+                "summarize",
+                "lazy_load",
+                "scoped",
+                "needs_more_evidence"
+              ]
+            },
+            "max_tokens": {"type": "integer", "minimum": 1},
+            "target_agent_ids": {
+              "type": "array",
+              "items": {"type": "string", "minLength": 1}
+            },
+            "target_phases": {
+              "type": "array",
+              "items": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  }
+}

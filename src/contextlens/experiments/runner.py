@@ -7,6 +7,7 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from contextlens.experiments.adapters import AgentAdapter
@@ -20,6 +21,13 @@ from contextlens.experiments.model import (
     ReplayTask,
     ResourceLimits,
 )
+from contextlens.experiments.mutations import (
+    ContextMutation,
+    MutationOperation,
+    Summarizer,
+    apply_mutations,
+)
+from contextlens.experiments.verification import WorkspaceVerifier
 from contextlens.experiments.workspace import DirectorySnapshot, compare_workspace
 from contextlens.trace.model import ContextSource
 
@@ -36,6 +44,10 @@ class ReplayWorker:
         context: tuple[ContextSource, ...],
         settings: AgentSettings,
         timeout_seconds: float,
+        summarizer: Summarizer | None = None,
+        target_agent_id: str | None = None,
+        target_phase: str | None = None,
+        verifier: WorkspaceVerifier | None = None,
     ) -> None:
         self.adapter = adapter
         self.snapshot = snapshot
@@ -43,6 +55,10 @@ class ReplayWorker:
         self.context = context
         self.settings = settings
         self.timeout_seconds = timeout_seconds
+        self.summarizer = summarizer
+        self.target_agent_id = target_agent_id
+        self.target_phase = target_phase
+        self.verifier = verifier
         source_ids = [source.source_id for source in context]
         if len(source_ids) != len(set(source_ids)):
             raise ValueError("context source IDs must be unique")
@@ -52,14 +68,24 @@ class ReplayWorker:
         unknown = variant.removed_source_ids - known_ids
         if unknown:
             raise ValueError(f"variant removes unknown source IDs: {sorted(unknown)}")
-        selected = tuple(
-            source
-            for source in self.context
-            if source.source_id not in variant.removed_source_ids
+        compatibility_removals = tuple(
+            ContextMutation(MutationOperation.REMOVE, source_id)
+            for source_id in sorted(variant.removed_source_ids)
         )
+        application = apply_mutations(
+            self.context,
+            (*compatibility_removals, *variant.mutations),
+            summarizer=self.summarizer,
+            agent_id=self.target_agent_id,
+            phase=self.target_phase,
+        )
+        selected = application.context
         run_id = str(uuid4())
+        started_at = datetime.now(UTC).isoformat()
         started = time.monotonic()
+        result_metadata: dict[str, object] = {}
         with self.snapshot.isolated() as (workspace, before):
+            workspace_id = workspace.parent.name
             request = ReplayRequest(
                 run_id=run_id,
                 task=self.task,
@@ -68,25 +94,56 @@ class ReplayWorker:
                 settings=self.settings,
                 workspace=str(workspace),
                 timeout_seconds=self.timeout_seconds,
+                lazy_context=application.lazy_context,
             )
             try:
                 outcome = self.adapter.run(request)
+                if self.verifier is not None:
+                    verification = self.verifier.verify(
+                        workspace,
+                        self.task,
+                        outcome,
+                    )
+                    verification_line = (
+                        "verification passed"
+                        if verification.passed
+                        else "verification failed"
+                    )
+                    outcome = replace(
+                        outcome,
+                        commands=(
+                            *outcome.commands,
+                            " ".join(verification.command),
+                        ),
+                        test_results=(
+                            *outcome.test_results,
+                            verification_line,
+                        ),
+                        metadata={
+                            **dict(outcome.metadata),
+                            "task_completion": verification.passed,
+                            "verification": verification.to_dict(),
+                            "verifier_id": self.verifier.verifier_id,
+                        },
+                    )
                 status = ReplayStatus.COMPLETED
                 error = None
             except TimeoutError as exception:
                 outcome = None
                 status = ReplayStatus.TIMED_OUT
                 error = str(exception)
+                result_metadata = _exception_metadata(exception)
             except Exception as exception:
                 outcome = None
                 status = ReplayStatus.FAILED
                 error = f"{type(exception).__name__}: {exception}"
+                result_metadata = _exception_metadata(exception)
             changes = compare_workspace(workspace, before)
         return ReplayResult(
             run_id=run_id,
             task_id=self.task.task_id,
             variant_id=variant.variant_id,
-            removed_source_ids=tuple(sorted(variant.removed_source_ids)),
+            removed_source_ids=_removed_source_ids(variant),
             status=status,
             attempt=attempt,
             duration_seconds=time.monotonic() - started,
@@ -96,6 +153,11 @@ class ReplayWorker:
             file_changes=changes,
             error=error,
             cache_key=self.cache_key(variant),
+            workspace_id=workspace_id,
+            workspace_path=str(workspace),
+            started_at=started_at,
+            ended_at=datetime.now(UTC).isoformat(),
+            metadata=result_metadata,
         )
 
     def cache_key(self, variant: ContextVariant) -> str:
@@ -120,6 +182,9 @@ class ReplayWorker:
                 for source in self.context
                 if source.source_id not in variant.removed_source_ids
             ],
+            "mutations": [mutation.to_dict() for mutation in variant.mutations],
+            "target_agent_id": self.target_agent_id,
+            "target_phase": self.target_phase,
         }
         encoded = json.dumps(
             value,
@@ -163,7 +228,7 @@ class ReplayCoordinator:
                 return replace(
                     cached,
                     variant_id=variant.variant_id,
-                    removed_source_ids=tuple(sorted(variant.removed_source_ids)),
+                    removed_source_ids=_removed_source_ids(variant),
                     status=ReplayStatus.CACHED,
                 )
         result: ReplayResult | None = None
@@ -224,3 +289,19 @@ def _source_tokens(source: ContextSource) -> int:
     if source.content is None:
         return 0
     return (len(source.content.encode("utf-8")) + 3) // 4
+
+
+def _removed_source_ids(variant: ContextVariant) -> tuple[str, ...]:
+    explicit = {
+        mutation.context_item_id
+        for mutation in variant.mutations
+        if mutation.operation is MutationOperation.REMOVE
+    }
+    return tuple(sorted(variant.removed_source_ids | explicit))
+
+
+def _exception_metadata(exception: Exception) -> dict[str, object]:
+    value = getattr(exception, "metadata", None)
+    if not isinstance(value, dict):
+        return {}
+    return {str(key): item for key, item in value.items()}

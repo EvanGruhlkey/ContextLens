@@ -39,6 +39,7 @@ from contextlens.optimization import (
     OptimizationObjective,
     OptimizationPolicy,
 )
+from contextlens.policy import policy_from_report
 from contextlens.profiler import ContextProfiler, RunObservation
 from contextlens.reports import (
     Report,
@@ -126,6 +127,16 @@ def _parser() -> argparse.ArgumentParser:
     report.add_argument("report", type=Path)
     _format_arguments(report)
     report.set_defaults(handler=_render_saved)
+
+    policy = commands.add_parser(
+        "policy",
+        help="export a validated context policy from a saved report",
+    )
+    policy.add_argument("report", type=Path)
+    policy.add_argument("--objective", default="balanced")
+    policy.add_argument("--format", choices=("yaml", "json"), default="yaml")
+    policy.add_argument("--output", required=True, type=Path)
+    policy.set_defaults(handler=_export_policy)
     return parser
 
 
@@ -390,6 +401,22 @@ def _render_saved(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _export_policy(arguments: argparse.Namespace) -> int:
+    value = _load_json(arguments.report)
+    if not isinstance(value, dict):
+        raise ValueError("report must contain a JSON object")
+    policy = policy_from_report(
+        Report.from_dict(value),
+        objective=arguments.objective,
+    )
+    output = arguments.output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    content = policy.to_yaml() if arguments.format == "yaml" else policy.to_json()
+    output.write_text(content, encoding="utf-8")
+    print(output)
+    return 0
+
+
 def _write_report(
     report: Report,
     output_format: str,
@@ -435,6 +462,10 @@ def _observation(value: Any) -> RunObservation:
         changed_files=tuple(
             str(item)
             for item in value.get("changed_files", ())
+        ),
+        task_text=str(value.get("task_text", "")),
+        searched_queries=tuple(
+            str(item) for item in value.get("searched_queries", ())
         ),
     )
 

@@ -1,0 +1,12 @@
+{
+  "case_id": "microsoft-tslib-spread-array",
+  "suite": "smoke",
+  "category": "bug_fix",
+  "repo": "microsoft/tslib",
+  "commit": "0b9301459c223140c9a01b4215cbbc1639a396ca",
+  "task": "Fix __spreadArray when the source is array-like but explicitly non-concat-spreadable. It should append the source elements rather than the source object itself. Keep the CommonJS and ES module helper implementations consistent.",
+  "setup": [],
+  "verification": {
+    "commands": [["node", "-e", "const assert=require('assert'); const t=require('./tslib.js'); const source={0:'a',1:'b',length:2,[Symbol.isConcatSpreadable]:false}; assert.deepStrictEqual(t.__spreadArray([],source,false),['a','b']);"]]
+  }
+}

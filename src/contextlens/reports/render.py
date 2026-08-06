@@ -37,6 +37,11 @@ def render_csv(report: Report) -> str:
         "projected_latency_saved_seconds",
         "break_even_runs",
         "removal_quality_change",
+        "context_percentage",
+        "observed_usage",
+        "redundancy_score",
+        "experiment_priority",
+        "experiment_status",
         "detail",
     ]
     writer = csv.DictWriter(stream, fieldnames=fields, lineterminator="\n")
@@ -62,6 +67,10 @@ def render_terminal(report: Report) -> str:
         headers = (
             "Source",
             "Tokens",
+            "% Context",
+            "Usage",
+            "Redundancy",
+            "Priority",
             "Effect",
             "Evidence",
             "Verdict",
@@ -73,6 +82,14 @@ def render_terminal(report: Report) -> str:
             (
                 finding.name,
                 str(finding.tokens),
+                (
+                    f"{finding.context_percentage:.1%}"
+                    if finding.context_percentage is not None
+                    else "—"
+                ),
+                finding.observed_usage or "—",
+                _number(finding.redundancy_score),
+                _number(finding.experiment_priority),
                 _number(finding.effect),
                 finding.evidence_level,
                 finding.verdict,
@@ -133,6 +150,11 @@ def render_html(report: Report) -> str:
         "<tr>"
         f"<td>{html.escape(finding.name)}</td>"
         f"<td>{finding.tokens}</td>"
+        f"<td>{html.escape(finding.kind)}</td>"
+        f"<td>{html.escape(_percentage(finding.context_percentage))}</td>"
+        f"<td>{html.escape(finding.observed_usage or '—')}</td>"
+        f"<td>{html.escape(_number(finding.redundancy_score))}</td>"
+        f"<td>{html.escape(finding.experiment_status or 'completed')}</td>"
         f"<td>{html.escape(_number(finding.effect))}</td>"
         f"<td>{html.escape(finding.verdict)}</td>"
         f"<td>{html.escape(finding.action or '—')}</td>"
@@ -192,7 +214,8 @@ padding:3px 7px;border-radius:10px}} section{{margin-top:28px}} li{{margin:7px}}
 <p>Generated {html.escape(report.generated_at)}</p>
 <div class="cards">{summary}</div>
 <section><h2>Findings</h2><table>
-<thead><tr><th>Source</th><th>Tokens</th><th>Effect</th>
+  <thead><tr><th>Source</th><th>Tokens</th><th>Type</th><th>% context</th>
+  <th>Observed usage</th><th>Redundancy</th><th>Experiment</th><th>Effect</th>
 <th>Verdict</th><th>Action</th><th>Projected tokens</th>
 <th>Projected net savings</th><th>Evidence</th></tr></thead>
 <tbody>{rows}</tbody></table></section>
@@ -216,6 +239,10 @@ def _row(values: tuple[str, ...], widths: list[int]) -> str:
 
 def _number(value: float | None) -> str:
     return "—" if value is None else f"{value:+.4f}"
+
+
+def _percentage(value: float | None) -> str:
+    return "-" if value is None else f"{value:.1%}"
 
 
 def _interval(low: float | None, high: float | None) -> str:

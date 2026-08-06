@@ -1,0 +1,23 @@
+{
+  "method": "seeded stratified random sample from company-owned public repositories that have credential-free local verification",
+  "seed": "contextlens-company-smoke-v1",
+  "python_pool": [
+    "aws-powertools/powertools-lambda-python",
+    "getsentry/responses",
+    "pydantic/pydantic",
+    "spotify/luigi"
+  ],
+  "typescript_pool": [
+    "googleapis/nodejs-storage",
+    "microsoft/tslib",
+    "stripe/stripe-node"
+  ],
+  "selected": [
+    "aws-powertools/powertools-lambda-python",
+    "spotify/luigi",
+    "microsoft/tslib"
+  ],
+  "screened_out_after_draw": {
+    "googleapis/nodejs-storage": "dependency installation and replay-copy footprint exceeded the bounded smoke-case criterion"
+  }
+}

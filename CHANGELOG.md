@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Added complete agent-run and step records alongside structured context JSONL.
+- Added content hashing, expanded coding-agent source kinds, and built-in secret
+  redaction.
+- Added normalized project-scoped SQLite storage and an initial migration.
+- Added explicit remove, summarize, lazy-load, and scope mutations.
+- Added deterministic budgeted paired planning and validated replay lifecycle
+  transitions.
+- Added coding-task evaluation dimensions, effect evidence labels, policy
+  export/reapplication, richer HTML context breakdowns, and an end-to-end
+  fixture repository.
+
 All notable project changes will be documented here.
 
 The format follows Keep a Changelog principles, and releases use semantic

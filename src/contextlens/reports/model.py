@@ -40,6 +40,11 @@ class Finding:
     projected_latency_saved_seconds: float | None = None
     break_even_runs: int | None = None
     removal_quality_change: float | None = None
+    context_percentage: float | None = None
+    observed_usage: str | None = None
+    redundancy_score: float | None = None
+    experiment_priority: float | None = None
+    experiment_status: str | None = None
     detail: str = ""
 
 
@@ -197,6 +202,15 @@ class ReportBuilder:
                 evidence_level="observed",
                 verdict=profile.label.value,
                 tokens=profile.token_count,
+                context_percentage=(
+                    profile.token_count / report.total_tokens
+                    if report.total_tokens
+                    else 0.0
+                ),
+                observed_usage=profile.label.value,
+                redundancy_score=profile.redundancy_score,
+                experiment_priority=profile.experiment_priority,
+                experiment_status="not_run",
                 detail="apparent utilization from one completed run",
             )
         self._summary["profiled_sources"] = len(report.profiles)

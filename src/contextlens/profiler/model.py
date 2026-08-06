@@ -51,6 +51,24 @@ class RunObservation:
     commands: tuple[str, ...] = ()
     tool_inputs: tuple[str, ...] = ()
     changed_files: tuple[str, ...] = ()
+    task_text: str = ""
+    searched_queries: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileReason:
+    """Inspectible explanation for a candidate score."""
+
+    code: str
+    description: str
+    evidence: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "description": self.description,
+            "evidence": self.evidence or {},
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +89,14 @@ class SourceProfile:
     matched_output_spans: tuple[str, ...]
     signals: tuple[UsageSignal, ...]
     evidence_level: EvidenceLevel = EvidenceLevel.OBSERVED
+    relevance_score: float = 0.0
+    observed_usage_score: float = 0.0
+    redundancy_score: float = 0.0
+    contradiction_score: float = 0.0
+    staleness_score: float = 0.0
+    token_cost_score: float = 0.0
+    experiment_priority: float = 0.0
+    reasons: tuple[ProfileReason, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -88,5 +114,12 @@ class SourceProfile:
             "retrieval_rank": self.retrieval_rank,
             "matched_output_spans": list(self.matched_output_spans),
             "signals": [signal.to_dict() for signal in self.signals],
+            "relevance_score": self.relevance_score,
+            "observed_usage_score": self.observed_usage_score,
+            "redundancy_score": self.redundancy_score,
+            "contradiction_score": self.contradiction_score,
+            "staleness_score": self.staleness_score,
+            "token_cost_score": self.token_cost_score,
+            "experiment_priority": self.experiment_priority,
+            "reasons": [reason.to_dict() for reason in self.reasons],
         }
-

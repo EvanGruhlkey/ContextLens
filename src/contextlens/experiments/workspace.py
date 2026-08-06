@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import os
 import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -65,8 +66,26 @@ class DirectorySnapshot:
                 workspace,
                 ignore=shutil.ignore_patterns(*_IGNORED_NAMES),
             )
+            _prepare_windows_python_cache_directories(workspace)
             before = _files(workspace)
             yield workspace, before
+
+
+def _prepare_windows_python_cache_directories(workspace: Path) -> None:
+    """Avoid sandbox-owned Python cache directories that Windows cannot clean.
+
+    The native elevated sandbox can assign a restrictive ACL when a test runner
+    creates ``__pycache__``. Pre-creating each cache directory in the host
+    process preserves normal ownership; bytecode remains excluded from snapshots.
+    """
+
+    if os.name != "nt":
+        return
+    parents = {path.parent for path in workspace.rglob("*.py")}
+    for parent in parents:
+        (parent / "__pycache__").mkdir(exist_ok=True)
+    for name in (".pytest_cache", ".mypy_cache", ".ruff_cache"):
+        (workspace / name).mkdir(exist_ok=True)
 
 
 def compare_workspace(
@@ -115,4 +134,3 @@ def _text_patch(path: str, old: bytes | None, new: bytes | None) -> str | None:
         )
     )
     return patch if len(patch.encode("utf-8")) <= 64 * 1024 else None
-

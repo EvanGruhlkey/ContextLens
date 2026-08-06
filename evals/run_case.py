@@ -1,0 +1,41 @@
+"""Run one pinned real-repository ContextLens evaluation case."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+from evals.repository_runner import RepositoryRunOptions, run_repository_cases
+from evals.run import DEFAULT_MODEL, DEFAULT_REASONING
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--case", type=Path, required=True)
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--reasoning", default=DEFAULT_REASONING)
+    parser.add_argument("--timeout-seconds", type=float, default=600.0)
+    parser.add_argument("--max-experiments", type=int, default=2)
+    parser.add_argument("--output-root", type=Path, default=Path("evals/artifacts"))
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    run_dir = run_repository_cases(
+        (args.case,),
+        suite="case",
+        options=RepositoryRunOptions(
+            model=args.model,
+            reasoning=args.reasoning,
+            timeout_seconds=args.timeout_seconds,
+            max_experiments=args.max_experiments,
+            output_root=args.output_root,
+        ),
+    )
+    print(run_dir)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

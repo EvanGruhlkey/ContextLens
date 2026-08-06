@@ -3,6 +3,7 @@
 from contextlens.profiler.adapters import ContentSimilarity, ModelInternalsAdapter
 from contextlens.profiler.model import (
     EvidenceLevel,
+    ProfileReason,
     RunObservation,
     SourceProfile,
     UsageLabel,
@@ -16,6 +17,7 @@ __all__ = [
     "EvidenceLevel",
     "ModelInternalsAdapter",
     "ProfileReport",
+    "ProfileReason",
     "RunObservation",
     "SourceProfile",
     "UsageLabel",

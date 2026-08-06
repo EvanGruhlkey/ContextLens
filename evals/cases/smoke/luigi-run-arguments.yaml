@@ -1,0 +1,12 @@
+{
+  "case_id": "spotify-luigi-run-arguments",
+  "suite": "smoke",
+  "category": "bug_fix",
+  "repo": "spotify/luigi",
+  "commit": "096c48238f6f60970aa7142cdca64e5b27fd5fbb",
+  "task": "luigi.run() accepts arbitrary values as command-line arguments and later fails with confusing behavior. Validate that explicit command-line arguments are a list or tuple, raise an informative TypeError otherwise, and continue accepting None, lists, and tuples.",
+  "setup": [],
+  "verification": {
+    "commands": [["uv", "run", "--no-project", "--isolated", "--with", "python-dateutil", "--with", "tornado", "--with", "tenacity", "--with", "typing-extensions", "python", "-c", "import luigi;\nfor value in (123, {'task':'X'}, 'X'):\n try: luigi.run(value)\n except TypeError as e: assert 'list or tuple' in str(e)\n else: raise AssertionError(value)\nfor value in ([], ()):\n try: luigi.run(value)\n except (SystemExit, Exception) as e:\n  assert not isinstance(e, TypeError)"]]
+  }
+}

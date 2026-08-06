@@ -2,6 +2,7 @@
 
 from contextlens.evaluators.builtins import (
     CallableEvaluator,
+    CodingTaskEvaluator,
     ExactMatchEvaluator,
     RecordedEvaluator,
     TestResultsEvaluator,
@@ -9,8 +10,8 @@ from contextlens.evaluators.builtins import (
 
 __all__ = [
     "CallableEvaluator",
+    "CodingTaskEvaluator",
     "ExactMatchEvaluator",
     "RecordedEvaluator",
     "TestResultsEvaluator",
 ]
-

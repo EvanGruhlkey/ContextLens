@@ -1,0 +1,12 @@
+{
+  "case_id": "microsoft-tslib-async-delegator",
+  "suite": "smoke",
+  "category": "bug_fix",
+  "repo": "microsoft/tslib",
+  "commit": "8acd4b30d375be8c43144b9ee0b3c98599e7a9a1",
+  "task": "__asyncDelegator reports done too early for the first return delegation step. The wrapper step that yields the awaited return must remain incomplete until the delegated result is resumed. Keep CommonJS and ES module helpers consistent.",
+  "setup": [],
+  "verification": {
+    "commands": [["node", "-e", "const assert=require('assert'); const t=require('./tslib.js'); const delegate={next:v=>({value:v,done:false}),return:v=>({value:v,done:true})}; const wrapped=t.__asyncDelegator(delegate); const first=wrapped.return(42); assert.strictEqual(first.done,false); assert.ok(first.value); const second=wrapped.return(42); assert.strictEqual(second,42);"]]
+  }
+}

@@ -1,5 +1,8 @@
 # Benchmarks
 
+> **Planner benchmark only. This does not measure end-to-end LLM task
+> performance or production token savings.**
+
 ## Adaptive versus exhaustive ablation
 
 Run:
@@ -29,4 +32,3 @@ Expected result for version 0.1.0:
 This benchmark validates planner behavior and query count. It is not evidence
 that real model tasks will achieve the same reduction. Real savings depend on
 context interactions, evaluator noise, group structure, and stopping budgets.
-

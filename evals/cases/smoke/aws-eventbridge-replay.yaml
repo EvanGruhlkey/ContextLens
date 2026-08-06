@@ -1,0 +1,12 @@
+{
+  "case_id": "aws-powertools-eventbridge-replay",
+  "suite": "smoke",
+  "category": "bug_fix",
+  "repo": "aws-powertools/powertools-lambda-python",
+  "commit": "f8c7faf9c47c6d1ea60e50324670f1aafaa797f8",
+  "task": "EventBridgeEvent.replay_name currently raises KeyError for ordinary EventBridge events that were not replayed. Make the property return None when replay-name is absent while preserving the replay name when present. Keep the change focused.",
+  "setup": [],
+  "verification": {
+    "commands": [["uv", "run", "--no-project", "--isolated", "--with", "jmespath", "--with", "typing-extensions", "python", "-c", "from aws_lambda_powertools.utilities.data_classes.event_bridge_event import EventBridgeEvent; base={'version':'0','id':'x','detail-type':'x','source':'x','account':'x','time':'x','region':'x','resources':[],'detail':{}}; assert EventBridgeEvent(base).replay_name is None; base['replay-name']='archive'; assert EventBridgeEvent(base).replay_name == 'archive'"]]
+  }
+}

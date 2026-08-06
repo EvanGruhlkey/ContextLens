@@ -150,3 +150,46 @@ misrepresent correlated or interacting sources: if two sources duplicate the
 same fact, each may appear useless even though at least one is required.
 ContextLens therefore preserves evidence levels, grouped results, and run-level
 data for later interaction analysis.
+
+## Implemented coding-agent MVP revision
+
+The portable trace stream now optionally includes an `AgentTrace` aggregate and
+ordered `TraceStep` records in addition to context events. The normalized local
+index is SQLite:
+
+```text
+projects
+  -> traces
+     -> trace_steps
+     -> context_items -> context_profiles
+     -> experiments -> experiment_variants -> mutations
+                    -> replay_runs -> evaluation_results
+                    -> effect_estimates
+     -> recommendations
+  -> context_policies
+```
+
+All content-bearing trace reads are project scoped. Core query fields are
+columns; JSON is limited to provider metadata, evidence, and extensible
+parameters.
+
+The replay mutation boundary is explicit:
+
+```text
+baseline context
+  -> remove | summarize | lazy_load | scope
+  -> initial context + retrievable context
+  -> isolated workspace and conversation
+  -> adapter outcome + file patch + retrieval accounting
+  -> coding evaluator
+  -> paired effect
+```
+
+`DeterministicExperimentCoordinator` produces stable one-item experiments and
+matched job IDs. `ExperimentLifecycle` enforces pending, running, evaluating,
+and terminal states. The existing adaptive group planner remains available for
+later interaction search.
+
+See [contextlens-revision-plan.md](contextlens-revision-plan.md) for the
+assessment and [mvp-workflow.md](mvp-workflow.md) for reproducible commands,
+security boundaries, compatibility notes, and limitations.

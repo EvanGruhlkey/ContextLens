@@ -1,0 +1,5 @@
+{
+  "filesystem.read": {"description": "Read a file", "input": {"path": "string"}},
+  "filesystem.write": {"description": "Write a file", "input": {"path": "string", "content": "string"}},
+  "weather.lookup": {"description": "Unrelated weather lookup", "input": {"city": "string"}}
+}

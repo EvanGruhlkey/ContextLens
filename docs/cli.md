@@ -1,5 +1,21 @@
 # Command-line workflows
 
+## Export a context-loading policy
+
+Export the strongest finding for each source from a saved JSON report:
+
+```bash
+contextlens policy runs/latest.json \
+  --objective balanced \
+  --format yaml \
+  --output runs/context-policy.yaml
+```
+
+Unverified or inconclusive sources are emitted as `needs_more_evidence`.
+Supported output formats are YAML and JSON. Policies are validated against the
+version 1 in-process model; the portable schema is
+`schemas/context-policy.schema.json`.
+
 Install the package in a Python 3.11+ environment:
 
 ```bash
