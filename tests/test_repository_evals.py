@@ -15,6 +15,7 @@ from evals.repository_cases import (
 )
 from evals.run import (
     FINAL_POLICIES,
+    _deployable_context_effect,
     _deployment_rejection_reasons,
     _random_until,
 )
@@ -90,11 +91,45 @@ def test_deployment_gate_rejects_any_observed_regression() -> None:
     assert reasons == ("final trial 1 regressed from success to failure",)
 
 
+def test_deployable_savings_exclude_rejected_candidate_tokens() -> None:
+    measurements = (
+        _measurement("full_context", 1, 0.875, True, task_id="accepted"),
+        _measurement("contextlens", 1, 0.875, True, task_id="accepted"),
+        _measurement("full_context", 1, 0.875, True, task_id="fallback"),
+        _measurement("contextlens", 1, 0.325, False, task_id="fallback"),
+    )
+    context_tokens = {
+        ("accepted", "full_context", 1): 1_000,
+        ("accepted", "contextlens", 1): 200,
+        ("fallback", "full_context", 1): 1_000,
+        ("fallback", "contextlens", 1): 100,
+    }
+
+    result = _deployable_context_effect(
+        measurements,
+        context_tokens_by_key=context_tokens,
+        decisions={
+            "accepted": {"accepted": True},
+            "fallback": {"accepted": False},
+        },
+    )
+
+    assert result["quality_preserved"] is True
+    assert result["mean_deployed_injected_context_tokens"] == 600
+    assert result["injected_context_reduction_fraction"] == 0.4
+    assert result["fallback_case_ids"] == ["fallback"]
+
+
 def _measurement(
-    variant_id: str, trial: int, score: float, success: bool
+    variant_id: str,
+    trial: int,
+    score: float,
+    success: bool,
+    *,
+    task_id: str = "case",
 ) -> Measurement:
     return Measurement(
-        task_id="case",
+        task_id=task_id,
         trial_id=f"final:trial-{trial}",
         variant_id=variant_id,
         score=score,
