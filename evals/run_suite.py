@@ -15,6 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--suite", choices=("smoke",), required=True)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--reasoning", default=DEFAULT_REASONING)
+    parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--timeout-seconds", type=float, default=600.0)
     parser.add_argument("--max-experiments", type=int, default=2)
     parser.add_argument("--output-root", type=Path, default=Path("evals/artifacts"))
@@ -36,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
             reasoning=args.reasoning,
             timeout_seconds=args.timeout_seconds,
             max_experiments=args.max_experiments,
+            trials=args.trials,
             output_root=args.output_root,
         ),
     )

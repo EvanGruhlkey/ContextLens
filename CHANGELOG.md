@@ -12,6 +12,12 @@
 - Added coding-task evaluation dimensions, effect evidence labels, policy
   export/reapplication, richer HTML context breakdowns, and an end-to-end
   fixture repository.
+- Made real-repository evaluation use three trials by default and report
+  injected context separately from provider input usage.
+- Added a post-control deployment gate that refuses to export pruning after any
+  observed final regression.
+- Fixed matched-random controls so they match the target token total without
+  overshooting or duplicating the ContextLens candidate subset.
 
 All notable project changes will be documented here.
 

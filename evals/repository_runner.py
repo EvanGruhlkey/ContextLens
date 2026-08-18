@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -34,6 +35,7 @@ class RepositoryRunOptions:
     reasoning: str = DEFAULT_REASONING
     timeout_seconds: float = 600.0
     max_experiments: int = 2
+    trials: int = 3
     output_root: Path = Path("evals/artifacts")
 
 
@@ -47,6 +49,8 @@ def run_repository_cases(
 
     if not manifest_paths:
         raise ValueError("at least one real-repository case is required")
+    if options.trials < 1:
+        raise ValueError("trials must be positive")
     manifests = tuple(load_manifest(path) for path in manifest_paths)
     if len({item.case_id for item in manifests}) != len(manifests):
         raise ValueError("repository case IDs must be unique")
@@ -62,7 +66,7 @@ def run_repository_cases(
         "suite": suite,
         "case_ids": [item.case_id for item in manifests],
         "comparison_groups": list(FINAL_POLICIES),
-        "trials": 1,
+        "trials": options.trials,
         "provider": DEFAULT_PROVIDER,
         "model": options.model,
         "reasoning_level": options.reasoning,
@@ -89,7 +93,7 @@ def run_repository_cases(
                     case,
                     run_dir=run_dir,
                     evaluation_run_id=run_id,
-                    trials=1,
+                    trials=options.trials,
                     model=options.model,
                     reasoning=options.reasoning,
                     timeout_seconds=options.timeout_seconds,
@@ -108,7 +112,9 @@ def run_repository_cases(
                     flush=True,
                 )
         attempted = _merge_records(run_dir, tuple(outcomes))
-        aggregate = _aggregate(run_dir, tuple(outcomes), suite=suite, trials=1)
+        aggregate = _aggregate(
+            run_dir, tuple(outcomes), suite=suite, trials=options.trials
+        )
         manifest.update(
             {
                 "ended_at": _timestamp(),
@@ -137,11 +143,13 @@ def run_repository_cases(
 def _write_case_summary(case_dir: Path, repo: str, commit: str, task: str) -> None:
     records = read_evaluation_records(case_dir / "invocations.jsonl")
     by_policy = {
-        name: next((record for record in records if record.policy == name), None)
+        name: tuple(record for record in records if record.policy == name)
         for name in FINAL_POLICIES
     }
     profile = _load(case_dir / "profile.json")
     policy = _load(case_dir / "context-policy.json")
+    candidate_policy = _load(case_dir / "candidate-context-policy.json") or policy
+    deployment = _load(case_dir / "deployment-decision.json")
     discovery = [record for record in records if record.policy not in FINAL_POLICIES]
     replay_workers = [
         record
@@ -155,7 +163,16 @@ def _write_case_summary(case_dir: Path, repo: str, commit: str, task: str) -> No
         for record in discovery
     )
     context_rules = policy.get("context", {}) if isinstance(policy, dict) else {}
-    excluded = sum(
+    candidate_rules = (
+        candidate_policy.get("context", {})
+        if isinstance(candidate_policy, dict)
+        else {}
+    )
+    candidate_excluded = sum(
+        isinstance(rule, dict) and rule.get("strategy") == "exclude"
+        for rule in candidate_rules.values()
+    )
+    deployed_excluded = sum(
         isinstance(rule, dict) and rule.get("strategy") == "exclude"
         for rule in context_rules.values()
     )
@@ -174,8 +191,10 @@ def _write_case_summary(case_dir: Path, repo: str, commit: str, task: str) -> No
         if full_context_tokens and retained_context_tokens is not None
         else None
     )
-    baseline_success = _success(baseline)
-    optimized_success = _success(optimized)
+    baseline_summary = _record_summary(baseline)
+    optimized_summary = _record_summary(optimized)
+    baseline_success = bool(baseline_summary["success"])
+    optimized_success = bool(optimized_summary["success"])
     conclusion = (
         "win"
         if optimized_success and not baseline_success
@@ -187,19 +206,24 @@ def _write_case_summary(case_dir: Path, repo: str, commit: str, task: str) -> No
         "repository": repo,
         "commit": commit,
         "task": task.splitlines()[0],
-        "baseline": _record_summary(baseline),
+        "baseline": baseline_summary,
         "contextlens_discovery": {
             "context_sources_observed": len(source_profiles),
             "replay_experiments": len(replay_workers),
             "experiment_input_tokens": experiment_tokens,
             "experiment_uncached_input_tokens": experiment_uncached_tokens,
-            "selected_policy_exclusions": excluded,
+            "selected_candidate_exclusions": candidate_excluded,
         },
         "optimized_verification": {
-            **_record_summary(optimized),
+            **optimized_summary,
             "context_reduction_fraction": reduction,
         },
         "matched_random": _record_summary(random_record),
+        "deployment": {
+            "accepted": bool(deployment.get("accepted", False)),
+            "exported_policy_exclusions": deployed_excluded,
+            "rejection_reasons": list(deployment.get("rejection_reasons", [])),
+        },
         "conclusion": conclusion,
         "production_input_tokens_saved": _difference(baseline, optimized),
         "production_uncached_input_tokens_saved": _uncached_difference(
@@ -215,24 +239,37 @@ def _write_case_summary(case_dir: Path, repo: str, commit: str, task: str) -> No
     )
 
 
-def _record_summary(record: Any) -> dict[str, Any]:
-    if record is None:
+def _record_summary(records: Any) -> dict[str, Any]:
+    values = _as_records(records)
+    if not values:
         return {
             "success": False,
+            "success_rate": 0.0,
+            "trials": 0,
             "tests": "missing",
             "input_tokens": None,
             "latency": None,
         }
-    verification = record.metadata.get("provider_evidence", {}).get("verification", {})
+    successes = [_success(record) for record in values]
+    verifications = [
+        record.metadata.get("provider_evidence", {}).get("verification", {})
+        for record in values
+    ]
     return {
-        "success": _success(record),
-        "tests": "passed" if verification.get("passed") else "failed",
-        "input_tokens": record.provider_input_tokens,
-        "cached_input_tokens": record.provider_cached_tokens,
-        "output_tokens": record.provider_output_tokens,
-        "latency": record.latency_seconds,
-        "tool_calls": len(record.tool_calls),
-        "files_changed": list(record.changed_files),
+        "success": all(successes),
+        "success_rate": sum(successes) / len(successes),
+        "trials": len(values),
+        "tests": (
+            "passed" if all(item.get("passed") for item in verifications) else "failed"
+        ),
+        "input_tokens": _mean_optional(values, "provider_input_tokens"),
+        "cached_input_tokens": _mean_optional(values, "provider_cached_tokens"),
+        "output_tokens": _mean_optional(values, "provider_output_tokens"),
+        "latency": sum(record.latency_seconds for record in values) / len(values),
+        "tool_calls": sum(len(record.tool_calls) for record in values) / len(values),
+        "files_changed": sorted(
+            {path for record in values for path in record.changed_files}
+        ),
     }
 
 
@@ -243,47 +280,78 @@ def _success(record: Any) -> bool:
     return bool(scores.get("success", record.parsed_score.get("success", False)))
 
 
-def _difference(baseline: Any, optimized: Any) -> int | None:
-    if baseline is None or optimized is None:
+def _difference(baseline: Any, optimized: Any) -> float | None:
+    baseline_mean = _mean_optional(_as_records(baseline), "provider_input_tokens")
+    optimized_mean = _mean_optional(_as_records(optimized), "provider_input_tokens")
+    if baseline_mean is None or optimized_mean is None:
         return None
-    if (
-        baseline.provider_input_tokens is None
-        or optimized.provider_input_tokens is None
-    ):
-        return None
-    return int(baseline.provider_input_tokens) - int(optimized.provider_input_tokens)
+    return baseline_mean - optimized_mean
 
 
 def _break_even(baseline: Any, optimized: Any, overhead: int) -> int | None:
     saved = _difference(baseline, optimized)
     if saved is None or saved <= 0:
         return None
-    return max(1, (overhead + saved - 1) // saved)
+    return max(1, math.ceil(overhead / saved))
 
 
-def _uncached_difference(baseline: Any, optimized: Any) -> int | None:
-    if baseline is None or optimized is None:
+def _uncached_difference(baseline: Any, optimized: Any) -> float | None:
+    baseline_values = _as_records(baseline)
+    optimized_values = _as_records(optimized)
+    if not baseline_values or not optimized_values:
         return None
-    values = (
-        baseline.provider_input_tokens,
-        baseline.provider_cached_tokens,
-        optimized.provider_input_tokens,
-        optimized.provider_cached_tokens,
-    )
-    if any(value is None for value in values):
+    baseline_uncached = [
+        record.provider_input_tokens - record.provider_cached_tokens
+        for record in baseline_values
+        if record.provider_input_tokens is not None
+        and record.provider_cached_tokens is not None
+    ]
+    optimized_uncached = [
+        record.provider_input_tokens - record.provider_cached_tokens
+        for record in optimized_values
+        if record.provider_input_tokens is not None
+        and record.provider_cached_tokens is not None
+    ]
+    if (
+        len(baseline_uncached) != len(baseline_values)
+        or len(optimized_uncached) != len(optimized_values)
+    ):
         return None
-    return int(values[0]) - int(values[1]) - int(values[2]) + int(values[3])
+    return sum(baseline_uncached) / len(baseline_uncached) - sum(
+        optimized_uncached
+    ) / len(optimized_uncached)
 
 
-def _prompt_context_tokens(record: Any) -> int | None:
-    if record is None:
+def _prompt_context_tokens(records: Any) -> float | None:
+    values = _as_records(records)
+    if not values:
         return None
-    included = set(record.included_context_sources)
-    return sum(
-        int(item.token_count or 0)
-        for item in record.context_manifest
-        if item.source_id in included
-    )
+    totals = []
+    for record in values:
+        included = set(record.included_context_sources)
+        totals.append(
+            sum(
+                int(item.token_count or 0)
+                for item in record.context_manifest
+                if item.source_id in included
+            )
+        )
+    return sum(totals) / len(totals)
+
+
+def _as_records(value: Any) -> tuple[Any, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, (list, tuple)):
+        return tuple(value)
+    return (value,)
+
+
+def _mean_optional(records: tuple[Any, ...], field: str) -> float | None:
+    values = [getattr(record, field) for record in records]
+    if not values or any(value is None for value in values):
+        return None
+    return sum(float(value) for value in values) / len(values)
 
 
 def _render_summary(value: dict[str, Any]) -> str:
@@ -291,11 +359,14 @@ def _render_summary(value: dict[str, Any]) -> str:
     discovery = value["contextlens_discovery"]
     optimized = value["optimized_verification"]
     random_value = value["matched_random"]
+    deployment = value["deployment"]
     reduction = optimized["context_reduction_fraction"]
     reduction_text = "n/a" if reduction is None else f"{reduction:.1%}"
     return (
         f"Repository: {value['repository']}\nCommit: {value['commit']}\n"
         f"Task: {value['task']}\n\nBaseline:\n- Success: {baseline['success']}\n"
+        f"- Success rate: {baseline['success_rate']:.1%} "
+        f"({baseline['trials']} trials)\n"
         f"- Tests: {baseline['tests']}\n- Input tokens: {baseline['input_tokens']}\n"
         f"- Latency: {baseline['latency']}\n\nContextLens discovery:\n"
         f"- Context sources observed: {discovery['context_sources_observed']}\n"
@@ -303,15 +374,24 @@ def _render_summary(value: dict[str, Any]) -> str:
         f"- Experiment tokens: {discovery['experiment_input_tokens']}\n"
         f"- Experiment uncached tokens: "
         f"{discovery['experiment_uncached_input_tokens']}\n"
-        f"- Selected policy exclusions: {discovery['selected_policy_exclusions']}\n\n"
+        f"- Selected candidate exclusions: "
+        f"{discovery['selected_candidate_exclusions']}\n\n"
         f"Optimized verification:\n- Success: {optimized['success']}\n"
+        f"- Success rate: {optimized['success_rate']:.1%} "
+        f"({optimized['trials']} trials)\n"
         f"- Tests: {optimized['tests']}\n- Input tokens: {optimized['input_tokens']}\n"
         f"- Latency: {optimized['latency']}\n- Context reduction: {reduction_text}\n\n"
         f"Matched random:\n- Success: {random_value['success']}\n"
+        f"- Success rate: {random_value['success_rate']:.1%} "
+        f"({random_value['trials']} trials)\n"
         f"- Tests: {random_value['tests']}\n"
         f"- Input tokens: {random_value['input_tokens']}\n"
         f"- Latency: {random_value['latency']}\n\nConclusion:\n"
         f"- ContextLens {value['conclusion']}\n"
+        f"- Deployment accepted: {deployment['accepted']}\n"
+        f"- Exported policy exclusions: "
+        f"{deployment['exported_policy_exclusions']}\n"
+        f"- Deployment rejection reasons: {deployment['rejection_reasons']}\n"
         f"- Production input-token savings: {value['production_input_tokens_saved']}\n"
         f"- Production uncached-input savings: "
         f"{value['production_uncached_input_tokens_saved']}\n"

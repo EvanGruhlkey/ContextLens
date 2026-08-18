@@ -12,9 +12,13 @@ then uses the production ContextLens path:
 2. production trace recording and one-run profiling;
 3. adaptive paired replays in fresh workspaces;
 4. production paired analysis and optimizer verification;
-5. export of the optimizer-produced context policy;
-6. fresh full-context, ContextLens, and matched-random verification runs;
-7. per-case and aggregate reports with token, latency, test, and overhead data.
+5. export of the optimizer-produced candidate policy;
+6. at least three fresh full-context, ContextLens, and genuinely distinct
+   token-matched-random verification runs;
+7. a deployment gate that rejects the candidate after any observed final
+   quality regression and exports a non-pruning policy instead;
+8. per-case and aggregate reports with injected-context, provider-token,
+   latency, test, and overhead data.
 
 Context is discovered by repository conventions (`AGENTS.md`, root project
 metadata, project documentation, the tracked-file map, the pinned commit, and
@@ -48,6 +52,11 @@ prompt, context partition, token usage, commands, tool events, file changes,
 test output, policy, trace, reports, and checksums are retained under
 `evals/artifacts/<run-id>/`. `case-summary.txt` is the concise result requested
 for each repository task.
+
+Both commands default to three trials. `candidate-context-policy.*` records the
+configuration measured by the final controls. `context-policy.*` is the safe
+deployment artifact; if a final trial regresses, it contains no exclusion
+mutation and `deployment-decision.json` explains the rejection.
 
 ChatGPT-authenticated Codex reports token usage but not a per-call USD charge,
 so reports calculate token break-even and mark dollar cost unavailable.

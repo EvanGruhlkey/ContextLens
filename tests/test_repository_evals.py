@@ -3,14 +3,21 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
+from contextlens.analysis import Measurement
+from contextlens.trace import ContextSource, SourceKind
 from evals.repository_cases import (
     acquire_repository,
     discover_context,
     load_manifest,
     smoke_manifests,
 )
-from evals.run import FINAL_POLICIES
+from evals.run import (
+    FINAL_POLICIES,
+    _deployment_rejection_reasons,
+    _random_until,
+)
 
 
 def test_smoke_suite_has_two_tasks_for_three_real_repositories() -> None:
@@ -30,6 +37,73 @@ def test_smoke_suite_has_two_tasks_for_three_real_repositories() -> None:
 
 def test_primary_comparison_has_only_requested_groups() -> None:
     assert FINAL_POLICIES == ("full_context", "contextlens", "matched_random")
+
+
+def test_matched_random_control_uses_closest_token_subset() -> None:
+    context = tuple(
+        ContextSource(
+            kind=SourceKind.RETRIEVED_DOCUMENT,
+            name=f"source-{index}",
+            content="x",
+            source_id=f"source-{index}",
+            token_count=tokens,
+            token_count_method="test",
+        )
+        for index, tokens in enumerate((31_000, 3_769, 2_469, 1_893, 121))
+    )
+    case = SimpleNamespace(case_id="token-match", context=context)
+
+    selected = _random_until(case, 39_131)
+    selected_tokens = sum(
+        source.token_count or 0
+        for source in context
+        if source.source_id in selected
+    )
+
+    assert selected_tokens == 39_131
+    assert len(selected) < len(context)
+
+    different = _random_until(
+        case,
+        39_131,
+        forbidden=(frozenset(selected),),
+    )
+    assert frozenset(different) != frozenset(selected)
+
+
+def test_deployment_gate_rejects_any_observed_regression() -> None:
+    measurements = (
+        _measurement("full_context", 1, 0.875, True),
+        _measurement("contextlens", 1, 0.325, False),
+        _measurement("full_context", 2, 0.875, True),
+        _measurement("contextlens", 2, 0.875, True),
+        _measurement("full_context", 3, 0.875, True),
+        _measurement("contextlens", 3, 0.875, True),
+    )
+
+    reasons = _deployment_rejection_reasons(
+        measurements,
+        trials=3,
+        quality_tolerance=0.02,
+    )
+
+    assert reasons == ("final trial 1 regressed from success to failure",)
+
+
+def _measurement(
+    variant_id: str, trial: int, score: float, success: bool
+) -> Measurement:
+    return Measurement(
+        task_id="case",
+        trial_id=f"final:trial-{trial}",
+        variant_id=variant_id,
+        score=score,
+        success=success,
+        input_tokens=0,
+        output_tokens=0,
+        cost_usd=0.0,
+        latency_seconds=0.0,
+    )
 
 
 def test_manifest_public_value_does_not_expose_hidden_patch() -> None:
