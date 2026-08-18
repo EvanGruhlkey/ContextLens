@@ -9,6 +9,12 @@ An adaptive coordinator launches isolated replay workers for the context
 changes most likely to matter, rather than blindly rerunning every possible
 variant.
 
+The primary production metric is **deployable injected-context reduction**:
+tokens removed from the context preloaded into the agent, counting only
+policies that pass repeated mechanical quality checks. Provider-reported input
+tokens are shown separately because they also include system prompts, caching,
+reasoning, and later tool-driven exploration.
+
 ```text
 Context source             Tokens   Effect   Action       Token savings
 AGENTS.md                    4,820    +14%    Keep                     0

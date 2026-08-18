@@ -26,6 +26,18 @@ setup output). Case authors do not hand-pick relevant source files or construct
 a policy. Removing eager context never deletes repository files: every worker
 can still search and open the isolated checkout with its normal tools.
 
+## Primary result
+
+ContextLens is a context-token saver. Its headline metric is the fraction of
+preloaded, injected context tokens removed by the final deployable policy while
+mechanical task quality remains within tolerance. Total provider input is a
+secondary diagnostic because it also includes system prompts, cache behavior,
+reasoning, tool calls, and context the agent chooses to open later.
+
+`aggregate.json` reports the headline under `deployable_context_effect`. Cases
+whose candidate regresses fall back to full context, so rejected removals never
+contribute to the deployable savings percentage.
+
 The JSON-compatible `.yaml` files under `evals/cases/smoke/` pin six cases: two
 tasks each for AWS Powertools for Lambda, Spotify Luigi, and Microsoft tslib.
 These company-owned repositories were selected by the recorded seeded,

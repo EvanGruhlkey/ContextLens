@@ -1218,6 +1218,20 @@ def _aggregate(
         if mean_input_saved > 0
         else None
     )
+    decisions = {
+        outcome.case_id: _load_deployment_decision(outcome.directory)
+        for outcome in outcomes
+    }
+    context_tokens_by_key = {
+        (record.case_id, record.policy, record.trial): _record_context_tokens(record)
+        for record in records
+        if record.policy in {"full_context", "contextlens"}
+    }
+    deployable_effect = _deployable_context_effect(
+        measurements,
+        context_tokens_by_key=context_tokens_by_key,
+        decisions=decisions,
+    )
     result = {
         "schema_version": SCHEMA_VERSION,
         "suite": suite,
@@ -1249,6 +1263,7 @@ def _aggregate(
         },
         "policy_summaries": policy_summaries,
         "optimized_production_effect": {
+            "candidate_only": True,
             "mean_injected_context_tokens_saved": mean_context_saved,
             "injected_context_reduction_fraction": context_reduction,
             "mean_input_tokens_saved": mean_input_saved,
@@ -1263,12 +1278,14 @@ def _aggregate(
             ),
             "break_even_repeated_runs": break_even_runs,
         },
+        "deployable_context_effect": deployable_effect,
         "paired_effects_vs_full_context": effects,
         "win_tie_loss_vs_full_context": comparisons,
         "cost_note": (
             "ChatGPT-authenticated Codex does not expose per-invocation USD cost; "
-            "token and latency savings are measured, USD savings and break-even "
-            "remain unavailable."
+            "injected-context reduction is the primary metric, provider-token and "
+            "latency changes are secondary diagnostics, and USD savings remain "
+            "unavailable."
         ),
     }
     _json_dump(run_dir / "aggregate.json", result)
@@ -1282,6 +1299,89 @@ def _record_context_tokens(record: EvaluationInvocationRecord) -> int:
         for item in record.context_manifest
         if item.source_id in included
     )
+
+
+def _deployable_context_effect(
+    measurements: tuple[Measurement, ...],
+    *,
+    context_tokens_by_key: dict[tuple[str, str, int], int],
+    decisions: dict[str, dict[str, Any]],
+    quality_tolerance: float = 0.02,
+) -> dict[str, Any]:
+    full = {
+        (item.task_id, item.trial_id): item
+        for item in measurements
+        if item.variant_id == "full_context"
+    }
+    deployed = {
+        (item.task_id, item.trial_id): item
+        for item in measurements
+        if item.variant_id
+        == (
+            "contextlens"
+            if decisions.get(item.task_id, {}).get("accepted", False)
+            else "full_context"
+        )
+    }
+    if not full or set(deployed) != set(full):
+        raise ValueError("deployable context effect requires complete final trials")
+    full_context_tokens: list[int] = []
+    deployed_context_tokens: list[int] = []
+    for task_id, trial_id in sorted(full):
+        trial = int(trial_id.rsplit("-", 1)[-1])
+        deployed_policy = (
+            "contextlens"
+            if decisions.get(task_id, {}).get("accepted", False)
+            else "full_context"
+        )
+        full_context_tokens.append(
+            context_tokens_by_key[(task_id, "full_context", trial)]
+        )
+        deployed_context_tokens.append(
+            context_tokens_by_key[(task_id, deployed_policy, trial)]
+        )
+    mean_full_context = statistics.fmean(full_context_tokens)
+    mean_deployed_context = statistics.fmean(deployed_context_tokens)
+    mean_context_saved = mean_full_context - mean_deployed_context
+    quality_preserved = all(
+        (not baseline.success or deployed[key].success)
+        and deployed[key].score >= baseline.score - quality_tolerance
+        for key, baseline in full.items()
+    )
+    accepted_case_ids = sorted(
+        case_id for case_id, value in decisions.items() if value.get("accepted", False)
+    )
+    fallback_case_ids = sorted(set(decisions) - set(accepted_case_ids))
+    return {
+        "primary_metric": True,
+        "quality_preserved": quality_preserved,
+        "accepted_case_count": len(accepted_case_ids),
+        "fallback_case_count": len(fallback_case_ids),
+        "accepted_case_ids": accepted_case_ids,
+        "fallback_case_ids": fallback_case_ids,
+        "mean_full_injected_context_tokens": mean_full_context,
+        "mean_deployed_injected_context_tokens": mean_deployed_context,
+        "mean_injected_context_tokens_saved": mean_context_saved,
+        "injected_context_reduction_fraction": (
+            mean_context_saved / mean_full_context if mean_full_context > 0 else 0.0
+        ),
+        "mean_provider_input_tokens_saved": statistics.fmean(
+            baseline.input_tokens - deployed[key].input_tokens
+            for key, baseline in full.items()
+        ),
+        "provider_tokens_are_secondary": True,
+    }
+
+
+def _load_deployment_decision(case_dir: Path) -> dict[str, Any]:
+    path = case_dir / "deployment-decision.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"accepted": False, "rejection_reasons": ["decision unavailable"]}
+    if not isinstance(value, dict):
+        return {"accepted": False, "rejection_reasons": ["decision invalid"]}
+    return value
 
 
 def _merge_records(run_dir: Path, outcomes: tuple[CaseOutcome, ...]) -> int:

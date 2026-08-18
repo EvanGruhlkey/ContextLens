@@ -18,6 +18,8 @@
   observed final regression.
 - Fixed matched-random controls so they match the target token total without
   overshooting or duplicating the ContextLens candidate subset.
+- Made fail-closed deployable injected-context reduction the headline metric;
+  provider input tokens remain a secondary diagnostic.
 
 All notable project changes will be documented here.
 
