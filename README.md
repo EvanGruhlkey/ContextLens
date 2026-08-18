@@ -152,6 +152,18 @@ containerized SWE-bench scores. Artifacts are in
 `evals/artifacts/real-20260806T033419Z-665ca7be`, and the short-path pytest run
 `C:\contextlens-eval-artifacts\real-20260806T034931Z-6cda1996`.
 
+### Deployment-safety revalidation
+
+On 2026-08-18, the previously unstable AWS query-merge case was rerun with
+three final trials after making real-repository evaluations default to repeated
+trials. The candidate removed 99.8% of injected context and reduced mean
+provider input from 574,513 to 272,520 tokens (-52.6%), but passed only 2/3
+final trials versus 3/3 with full context. ContextLens now rejects such a
+candidate for deployment after any observed final regression and exports a
+non-pruning policy. This is a safety result, not a savings claim. The validated
+20-invocation artifact is
+`evals/artifacts/case-20260818T143704Z-ffd6169a`.
+
 ### Held-out LLM evaluation results
 
 The validated held-out run used 20 cases, five final policies, and three fresh

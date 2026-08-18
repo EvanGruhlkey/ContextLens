@@ -7,9 +7,11 @@ import random
 import statistics
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
-from contextlens.experiments.evaluation import Evaluation
-from contextlens.experiments.model import ReplayResult
+if TYPE_CHECKING:
+    from contextlens.experiments.evaluation import Evaluation
+    from contextlens.experiments.model import ReplayResult
 
 
 class EffectVerdict(StrEnum):

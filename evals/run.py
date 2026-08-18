@@ -14,7 +14,7 @@ import subprocess
 import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -443,7 +443,11 @@ def _control_variants(
     policy = policy_from_verified_configuration(case.context, verified)
     contextlens = mutations_from_policy(case.context, policy)
     target_tokens = verified.candidate.removed_tokens if verified.accepted else 0
-    random_ids = _random_until(case, target_tokens)
+    random_ids = _random_until(
+        case,
+        target_tokens,
+        forbidden=(frozenset(verified.candidate.removed_source_ids),),
+    )
     return (
         ContextVariant("full_context", description="unmodified complete context"),
         ContextVariant(
@@ -478,21 +482,47 @@ def _largest_until(
     return tuple(selected)
 
 
-def _random_until(case: EvalCase, target_tokens: int) -> tuple[str, ...]:
+def _random_until(
+    case: EvalCase,
+    target_tokens: int,
+    *,
+    forbidden: tuple[frozenset[str], ...] = (),
+) -> tuple[str, ...]:
     if target_tokens <= 0:
         return ()
     seed = int(hashlib.sha256(case.case_id.encode("utf-8")).hexdigest()[:16], 16)
     generator = random.Random(seed)
     values = list(case.context)
     generator.shuffle(values)
-    selected: list[str] = []
-    total = 0
+    # Find the closest attainable token total instead of greedily overshooting.
+    # Greedy selection is especially biased when one source is much larger than
+    # the others: it can remove the entire context to match a slightly smaller
+    # target, making the supposed token-matched control materially different.
+    by_total: dict[int, tuple[str, ...]] = {0: ()}
     for source in values:
-        if total >= target_tokens:
-            break
-        selected.append(source.source_id)
-        total += _source_tokens(source)
-    return tuple(selected)
+        tokens = _source_tokens(source)
+        additions = {
+            total + tokens: (*source_ids, source.source_id)
+            for total, source_ids in tuple(by_total.items())
+        }
+        for total, source_ids in additions.items():
+            by_total.setdefault(total, source_ids)
+    choices = [
+        (total, source_ids)
+        for total, source_ids in by_total.items()
+        if frozenset(source_ids) not in forbidden
+    ]
+    if not choices:
+        return ()
+    _, selected = min(
+        choices,
+        key=lambda item: (
+            abs(item[0] - target_tokens),
+            item[0] > target_tokens,
+            item[0],
+        ),
+    )
+    return selected
 
 
 def _run_case(
@@ -675,12 +705,12 @@ def _run_case(
         intervention_id=verified.candidate.candidate_id,
         parent_run_id=profiler_result.run_id,
     )
-    context_policy = policy_from_verified_configuration(case.context, verified)
-    (case_dir / "context-policy.json").write_text(
-        context_policy.to_json(), encoding="utf-8"
+    candidate_policy = policy_from_verified_configuration(case.context, verified)
+    (case_dir / "candidate-context-policy.json").write_text(
+        candidate_policy.to_json(), encoding="utf-8"
     )
-    (case_dir / "context-policy.yaml").write_text(
-        context_policy.to_yaml(), encoding="utf-8"
+    (case_dir / "candidate-context-policy.yaml").write_text(
+        candidate_policy.to_yaml(), encoding="utf-8"
     )
 
     controls = _control_variants(case, verified)
@@ -711,6 +741,43 @@ def _run_case(
                     score_name="quality",
                 )
             )
+
+    deployment_rejections = _deployment_rejection_reasons(
+        tuple(final_measurements),
+        trials=trials,
+        quality_tolerance=optimization_policy.quality_tolerance,
+    )
+    deployment_verified = (
+        replace(
+            verified,
+            accepted=False,
+            rejection_reasons=(
+                *verified.rejection_reasons,
+                *deployment_rejections,
+            ),
+        )
+        if deployment_rejections
+        else verified
+    )
+    context_policy = policy_from_verified_configuration(
+        case.context, deployment_verified
+    )
+    (case_dir / "context-policy.json").write_text(
+        context_policy.to_json(), encoding="utf-8"
+    )
+    (case_dir / "context-policy.yaml").write_text(
+        context_policy.to_yaml(), encoding="utf-8"
+    )
+    _json_dump(
+        case_dir / "deployment-decision.json",
+        {
+            "accepted": deployment_verified.accepted,
+            "candidate_id": verified.candidate.candidate_id,
+            "quality_tolerance": optimization_policy.quality_tolerance,
+            "trials": trials,
+            "rejection_reasons": list(deployment_verified.rejection_reasons),
+        },
+    )
 
     report_builder = (
         ReportBuilder(f"ContextLens real LLM eval: {case.case_id}")
@@ -761,6 +828,10 @@ def _run_case(
             "status": "complete",
             "profiler_trace": str(trace_path.relative_to(run_dir)),
             "candidate_accepted": verified.accepted,
+            "deployment_candidate_accepted": deployment_verified.accepted,
+            "deployment_rejection_reasons": list(
+                deployment_verified.rejection_reasons
+            ),
             "candidate_removed_source_ids": list(candidate.removed_source_ids),
             "final_policy_count": len(FINAL_POLICIES),
             "final_trial_count": trials,
@@ -774,6 +845,40 @@ def _run_case(
         measurements=tuple(final_measurements),
         invocation_count=len(read_evaluation_records(records_path)),
     )
+
+
+def _deployment_rejection_reasons(
+    measurements: tuple[Measurement, ...],
+    *,
+    trials: int,
+    quality_tolerance: float,
+) -> tuple[str, ...]:
+    """Reject a deployment candidate after any observed final regression."""
+
+    reasons: list[str] = []
+    if trials < 3:
+        reasons.append("fewer than three final trials cannot authorize deployment")
+    by_key = {
+        (item.variant_id, item.trial_id): item
+        for item in measurements
+        if item.variant_id in {"full_context", "contextlens"}
+    }
+    for trial in range(1, trials + 1):
+        trial_id = f"final:trial-{trial}"
+        baseline = by_key.get(("full_context", trial_id))
+        candidate = by_key.get(("contextlens", trial_id))
+        if baseline is None or candidate is None:
+            reasons.append(f"final trial {trial} is incomplete")
+            continue
+        if baseline.success and not candidate.success:
+            reasons.append(
+                f"final trial {trial} regressed from success to failure"
+            )
+        elif candidate.score < baseline.score - quality_tolerance:
+            reasons.append(
+                f"final trial {trial} quality fell outside the allowed tolerance"
+            )
+    return tuple(reasons)
 
 
 def _measurement_from_record(record: EvaluationInvocationRecord) -> Measurement:
@@ -827,8 +932,11 @@ def _completed_case_outcome(
         "profile.json",
         "candidate-plan.json",
         "adaptive-search.json",
+        "candidate-context-policy.json",
+        "candidate-context-policy.yaml",
         "context-policy.json",
         "context-policy.yaml",
+        "deployment-decision.json",
         "report.json",
         "report.html",
         "report.txt",
@@ -1029,6 +1137,9 @@ def _aggregate(
     for policy in FINAL_POLICIES:
         values = [item for item in measurements if item.variant_id == policy]
         policy_records = [record for record in records if record.policy == policy]
+        context_tokens = [
+            _record_context_tokens(record) for record in policy_records
+        ]
         cached = [
             record.provider_cached_tokens
             for record in policy_records
@@ -1063,6 +1174,9 @@ def _aggregate(
             "mean_uncached_input_tokens": statistics.fmean(uncached)
             if uncached
             else None,
+            "mean_injected_context_tokens": statistics.fmean(context_tokens)
+            if context_tokens
+            else None,
             "mean_latency_seconds": statistics.fmean(
                 item.latency_seconds for item in values
             )
@@ -1086,6 +1200,15 @@ def _aggregate(
     mean_uncached_saved = (
         float(full_summary["mean_uncached_input_tokens"])
         - float(optimized_summary["mean_uncached_input_tokens"])
+    )
+    mean_context_saved = (
+        float(full_summary["mean_injected_context_tokens"])
+        - float(optimized_summary["mean_injected_context_tokens"])
+    )
+    context_reduction = (
+        mean_context_saved / float(full_summary["mean_injected_context_tokens"])
+        if float(full_summary["mean_injected_context_tokens"]) > 0
+        else 0.0
     )
     discovery_input_tokens = sum(
         record.provider_input_tokens or 0 for record in discovery_records
@@ -1126,6 +1249,8 @@ def _aggregate(
         },
         "policy_summaries": policy_summaries,
         "optimized_production_effect": {
+            "mean_injected_context_tokens_saved": mean_context_saved,
+            "injected_context_reduction_fraction": context_reduction,
             "mean_input_tokens_saved": mean_input_saved,
             "mean_uncached_input_tokens_saved": mean_uncached_saved,
             "mean_output_tokens_saved": (
@@ -1148,6 +1273,15 @@ def _aggregate(
     }
     _json_dump(run_dir / "aggregate.json", result)
     return result
+
+
+def _record_context_tokens(record: EvaluationInvocationRecord) -> int:
+    included = set(record.included_context_sources)
+    return sum(
+        int(item.token_count or 0)
+        for item in record.context_manifest
+        if item.source_id in included
+    )
 
 
 def _merge_records(run_dir: Path, outcomes: tuple[CaseOutcome, ...]) -> int:
