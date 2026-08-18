@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -139,8 +140,7 @@ for event in events:
                     "gpt-test",
                     "--sandbox",
                     "read-only",
-                    "-c",
-                    'windows.sandbox="elevated"',
+                    *(["-c", 'windows.sandbox="elevated"'] if os.name == "nt" else []),
                     "-c",
                     'shell_environment_policy.set.PYTHONDONTWRITEBYTECODE="1"',
                     "-c",
