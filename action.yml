@@ -27,6 +27,14 @@ inputs:
     description: Optional maximum increase in stale path references
     required: false
     default: ""
+  targets:
+    description: Optional comma-separated task paths for effective-context reporting
+    required: false
+    default: ""
+  provider:
+    description: Scope resolver for targets (portable, codex, claude, copilot, cursor)
+    required: false
+    default: portable
 
 outputs:
   result:
@@ -53,8 +61,10 @@ runs:
         CONTEXTLENS_MAX_CONTEXT_INCREASE: ${{ inputs['max-context-increase'] }}
         CONTEXTLENS_MAX_DUPLICATE_INCREASE: ${{ inputs['max-duplicate-increase'] }}
         CONTEXTLENS_MAX_STALE_INCREASE: ${{ inputs['max-stale-increase'] }}
+        CONTEXTLENS_TARGETS: ${{ inputs.targets }}
+        CONTEXTLENS_PROVIDER: ${{ inputs.provider }}
       run: |
-        args=(ci --mode "$CONTEXTLENS_MODE" --base "$CONTEXTLENS_BASE" --json-output .contextlens/ci-result.json)
+        args=(ci --mode "$CONTEXTLENS_MODE" --base "$CONTEXTLENS_BASE" --provider "$CONTEXTLENS_PROVIDER" --json-output .contextlens/ci-result.json)
         if [[ "$CONTEXTLENS_MODE" == "verified" ]]; then
           args+=(--config "$CONTEXTLENS_CONFIG")
         fi
@@ -67,8 +77,18 @@ runs:
         if [[ -n "$CONTEXTLENS_MAX_STALE_INCREASE" ]]; then
           args+=(--max-stale-increase "$CONTEXTLENS_MAX_STALE_INCREASE")
         fi
+        if [[ -n "$CONTEXTLENS_TARGETS" ]]; then
+          IFS=',' read -ra targets <<< "$CONTEXTLENS_TARGETS"
+          for target in "${targets[@]}"; do
+            args+=(--target "$target")
+          done
+        fi
+        set +e
         contextlens "${args[@]}"
+        status=$?
+        set -e
         echo "result=$GITHUB_WORKSPACE/.contextlens/ci-result.json" >> "$GITHUB_OUTPUT"
+        exit "$status"
 
 branding:
   icon: check-circle

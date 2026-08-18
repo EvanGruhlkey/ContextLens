@@ -4,6 +4,7 @@ The default ContextLens workflow is Git-native and requires no proprietary
 trace format:
 
 ```bash
+contextlens init
 contextlens scan
 contextlens diff --base origin/main
 contextlens verify .contextlens/evals.json --base origin/main
@@ -13,10 +14,25 @@ contextlens minimize AGENTS.md --config .contextlens/evals.json
 `scan` and `diff` never call a model. `verify` and verified `minimize` invoke
 the configured agent and should be budgeted accordingly.
 
+## Initialize a verification suite
+
+```bash
+contextlens init [repository]
+contextlens init --output .contextlens/evals.json
+```
+
+`init` detects Python, Node, Rust, and Go project markers; common test and
+static-check commands; recognized context; and a locally installed Codex CLI
+or `CONTEXTLENS_AGENT_COMMAND`. The generated JSON remains deliberately small.
+If meaningful checks or an agent are missing, the file contains explicit TODO
+commands and the terminal output says it is not runnable.
+
 ## Scan repository context
 
 ```bash
 contextlens scan [repository]
+contextlens scan --target packages/api/src/auth.ts --provider codex
+contextlens scan --target src/a.py --target src/b.py --provider portable
 contextlens scan --format json --output .contextlens/scan.json
 contextlens scan --format markdown --output .contextlens/scan.md
 ```
@@ -25,6 +41,13 @@ Discovery recognizes root and nested `AGENTS.md`/`CLAUDE.md`, Copilot
 instructions, Cursor rules, repository skills, MCP configs, and conventional
 static tool-schema files. UTF-8 bytes divided by four is used as an explicitly
 labeled estimate because `scan` has no provider/model dependency.
+
+Without `--target`, the total is the **repository context footprint**: every
+recognized configuration file in Git, not a claim about one prompt. With one
+or more `--target` values, ContextLens reports the union of effective context
+for those paths. Resolver choices are `portable`, `codex`, `claude`, `copilot`,
+and `cursor`; every source records whether its scope rule is `documented` or
+`approximated`. Deleted targets remain analyzable through lexical scope.
 
 Findings include duplicate and nested-scope duplicate instructions, explicit
 missing path references, potential modal conflicts, narrowly targeted root
@@ -42,6 +65,7 @@ contextlens profile trace.jsonl --observation observation.json
 
 ```bash
 contextlens diff [repository] --base origin/main
+contextlens diff --base origin/main --target packages/api/src/auth.ts
 ```
 
 If `--base` is omitted, ContextLens tries the merge-base with `origin/main`,
@@ -186,10 +210,17 @@ contextlens minimize AGENTS.md packages/api/AGENTS.md \
   --format json
 ```
 
-Static analysis generates candidates. The combined candidate is compared with
-the current context using the verification suite. A patch is written only for
-a PASS verdict and positive footprint reduction. The repository source files
-are never edited.
+Static signals generate prioritized deduplicate, stale-guidance removal, and
+scoped-move experiments. Positive-footprint candidates are first compared
+individually with current context. Only isolated PASS results enter the
+combined candidate, which receives a separate repeated final verification to
+catch interactions. A patch is written only after that final PASS. WARN,
+INCONCLUSIVE, FAIL, or a combined regression writes no patch, and repository
+source files are never edited.
+
+Scope candidates are reported but remain review-only until target-effective
+replay evidence is configured. Semantic summaries and lazy loading require an
+explicit summarizer or retrieval contract and are not silently synthesized.
 
 Without `--config`, candidates are printed as `candidate/static — NOT VERIFIED`
 and no patch can be written.
@@ -198,6 +229,7 @@ and no patch can be written.
 
 ```bash
 contextlens ci --mode static --base origin/main \
+  --target packages/api/src/auth.ts --provider codex \
   --max-context-increase 0.25 \
   --max-duplicate-increase 0 \
   --json-output .contextlens/ci-result.json
@@ -209,6 +241,9 @@ contextlens ci --mode verified --base origin/main \
 When `GITHUB_STEP_SUMMARY` is set, Markdown is appended automatically. Use
 `--summary path.md` elsewhere. Static thresholds are optional and gate only
 deterministic footprint/configuration properties—not claimed task performance.
+With `--target`, or task `target_paths` read from the eval config, static CI also
+reports the effective-context delta. A context increase does not fail unless a
+user explicitly configures a threshold.
 
 ## Existing advanced commands
 

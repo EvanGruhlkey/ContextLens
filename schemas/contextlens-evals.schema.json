@@ -5,6 +5,8 @@
   "type": "object",
   "required": ["agent", "tasks"],
   "properties": {
+    "generated_by": {"type": "string"},
+    "notes": {"type": "array", "items": {"type": "string"}},
     "base_ref": {"type": "string", "minLength": 1},
     "trials": {"type": "integer", "minimum": 1, "default": 3},
     "quality_tolerance": {"type": "number", "minimum": 0, "default": 0},
@@ -57,6 +59,13 @@
           },
           "expected_output": {"type": "string"},
           "allowed_files": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "category": {"type": "string"},
+          "language": {"type": "string"},
+          "repository_scope": {"type": "string"},
+          "target_paths": {
             "type": "array",
             "items": {"type": "string"}
           },

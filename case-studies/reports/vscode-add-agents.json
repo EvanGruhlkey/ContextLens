@@ -1,0 +1,979 @@
+{
+  "case": {
+    "id": "vscode-add-agents",
+    "repository": "microsoft/vscode",
+    "clone_url": "https://github.com/microsoft/vscode.git",
+    "base_commit": "884364539d18dc24c40530359a95da7fc187aeef",
+    "candidate_commit": "ea130eeb3ab7e0f81a81bf137c5161ae5377e47c",
+    "commit_url": "https://github.com/microsoft/vscode/commit/ea130eeb3ab7e0f81a81bf137c5161ae5377e47c",
+    "commit_date": "2025-12-01T13:59:21Z",
+    "change": "docs - add instructions for AI coding agents (#280321)",
+    "context_paths": [
+      "AGENTS.md"
+    ],
+    "study_status": "static_ready"
+  },
+  "evidence": "observed/static",
+  "verified": false,
+  "reproduction": {
+    "contextlens_version": "0.1.0",
+    "acquisition": "git fetch --filter=blob:none --depth=1",
+    "checkout_performed": false,
+    "token_count_method": "estimated_utf8_bytes_div_4"
+  },
+  "report": {
+    "schema_version": "1.0",
+    "report_type": "repository_context_diff",
+    "evidence": "observed/static",
+    "verified": false,
+    "root": "https://github.com/microsoft/vscode.git",
+    "base_ref": "884364539d18dc24c40530359a95da7fc187aeef",
+    "summary": {
+      "base_estimated_tokens": 5966,
+      "candidate_estimated_tokens": 6034,
+      "delta_estimated_tokens": 68,
+      "change_fraction": 0.011397921555481059,
+      "duplicate_token_delta": 0,
+      "stale_reference_delta": 0,
+      "token_count_method": "estimated_utf8_bytes_div_4"
+    },
+    "sources": [
+      {
+        "path": "AGENTS.md",
+        "kind": "agents_md",
+        "base_tokens": 0,
+        "candidate_tokens": 68,
+        "delta_tokens": 68
+      }
+    ],
+    "base_findings": [
+      {
+        "finding_id": "scope:0e61a2e90c4e0522",
+        "category": "potential_scope",
+        "message": "10 estimated tokens in .github/copilot-instructions.md mention only `build/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 10,
+        "detail": "Candidate for review as build-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:bdd3907020644dc2",
+        "category": "potential_scope",
+        "message": "11 estimated tokens in .github/copilot-instructions.md mention only `scripts/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 11,
+        "detail": "Candidate for review as scripts-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:2e4ded32623761e1",
+        "category": "potential_scope",
+        "message": "13 estimated tokens in .github/copilot-instructions.md mention only `resources/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 13,
+        "detail": "Candidate for review as resources-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:53ee5c5227d893db",
+        "category": "potential_scope",
+        "message": "13 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 13,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:8d52722ee2aa5623",
+        "category": "potential_scope",
+        "message": "13 estimated tokens in .github/copilot-instructions.md mention only `test/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 13,
+        "detail": "Candidate for review as test-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:cb1f7970cd7b01a8",
+        "category": "potential_scope",
+        "message": "15 estimated tokens in .github/copilot-instructions.md mention only `extensions/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 15,
+        "detail": "Candidate for review as extensions-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:1a9111a4e216d94d",
+        "category": "potential_scope",
+        "message": "16 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 16,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:a351f37c6dc06183",
+        "category": "potential_scope",
+        "message": "17 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 17,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:049afa765ceae4bf",
+        "category": "potential_scope",
+        "message": "18 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 18,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:ddcb6b4663531dfa",
+        "category": "potential_scope",
+        "message": "20 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 20,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:a42e5d4cd3250b22",
+        "category": "potential_scope",
+        "message": "21 estimated tokens in .github/copilot-instructions.md mention only `extensions/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 21,
+        "detail": "Candidate for review as extensions-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:77c3707c949f9f8d",
+        "category": "potential_scope",
+        "message": "28 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 28,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:5c0a0e98b1e589fe",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `css-language-features/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:51ed55473790b627",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `debug-auto-launch/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:1c67245bc681b36a",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `emmet/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:1db97fa2ac463131",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `extension-editing/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:6acae6c3dd6b7efb",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `git/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:02432a3ccc070e25",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `html-language-features/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:b7b18deaac2d4c3c",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `markdown-language-features/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:cee2e7379a358463",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `out/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:28abebcc0360dcbb",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `src/vs/*/test/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:d09aebb15d7cf2b0",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `typescript-language-features/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:fb8ad14e3c0da306",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `vs/nls`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:7d78e819bff64f23",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `vscode-api-tests/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:188fc8ee08b93f38",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `workbench/api/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:f8415a0d47d8df87",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `workbench/browser/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:cc54de907ecdfc11",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `workbench/contrib/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:a8c34f8ceabb365c",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `workbench/services/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:819e3145183b8e06",
+        "category": "stale_reference",
+        "message": ".github/instructions/telemetry.instructions.md references missing path `sessionId/extensionId`",
+        "paths": [
+          ".github/instructions/telemetry.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:319b975c0d00ffb4",
+        "category": "stale_reference",
+        "message": ".github/instructions/telemetry.instructions.md references missing path `success/hasError/isEnabled`",
+        "paths": [
+          ".github/instructions/telemetry.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:5897a7a83162543b",
+        "category": "stale_reference",
+        "message": ".github/instructions/telemetry.instructions.md references missing path `type/kind/source`",
+        "paths": [
+          ".github/instructions/telemetry.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:8962eaf5c8771d19",
+        "category": "stale_reference",
+        "message": ".github/instructions/tree-widgets.instructions.md references missing path `src/vs/platform/list/browser/test/listService.test.ts`",
+        "paths": [
+          ".github/instructions/tree-widgets.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:20684f95ed0de11e",
+        "category": "stale_reference",
+        "message": ".github/instructions/tree-widgets.instructions.md references missing path `test/browser/ui/tree/asyncDataTree.test.ts`",
+        "paths": [
+          ".github/instructions/tree-widgets.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:8b958fe889a6a764",
+        "category": "stale_reference",
+        "message": ".github/instructions/tree-widgets.instructions.md references missing path `test/browser/ui/tree/dataTree.test.ts`",
+        "paths": [
+          ".github/instructions/tree-widgets.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:da455085702345f2",
+        "category": "stale_reference",
+        "message": ".github/instructions/tree-widgets.instructions.md references missing path `test/browser/ui/tree/objectTree.test.ts`",
+        "paths": [
+          ".github/instructions/tree-widgets.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:fa90382a0f13bcef",
+        "category": "stale_reference",
+        "message": ".github/instructions/tree-widgets.instructions.md references missing path `test/listService.test.ts`",
+        "paths": [
+          ".github/instructions/tree-widgets.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:997aa9a4d54ac686",
+        "category": "stale_reference",
+        "message": ".vscode/mcp.json references missing path `../test/mcp/README.md`",
+        "paths": [
+          ".vscode/mcp.json"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "tool-schema-footprint",
+        "category": "tool_schema_footprint",
+        "message": "tool and MCP configuration contributes 68 estimated tokens",
+        "paths": [
+          ".vscode/mcp.json"
+        ],
+        "tokens": 68,
+        "detail": "Footprint only; runtime tool-search and provider behavior may differ.",
+        "evidence": "observed/static",
+        "verified": false
+      }
+    ],
+    "candidate_findings": [
+      {
+        "finding_id": "scope:0e61a2e90c4e0522",
+        "category": "potential_scope",
+        "message": "10 estimated tokens in .github/copilot-instructions.md mention only `build/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 10,
+        "detail": "Candidate for review as build-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:bdd3907020644dc2",
+        "category": "potential_scope",
+        "message": "11 estimated tokens in .github/copilot-instructions.md mention only `scripts/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 11,
+        "detail": "Candidate for review as scripts-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:2e4ded32623761e1",
+        "category": "potential_scope",
+        "message": "13 estimated tokens in .github/copilot-instructions.md mention only `resources/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 13,
+        "detail": "Candidate for review as resources-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:53ee5c5227d893db",
+        "category": "potential_scope",
+        "message": "13 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 13,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:8d52722ee2aa5623",
+        "category": "potential_scope",
+        "message": "13 estimated tokens in .github/copilot-instructions.md mention only `test/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 13,
+        "detail": "Candidate for review as test-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:cb1f7970cd7b01a8",
+        "category": "potential_scope",
+        "message": "15 estimated tokens in .github/copilot-instructions.md mention only `extensions/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 15,
+        "detail": "Candidate for review as extensions-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:1a9111a4e216d94d",
+        "category": "potential_scope",
+        "message": "16 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 16,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:a351f37c6dc06183",
+        "category": "potential_scope",
+        "message": "17 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 17,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:049afa765ceae4bf",
+        "category": "potential_scope",
+        "message": "18 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 18,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:ddcb6b4663531dfa",
+        "category": "potential_scope",
+        "message": "20 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 20,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:a42e5d4cd3250b22",
+        "category": "potential_scope",
+        "message": "21 estimated tokens in .github/copilot-instructions.md mention only `extensions/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 21,
+        "detail": "Candidate for review as extensions-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:77c3707c949f9f8d",
+        "category": "potential_scope",
+        "message": "28 estimated tokens in .github/copilot-instructions.md mention only `src/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 28,
+        "detail": "Candidate for review as src-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "scope:b20d95342c66c322",
+        "category": "potential_scope",
+        "message": "38 estimated tokens in AGENTS.md mention only `.github/`",
+        "paths": [
+          "AGENTS.md"
+        ],
+        "tokens": 38,
+        "detail": "Candidate for review as .github-scoped guidance; not verified safe to move.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:5c0a0e98b1e589fe",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `css-language-features/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:51ed55473790b627",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `debug-auto-launch/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:1c67245bc681b36a",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `emmet/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:1db97fa2ac463131",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `extension-editing/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:6acae6c3dd6b7efb",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `git/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:02432a3ccc070e25",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `html-language-features/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:b7b18deaac2d4c3c",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `markdown-language-features/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:cee2e7379a358463",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `out/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:28abebcc0360dcbb",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `src/vs/*/test/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:d09aebb15d7cf2b0",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `typescript-language-features/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:fb8ad14e3c0da306",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `vs/nls`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:7d78e819bff64f23",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `vscode-api-tests/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:188fc8ee08b93f38",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `workbench/api/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:f8415a0d47d8df87",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `workbench/browser/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:cc54de907ecdfc11",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `workbench/contrib/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:a8c34f8ceabb365c",
+        "category": "stale_reference",
+        "message": ".github/copilot-instructions.md references missing path `workbench/services/`",
+        "paths": [
+          ".github/copilot-instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:819e3145183b8e06",
+        "category": "stale_reference",
+        "message": ".github/instructions/telemetry.instructions.md references missing path `sessionId/extensionId`",
+        "paths": [
+          ".github/instructions/telemetry.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:319b975c0d00ffb4",
+        "category": "stale_reference",
+        "message": ".github/instructions/telemetry.instructions.md references missing path `success/hasError/isEnabled`",
+        "paths": [
+          ".github/instructions/telemetry.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:5897a7a83162543b",
+        "category": "stale_reference",
+        "message": ".github/instructions/telemetry.instructions.md references missing path `type/kind/source`",
+        "paths": [
+          ".github/instructions/telemetry.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:8962eaf5c8771d19",
+        "category": "stale_reference",
+        "message": ".github/instructions/tree-widgets.instructions.md references missing path `src/vs/platform/list/browser/test/listService.test.ts`",
+        "paths": [
+          ".github/instructions/tree-widgets.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:20684f95ed0de11e",
+        "category": "stale_reference",
+        "message": ".github/instructions/tree-widgets.instructions.md references missing path `test/browser/ui/tree/asyncDataTree.test.ts`",
+        "paths": [
+          ".github/instructions/tree-widgets.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:8b958fe889a6a764",
+        "category": "stale_reference",
+        "message": ".github/instructions/tree-widgets.instructions.md references missing path `test/browser/ui/tree/dataTree.test.ts`",
+        "paths": [
+          ".github/instructions/tree-widgets.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:da455085702345f2",
+        "category": "stale_reference",
+        "message": ".github/instructions/tree-widgets.instructions.md references missing path `test/browser/ui/tree/objectTree.test.ts`",
+        "paths": [
+          ".github/instructions/tree-widgets.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:fa90382a0f13bcef",
+        "category": "stale_reference",
+        "message": ".github/instructions/tree-widgets.instructions.md references missing path `test/listService.test.ts`",
+        "paths": [
+          ".github/instructions/tree-widgets.instructions.md"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "stale:997aa9a4d54ac686",
+        "category": "stale_reference",
+        "message": ".vscode/mcp.json references missing path `../test/mcp/README.md`",
+        "paths": [
+          ".vscode/mcp.json"
+        ],
+        "tokens": 0,
+        "detail": "The path was explicit and was not found in the worktree or source-relative scope.",
+        "evidence": "observed/static",
+        "verified": false
+      },
+      {
+        "finding_id": "tool-schema-footprint",
+        "category": "tool_schema_footprint",
+        "message": "tool and MCP configuration contributes 68 estimated tokens",
+        "paths": [
+          ".vscode/mcp.json"
+        ],
+        "tokens": 68,
+        "detail": "Footprint only; runtime tool-search and provider behavior may differ.",
+        "evidence": "observed/static",
+        "verified": false
+      }
+    ],
+    "disclaimer": "This is a deterministic static comparison, not evidence that the candidate helps or hurts an agent."
+  }
+}

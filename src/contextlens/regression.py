@@ -65,6 +65,10 @@ class VerificationTask:
     checks: tuple[tuple[str, ...], ...] = ()
     expected_output: str | None = None
     allowed_files: tuple[str, ...] = ()
+    category: str = "unspecified"
+    language: str = "unspecified"
+    repository_scope: str = "."
+    target_paths: tuple[str, ...] = ()
     timeout_seconds: float = 300.0
 
     def __post_init__(self) -> None:
@@ -120,11 +124,21 @@ class TrialMetrics:
     exploration_breadth: int | None
     retries: int
     changed_files: tuple[str, ...]
+    task_category: str = "unspecified"
+    language: str = "unspecified"
+    repository_scope: str = "."
+    target_paths: tuple[str, ...] = ()
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "task_id": self.task_id,
+            "task_dimensions": {
+                "category": self.task_category,
+                "language": self.language,
+                "repository_scope": self.repository_scope,
+                "target_paths": list(self.target_paths),
+            },
             "trial": self.trial,
             "variant": self.variant,
             "status": self.status,
@@ -481,7 +495,13 @@ def run_context_verification(
         replay_task = ReplayTask(
             task.task_id,
             task.instruction,
-            metadata={"allowed_files": list(task.allowed_files)},
+            metadata={
+                "allowed_files": list(task.allowed_files),
+                "task_category": task.category,
+                "language": task.language,
+                "repository_scope": task.repository_scope,
+                "target_paths": list(task.target_paths),
+            },
         )
         verifier = _verifier(task)
         workers = {
@@ -526,6 +546,7 @@ def run_context_verification(
                         trial=trial,
                         variant=variant,
                         pricing=pricing,
+                        task=task,
                     )
                 )
     base = _aggregate(tuple(item for item in trial_metrics if item.variant == "base"))
@@ -768,6 +789,7 @@ def _trial_metrics(
     trial: int,
     variant: str,
     pricing: PricingSnapshot | None,
+    task: VerificationTask,
 ) -> TrialMetrics:
     outcome = result.outcome
     usage = usage_from_outcome(outcome)
@@ -816,6 +838,10 @@ def _trial_metrics(
         exploration_breadth=exploration,
         retries=max(outcome.retries if outcome is not None else 0, result.attempt - 1),
         changed_files=tuple(change.path for change in result.file_changes),
+        task_category=task.category,
+        language=task.language,
+        repository_scope=task.repository_scope,
+        target_paths=task.target_paths,
         error=result.error,
     )
 
@@ -1098,6 +1124,12 @@ def _tasks_from_config(
                 ),
                 allowed_files=tuple(
                     str(item) for item in _sequence(task.get("allowed_files", ()))
+                ),
+                category=str(task.get("category", "unspecified")),
+                language=str(task.get("language", "unspecified")),
+                repository_scope=str(task.get("repository_scope", ".")),
+                target_paths=tuple(
+                    str(item) for item in _sequence(task.get("target_paths", ()))
                 ),
                 timeout_seconds=float(task.get("timeout_seconds", 300)),
             )

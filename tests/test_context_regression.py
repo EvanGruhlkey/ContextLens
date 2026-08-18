@@ -74,6 +74,41 @@ class _CacheRegressionAdapter:
         )
 
 
+class _MissingUsageAdapter:
+    adapter_id = "missing-usage-fixture"
+
+    def run(self, request: ReplayRequest) -> AgentOutcome:
+        del request
+        return AgentOutcome(output_text="ok")
+
+
+class _NondeterministicCandidateAdapter:
+    adapter_id = "nondeterministic-candidate-fixture"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def run(self, request: ReplayRequest) -> AgentOutcome:
+        self.calls += 1
+        is_candidate = "candidate" in {item.source_id for item in request.context}
+        output = "wrong" if is_candidate and self.calls == 2 else "ok"
+        return AgentOutcome(output_text=output, input_tokens=100, output_tokens=5)
+
+
+class _WorkspaceIsolationAdapter:
+    adapter_id = "workspace-isolation-fixture"
+
+    def run(self, request: ReplayRequest) -> AgentOutcome:
+        marker = Path(request.workspace) / ".contextlens-run-marker"
+        clean = not marker.exists()
+        marker.write_text("mutated", encoding="utf-8")
+        return AgentOutcome(
+            output_text="ok" if clean else "contaminated",
+            input_tokens=100,
+            output_tokens=5,
+        )
+
+
 def _task(tmp_path: Path) -> VerificationTask:
     (tmp_path / "fixture.txt").write_text("fixed workspace\n", encoding="utf-8")
     return VerificationTask(
@@ -137,3 +172,49 @@ def test_cache_loss_is_visible_and_can_fail_economics_gate(tmp_path: Path) -> No
     assert report.candidate.uncached_input_tokens == 900
     assert report.verdict is RegressionVerdict.FAIL
     assert "uncached" in report.rationale.casefold()
+
+
+def test_required_missing_provider_usage_is_inconclusive(tmp_path: Path) -> None:
+    report = run_context_verification(
+        base_context=(_source("base", 100),),
+        candidate_context=(_source("candidate", 50),),
+        tasks=(_task(tmp_path),),
+        agent_factory=_MissingUsageAdapter,
+        settings=AgentSettings("fixture", "deterministic"),
+        policy=VerificationPolicy(trials=2, require_provider_usage=True),
+    )
+
+    assert report.verdict is RegressionVerdict.INCONCLUSIVE
+    assert report.exit_code == 5
+    assert report.base.provider_input_tokens is None
+
+
+def test_nondeterministic_candidate_failure_is_never_dropped(tmp_path: Path) -> None:
+    report = run_context_verification(
+        base_context=(_source("base", 100),),
+        candidate_context=(_source("candidate", 50),),
+        tasks=(_task(tmp_path),),
+        agent_factory=_NondeterministicCandidateAdapter,
+        settings=AgentSettings("fixture", "deterministic"),
+        policy=VerificationPolicy(trials=3),
+    )
+
+    assert report.verdict is RegressionVerdict.FAIL
+    assert report.catastrophic_regressions == 1
+    assert len(report.trials) == 6
+
+
+def test_base_and_candidate_runs_use_fresh_isolated_workspaces(
+    tmp_path: Path,
+) -> None:
+    report = run_context_verification(
+        base_context=(_source("base", 100),),
+        candidate_context=(_source("candidate", 50),),
+        tasks=(_task(tmp_path),),
+        agent_factory=_WorkspaceIsolationAdapter,
+        settings=AgentSettings("fixture", "deterministic"),
+        policy=VerificationPolicy(trials=2),
+    )
+
+    assert report.base.successes == report.candidate.successes == 2
+    assert not (tmp_path / ".contextlens-run-marker").exists()
