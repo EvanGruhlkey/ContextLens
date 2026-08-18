@@ -1,0 +1,40 @@
+{
+  "browser-use-redaction-cascade": {
+    "type": "remove_bounded_block",
+    "path": "AGENTS.md",
+    "start": "<browser_use_docs>",
+    "end": "</browser_use_docs>"
+  },
+  "browser-use-zero-compaction-threshold": {
+    "type": "remove_bounded_block",
+    "path": "AGENTS.md",
+    "start": "<browser_use_docs>",
+    "end": "</browser_use_docs>"
+  },
+  "infisical-backend-ldap-cn-case": {
+    "type": "remove_markdown_sections",
+    "path": "CLAUDE.md",
+    "headings": [
+      "### Design System & Voice",
+      "### Interface Pattern (Go)",
+      "### API Layer (Frontend)"
+    ]
+  },
+  "infisical-frontend-null-connection-message": {
+    "type": "remove_markdown_sections",
+    "path": "CLAUDE.md",
+    "headings": [
+      "### Self-Hosted Deployment",
+      "### Service Factory + Manual DI (Backend)",
+      "### Interface Pattern (Go)"
+    ]
+  },
+  "langfuse-web-project-role-entitlement": {
+    "type": "contextlens_conservative",
+    "selected_paths": [".agents/AGENTS.md", "web/AGENTS.md"]
+  },
+  "langfuse-shared-flattened-otel-parameters": {
+    "type": "contextlens_conservative",
+    "selected_paths": [".agents/AGENTS.md", "packages/shared/AGENTS.md"]
+  }
+}

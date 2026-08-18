@@ -8,6 +8,9 @@
     "generated_by": {"type": "string"},
     "notes": {"type": "array", "items": {"type": "string"}},
     "base_ref": {"type": "string", "minLength": 1},
+    "context_provider": {
+      "enum": ["portable", "codex", "claude", "copilot", "cursor"]
+    },
     "trials": {"type": "integer", "minimum": 1, "default": 3},
     "quality_tolerance": {"type": "number", "minimum": 0, "default": 0},
     "economics_tolerance": {"type": "number", "minimum": 0, "default": 0},
@@ -68,6 +71,9 @@
           "target_paths": {
             "type": "array",
             "items": {"type": "string"}
+          },
+          "context_provider": {
+            "enum": ["portable", "codex", "claude", "copilot", "cursor"]
           },
           "timeout_seconds": {"type": "number", "exclusiveMinimum": 0}
         },

@@ -327,6 +327,14 @@ Mechanical evaluation is preferred: tests, builds, type checks, linters,
 expected behavior, and deterministic assertions. A model judge is optional and
 never silently substitutes for mechanical correctness.
 
+Verification resolves repository instructions per task. When a task declares
+`target_paths`, ContextLens independently computes the base and candidate
+effective context using that task's `context_provider` (`codex`, `claude`,
+`copilot`, `cursor`, or `portable`). Reports persist the targets, provider,
+exact source paths, effective initial tokens, resolution mode, and scope
+warnings. Tasks without targets retain the backward-compatible full-inventory
+behavior and are labeled with an explicit warning.
+
 ## Why measure context?
 
 There is no universal answer to whether more repository context helps coding

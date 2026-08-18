@@ -1,0 +1,151 @@
+{
+  "grader_valid": true,
+  "hidden_grader_sha256": "6d4fbb368adb408f682f776e8a7740f64a06980e74299078836906d1ed513cb6",
+  "schema_version": "1.0",
+  "setup_valid": true,
+  "status": "ready_for_agent_run",
+  "study_id": "langfuse",
+  "task_id": "langfuse-shared-flattened-otel-parameters",
+  "valid": true,
+  "validated_at": "2026-08-18T21:26:27.891593+00:00",
+  "variants": {
+    "buggy": {
+      "cleanup_warning": "[WinError 145] The directory is not empty: 'C:\\\\Users\\\\egruh\\\\AppData\\\\Local\\\\Temp\\\\contextlens-case-studies\\\\workspaces\\\\cleanup-a58fdfa4\\\\node_modules\\\\.pnpm\\\\@aws-sdk+checksums@3.1000.12\\\\node_modules\\\\@aws-sdk\\\\checksums\\\\dist-types\\\\submodules\\\\flexible-checksums'",
+      "environment": {
+        "destination": ".env",
+        "sha256": "454ca60dfd9ca0930cc5f0ecba2b9ad7b05187554c9574f485163ebda4c8f64d",
+        "source": ".env.dev.example"
+      },
+      "grader": {
+        "command": [
+          "pnpm",
+          "--filter",
+          "@langfuse/shared",
+          "run",
+          "test",
+          "OtelIngestionProcessor.contextlens.test.ts"
+        ],
+        "duration_seconds": 145.95964,
+        "ended_at": "2026-08-18T21:25:05.624425+00:00",
+        "exit_code": 1,
+        "resolved_executable": "C:\\Users\\egruh\\AppData\\Roaming\\npm\\pnpm.CMD",
+        "started_at": "2026-08-18T21:22:39.664785+00:00",
+        "stderr": "$ dotenv -e ../../.env -- vitest run \"OtelIngestionProcessor.contextlens.test.ts\"\n\n⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯\n\n FAIL  src/server/otel/OtelIngestionProcessor.contextlens.test.ts > OtelIngestionProcessor model parameters > maps flattened OpenInference invocation parameters\nAssertionError: expected {} to deeply equal { temperature: 0.1, …(3) }\n\n- Expected\n+ Received\n\n- {\n-   \"max_tokens\": 6000,\n-   \"reasoning_effort\": \"high\",\n-   \"service_tier\": \"priority\",\n-   \"temperature\": 0.1,\n- }\n+ {}\n\n ❯ src/server/otel/OtelIngestionProcessor.contextlens.test.ts:227:39\n    225|\n    226|     expect(events).toHaveLength(1);\n    227|     expect(events[0].modelParameters).toEqual({\n       |                                       ^\n    228|       temperature: 0.1,\n    229|       max_tokens: 6000,\n\n⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯\n\n",
+        "stdout": "\n RUN  v4.1.10 C:/Users/egruh/AppData/Local/Temp/contextlens-case-studies/workspaces/v-langfuse-b-e151fd74/packages/shared\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:23:59.013Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:23:59.072Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:23:59.178Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:23:59.598Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:00.063Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:02.215Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:04.513Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:07.048Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:07.702Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:09.625Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:10.284Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:12.333Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:15.393Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:18.843Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:20.257Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:24.685Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:35.875Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:44.496Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:45.077Z info \t[LocalCache:model_match] Initialized local cache {\"enabled\":false,\"ttlMs\":10000,\"max\":20000}\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:45.402Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:24:58.028Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:25:03.859Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\nstdout | src/server/otel/OtelIngestionProcessor.contextlens.test.ts\n2026-08-18T21:25:04.911Z error \tRedis error [connection-refused]: connect ECONNREFUSED 127.0.0.1:6379\nError: connect ECONNREFUSED 127.0.0.1:6379\n    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1705:16)\n\n ❯ src/server/otel/OtelIngestionProcessor.contextlens.test.ts (4 tests | 1 failed) 17ms\n     × maps flattened OpenInference invocation parameters 6ms\n\n Test Files  1 failed (1)\n      Tests  1 failed | 3 passed (4)\n   Start at  16:22:41\n   Duration  143.61s (transform 4.81s, setup 0ms, import 143.37s, tests 17ms, environment 0ms)\n\nC:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-langfuse-b-e151fd74\\packages\\shared:\n[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @langfuse/shared@1.0.0 test: `dotenv -e ../../.env -- vitest run \"OtelIngestionProcessor.contextlens.test.ts\"`\nExit status 1\n",
+        "working_directory": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-langfuse-b-e151fd74"
+      },
+      "revision": "fb4a4f12bf2d5788d7bcb3e3f9c6515adb5fe691",
+      "setup": {
+        "exit_code": 0,
+        "stderr": "\n$ dotenv -e ../../.env -- npx prisma generate --no-hints\nwarn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).\nFor more information, see: https://pris.ly/prisma-config\n\nwarn Preview feature \"metrics\" is deprecated. It will be removed in a future version of Prisma.\n",
+        "stdout": "Scope: all 9 workspace projects\n✓ Lockfile passes supply-chain policies (verified 25m ago)\nLockfile is up to date, resolution step is skipped\nProgress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +2099\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\nProgress: resolved 2099, reused 981, downloaded 0, added 0\nProgress: resolved 2099, reused 1792, downloaded 0, added 0\nProgress: resolved 2099, reused 2085, downloaded 0, added 0\nProgress: resolved 2099, reused 2086, downloaded 0, added 66\nProgress: resolved 2099, reused 2086, downloaded 0, added 261\nProgress: resolved 2099, reused 2086, downloaded 0, added 443\nProgress: resolved 2099, reused 2086, downloaded 0, added 546\nProgress: resolved 2099, reused 2086, downloaded 0, added 681\nProgress: resolved 2099, reused 2086, downloaded 0, added 694\nProgress: resolved 2099, reused 2086, downloaded 0, added 720\nProgress: resolved 2099, reused 2086, downloaded 0, added 863\nProgress: resolved 2099, reused 2086, downloaded 0, added 959\nProgress: resolved 2099, reused 2086, downloaded 0, added 1120\nProgress: resolved 2099, reused 2086, downloaded 0, added 1160\nProgress: resolved 2099, reused 2086, downloaded 0, added 1191\nProgress: resolved 2099, reused 2086, downloaded 0, added 1327\nProgress: resolved 2099, reused 2086, downloaded 0, added 1385\nProgress: resolved 2099, reused 2086, downloaded 0, added 1461\nProgress: resolved 2099, reused 2086, downloaded 0, added 1507\nProgress: resolved 2099, reused 2086, downloaded 0, added 1551\nProgress: resolved 2099, reused 2086, downloaded 0, added 1651\nProgress: resolved 2099, reused 2086, downloaded 0, added 1722\nProgress: resolved 2099, reused 2086, downloaded 0, added 1765\nProgress: resolved 2099, reused 2086, downloaded 0, added 1771\nProgress: resolved 2099, reused 2086, downloaded 0, added 1826\nProgress: resolved 2099, reused 2086, downloaded 0, added 1918\nProgress: resolved 2099, reused 2086, downloaded 0, added 2097\nProgress: resolved 2099, reused 2086, downloaded 0, added 2099, done\n\ndevDependencies:\n+ @release-it/bumper 7.0.6\n+ dotenv-cli 7.4.4\n+ eslint-scope 9.1.2\n+ espree 11.2.0\n+ globals 16.5.0\n+ husky 9.1.7\n+ knip 6.22.0\n+ prettier 3.8.3\n+ release-it 20.2.0\n+ ts7 <- typescript 7.0.2\n+ turbo 2.10.5\n\nDone in 37.8s using pnpm v11.10.0\n\nPrisma schema loaded from prisma\\schema.prisma\n\n✔ Generated Prisma Client (v6.19.3) to .\\..\\..\\node_modules\\.pnpm\\@prisma+client@6.19.3_@type_afaf70bb389ff469b3695c930fcf8c3c\\node_modules\\@prisma\\client in 477ms\n\n",
+        "steps": [
+          {
+            "command": [
+              "pnpm",
+              "install",
+              "--frozen-lockfile",
+              "--ignore-scripts"
+            ],
+            "duration_seconds": 38.389272,
+            "ended_at": "2026-08-18T21:22:35.022360+00:00",
+            "exit_code": 0,
+            "resolved_executable": "C:\\Users\\egruh\\AppData\\Roaming\\npm\\pnpm.CMD",
+            "started_at": "2026-08-18T21:21:56.633088+00:00",
+            "stderr": "",
+            "stdout": "Scope: all 9 workspace projects\n✓ Lockfile passes supply-chain policies (verified 25m ago)\nLockfile is up to date, resolution step is skipped\nProgress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +2099\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\nProgress: resolved 2099, reused 981, downloaded 0, added 0\nProgress: resolved 2099, reused 1792, downloaded 0, added 0\nProgress: resolved 2099, reused 2085, downloaded 0, added 0\nProgress: resolved 2099, reused 2086, downloaded 0, added 66\nProgress: resolved 2099, reused 2086, downloaded 0, added 261\nProgress: resolved 2099, reused 2086, downloaded 0, added 443\nProgress: resolved 2099, reused 2086, downloaded 0, added 546\nProgress: resolved 2099, reused 2086, downloaded 0, added 681\nProgress: resolved 2099, reused 2086, downloaded 0, added 694\nProgress: resolved 2099, reused 2086, downloaded 0, added 720\nProgress: resolved 2099, reused 2086, downloaded 0, added 863\nProgress: resolved 2099, reused 2086, downloaded 0, added 959\nProgress: resolved 2099, reused 2086, downloaded 0, added 1120\nProgress: resolved 2099, reused 2086, downloaded 0, added 1160\nProgress: resolved 2099, reused 2086, downloaded 0, added 1191\nProgress: resolved 2099, reused 2086, downloaded 0, added 1327\nProgress: resolved 2099, reused 2086, downloaded 0, added 1385\nProgress: resolved 2099, reused 2086, downloaded 0, added 1461\nProgress: resolved 2099, reused 2086, downloaded 0, added 1507\nProgress: resolved 2099, reused 2086, downloaded 0, added 1551\nProgress: resolved 2099, reused 2086, downloaded 0, added 1651\nProgress: resolved 2099, reused 2086, downloaded 0, added 1722\nProgress: resolved 2099, reused 2086, downloaded 0, added 1765\nProgress: resolved 2099, reused 2086, downloaded 0, added 1771\nProgress: resolved 2099, reused 2086, downloaded 0, added 1826\nProgress: resolved 2099, reused 2086, downloaded 0, added 1918\nProgress: resolved 2099, reused 2086, downloaded 0, added 2097\nProgress: resolved 2099, reused 2086, downloaded 0, added 2099, done\n\ndevDependencies:\n+ @release-it/bumper 7.0.6\n+ dotenv-cli 7.4.4\n+ eslint-scope 9.1.2\n+ espree 11.2.0\n+ globals 16.5.0\n+ husky 9.1.7\n+ knip 6.22.0\n+ prettier 3.8.3\n+ release-it 20.2.0\n+ ts7 <- typescript 7.0.2\n+ turbo 2.10.5\n\nDone in 37.8s using pnpm v11.10.0\n",
+            "working_directory": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-langfuse-b-e151fd74"
+          },
+          {
+            "command": [
+              "pnpm",
+              "--filter",
+              "@langfuse/shared",
+              "run",
+              "db:generate"
+            ],
+            "duration_seconds": 4.641344,
+            "ended_at": "2026-08-18T21:22:39.663744+00:00",
+            "exit_code": 0,
+            "resolved_executable": "C:\\Users\\egruh\\AppData\\Roaming\\npm\\pnpm.CMD",
+            "started_at": "2026-08-18T21:22:35.022400+00:00",
+            "stderr": "$ dotenv -e ../../.env -- npx prisma generate --no-hints\nwarn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).\nFor more information, see: https://pris.ly/prisma-config\n\nwarn Preview feature \"metrics\" is deprecated. It will be removed in a future version of Prisma.\n",
+            "stdout": "Prisma schema loaded from prisma\\schema.prisma\n\n✔ Generated Prisma Client (v6.19.3) to .\\..\\..\\node_modules\\.pnpm\\@prisma+client@6.19.3_@type_afaf70bb389ff469b3695c930fcf8c3c\\node_modules\\@prisma\\client in 477ms\n\n",
+            "working_directory": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-langfuse-b-e151fd74"
+          }
+        ]
+      },
+      "workspace": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-langfuse-b-e151fd74",
+      "workspace_retained": false
+    },
+    "upstream_fixed": {
+      "cleanup_warning": "[WinError 145] The directory is not empty: 'C:\\\\Users\\\\egruh\\\\AppData\\\\Local\\\\Temp\\\\contextlens-case-studies\\\\workspaces\\\\cleanup-54871e93\\\\node_modules\\\\.pnpm\\\\@aws-sdk+checksums@3.1000.12\\\\node_modules\\\\@aws-sdk\\\\checksums\\\\dist-types\\\\submodules\\\\flexible-checksums'",
+      "environment": {
+        "destination": ".env",
+        "sha256": "454ca60dfd9ca0930cc5f0ecba2b9ad7b05187554c9574f485163ebda4c8f64d",
+        "source": ".env.dev.example"
+      },
+      "grader": {
+        "command": [
+          "pnpm",
+          "--filter",
+          "@langfuse/shared",
+          "run",
+          "test",
+          "OtelIngestionProcessor.contextlens.test.ts"
+        ],
+        "duration_seconds": 11.100375,
+        "ended_at": "2026-08-18T21:26:17.203630+00:00",
+        "exit_code": 0,
+        "resolved_executable": "C:\\Users\\egruh\\AppData\\Roaming\\npm\\pnpm.CMD",
+        "started_at": "2026-08-18T21:26:06.103255+00:00",
+        "stderr": "$ dotenv -e ../../.env -- vitest run \"OtelIngestionProcessor.contextlens.test.ts\"\n",
+        "stdout": "\n RUN  v4.1.10 C:/Users/egruh/AppData/Local/Temp/contextlens-case-studies/workspaces/v-langfuse-u-8b7895d1/packages/shared\n\n\n Test Files  1 passed (1)\n      Tests  4 passed (4)\n   Start at  16:26:07\n   Duration  9.40s (transform 3.75s, setup 0ms, import 9.17s, tests 11ms, environment 0ms)\n\n",
+        "working_directory": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-langfuse-u-8b7895d1"
+      },
+      "revision": "0757b12cecd11321132309f5eb319fcab25a01b9",
+      "setup": {
+        "exit_code": 0,
+        "stderr": "\n$ dotenv -e ../../.env -- npx prisma generate --no-hints\nwarn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).\nFor more information, see: https://pris.ly/prisma-config\n\nwarn Preview feature \"metrics\" is deprecated. It will be removed in a future version of Prisma.\n",
+        "stdout": "Scope: all 9 workspace projects\n✓ Lockfile passes supply-chain policies (verified 28m ago)\nLockfile is up to date, resolution step is skipped\nProgress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +2099\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\nProgress: resolved 2099, reused 1097, downloaded 0, added 0\nProgress: resolved 2099, reused 1942, downloaded 0, added 0\nProgress: resolved 2099, reused 2086, downloaded 0, added 9\nProgress: resolved 2099, reused 2086, downloaded 0, added 244\nProgress: resolved 2099, reused 2086, downloaded 0, added 421\nProgress: resolved 2099, reused 2086, downloaded 0, added 514\nProgress: resolved 2099, reused 2086, downloaded 0, added 632\nProgress: resolved 2099, reused 2086, downloaded 0, added 691\nProgress: resolved 2099, reused 2086, downloaded 0, added 719\nProgress: resolved 2099, reused 2086, downloaded 0, added 817\nProgress: resolved 2099, reused 2086, downloaded 0, added 943\nProgress: resolved 2099, reused 2086, downloaded 0, added 1031\nProgress: resolved 2099, reused 2086, downloaded 0, added 1149\nProgress: resolved 2099, reused 2086, downloaded 0, added 1174\nProgress: resolved 2099, reused 2086, downloaded 0, added 1286\nProgress: resolved 2099, reused 2086, downloaded 0, added 1354\nProgress: resolved 2099, reused 2086, downloaded 0, added 1403\nProgress: resolved 2099, reused 2086, downloaded 0, added 1476\nProgress: resolved 2099, reused 2086, downloaded 0, added 1522\nProgress: resolved 2099, reused 2086, downloaded 0, added 1629\nProgress: resolved 2099, reused 2086, downloaded 0, added 1653\nProgress: resolved 2099, reused 2086, downloaded 0, added 1756\nProgress: resolved 2099, reused 2086, downloaded 0, added 1765\nProgress: resolved 2099, reused 2086, downloaded 0, added 1812\nProgress: resolved 2099, reused 2086, downloaded 0, added 1839\nProgress: resolved 2099, reused 2086, downloaded 0, added 1939\nProgress: resolved 2099, reused 2086, downloaded 0, added 2098\nProgress: resolved 2099, reused 2086, downloaded 0, added 2099, done\n\ndevDependencies:\n+ @release-it/bumper 7.0.6\n+ dotenv-cli 7.4.4\n+ eslint-scope 9.1.2\n+ espree 11.2.0\n+ globals 16.5.0\n+ husky 9.1.7\n+ knip 6.22.0\n+ prettier 3.8.3\n+ release-it 20.2.0\n+ ts7 <- typescript 7.0.2\n+ turbo 2.10.5\n\nDone in 41.2s using pnpm v11.10.0\n\nPrisma schema loaded from prisma\\schema.prisma\n\n✔ Generated Prisma Client (v6.19.3) to .\\..\\..\\node_modules\\.pnpm\\@prisma+client@6.19.3_@type_afaf70bb389ff469b3695c930fcf8c3c\\node_modules\\@prisma\\client in 450ms\n\n",
+        "steps": [
+          {
+            "command": [
+              "pnpm",
+              "install",
+              "--frozen-lockfile",
+              "--ignore-scripts"
+            ],
+            "duration_seconds": 41.776404,
+            "ended_at": "2026-08-18T21:26:00.752457+00:00",
+            "exit_code": 0,
+            "resolved_executable": "C:\\Users\\egruh\\AppData\\Roaming\\npm\\pnpm.CMD",
+            "started_at": "2026-08-18T21:25:18.976053+00:00",
+            "stderr": "",
+            "stdout": "Scope: all 9 workspace projects\n✓ Lockfile passes supply-chain policies (verified 28m ago)\nLockfile is up to date, resolution step is skipped\nProgress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +2099\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\nProgress: resolved 2099, reused 1097, downloaded 0, added 0\nProgress: resolved 2099, reused 1942, downloaded 0, added 0\nProgress: resolved 2099, reused 2086, downloaded 0, added 9\nProgress: resolved 2099, reused 2086, downloaded 0, added 244\nProgress: resolved 2099, reused 2086, downloaded 0, added 421\nProgress: resolved 2099, reused 2086, downloaded 0, added 514\nProgress: resolved 2099, reused 2086, downloaded 0, added 632\nProgress: resolved 2099, reused 2086, downloaded 0, added 691\nProgress: resolved 2099, reused 2086, downloaded 0, added 719\nProgress: resolved 2099, reused 2086, downloaded 0, added 817\nProgress: resolved 2099, reused 2086, downloaded 0, added 943\nProgress: resolved 2099, reused 2086, downloaded 0, added 1031\nProgress: resolved 2099, reused 2086, downloaded 0, added 1149\nProgress: resolved 2099, reused 2086, downloaded 0, added 1174\nProgress: resolved 2099, reused 2086, downloaded 0, added 1286\nProgress: resolved 2099, reused 2086, downloaded 0, added 1354\nProgress: resolved 2099, reused 2086, downloaded 0, added 1403\nProgress: resolved 2099, reused 2086, downloaded 0, added 1476\nProgress: resolved 2099, reused 2086, downloaded 0, added 1522\nProgress: resolved 2099, reused 2086, downloaded 0, added 1629\nProgress: resolved 2099, reused 2086, downloaded 0, added 1653\nProgress: resolved 2099, reused 2086, downloaded 0, added 1756\nProgress: resolved 2099, reused 2086, downloaded 0, added 1765\nProgress: resolved 2099, reused 2086, downloaded 0, added 1812\nProgress: resolved 2099, reused 2086, downloaded 0, added 1839\nProgress: resolved 2099, reused 2086, downloaded 0, added 1939\nProgress: resolved 2099, reused 2086, downloaded 0, added 2098\nProgress: resolved 2099, reused 2086, downloaded 0, added 2099, done\n\ndevDependencies:\n+ @release-it/bumper 7.0.6\n+ dotenv-cli 7.4.4\n+ eslint-scope 9.1.2\n+ espree 11.2.0\n+ globals 16.5.0\n+ husky 9.1.7\n+ knip 6.22.0\n+ prettier 3.8.3\n+ release-it 20.2.0\n+ ts7 <- typescript 7.0.2\n+ turbo 2.10.5\n\nDone in 41.2s using pnpm v11.10.0\n",
+            "working_directory": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-langfuse-u-8b7895d1"
+          },
+          {
+            "command": [
+              "pnpm",
+              "--filter",
+              "@langfuse/shared",
+              "run",
+              "db:generate"
+            ],
+            "duration_seconds": 5.348308,
+            "ended_at": "2026-08-18T21:26:06.100799+00:00",
+            "exit_code": 0,
+            "resolved_executable": "C:\\Users\\egruh\\AppData\\Roaming\\npm\\pnpm.CMD",
+            "started_at": "2026-08-18T21:26:00.752491+00:00",
+            "stderr": "$ dotenv -e ../../.env -- npx prisma generate --no-hints\nwarn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please migrate to a Prisma config file (e.g., `prisma.config.ts`).\nFor more information, see: https://pris.ly/prisma-config\n\nwarn Preview feature \"metrics\" is deprecated. It will be removed in a future version of Prisma.\n",
+            "stdout": "Prisma schema loaded from prisma\\schema.prisma\n\n✔ Generated Prisma Client (v6.19.3) to .\\..\\..\\node_modules\\.pnpm\\@prisma+client@6.19.3_@type_afaf70bb389ff469b3695c930fcf8c3c\\node_modules\\@prisma\\client in 450ms\n\n",
+            "working_directory": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-langfuse-u-8b7895d1"
+          }
+        ]
+      },
+      "workspace": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-langfuse-u-8b7895d1",
+      "workspace_retained": false
+    }
+  }
+}

@@ -1,0 +1,79 @@
+--- a/.agents/AGENTS.md
++++ b/.agents/AGENTS.md
+@@ -8,22 +8,12 @@
+ - Read the minimal local context required for the task.
+ - Keep changes scoped and avoid unrelated refactors.
+ - For bug fixes, first write the smallest failing test that proves the reported
+-  behavior and confirm it fails against the buggy behavior before changing
+-  production code. Add another test only when it exercises a distinct adapter,
+-  contract, or execution path. Extend the closest existing test suite; do not
+-  create a standalone constant test when an existing feature suite owns the
+-  behavior. If the bug depends on a data shape, pause and ask: can
+-  `pnpm run seed` prefill that shape locally? If not, consider extending a
+-  seeder scenario so the bug stays cheaply reproducible
+-  (`packages/shared/scripts/seeder/AGENTS.md`), or note why a seed cannot
+-  express it.
++
+ - Prefill local test data with the seed CLI (`pnpm run seed -- list` shows
+   scenarios; runs print UI deep links) — never with ad-hoc scripts or raw
+   ClickHouse inserts.
+ - Every PR auto-builds (via GitHub Actions) a disposable, full-stack preview at
+-  `pr-<N>.preview.langfuse.com` — nothing to spin up. Use the `langfuse-previews`
+-  skill to use or debug one, e.g. read a preview's web/worker error logs with
+-  `kubectl`.
++
+ - For documentation screenshots in Markdown, avoid fixed `height` on `<img>`
+   tags; prefer Markdown images or width-only HTML so previews preserve aspect
+   ratio.
+@@ -33,10 +23,7 @@
+   commands, to avoid zsh glob expansion issues with dynamic Next.js routes.
+ - Never invoke Node-installed binaries through `./node_modules/.bin/*`. Always run them through `pnpm`.
+ - Never put internal ticket ids (`LFE-1234`, `LFINT-1234`, `CLI-Q226-12`) or
+-  Linear URLs into anything this repo publishes: code comments, docs prose,
+-  commit messages, PR titles and descriptions, or changelog entries. They mean
+-  nothing to OSS readers. Describe the problem on its own terms; a
+-  ticket-prefixed branch name is the one place the identifier belongs.
++
+ - Never commit secrets or credentials. Keep `.env*.example` files in
+   sync with required env vars.
+ 
+@@ -107,8 +94,7 @@
+   continue to use the seed CLI to create frontend test state rather than
+   ad-hoc inserts.
+ - Dev Docker Compose exposes these clients on `${HOST_IP:-127.0.0.1}`:
+-  - Postgres: `PGPASSWORD="${POSTGRES_PASSWORD:-postgres}" psql -h "${HOST_IP:-127.0.0.1}" -p "${POSTGRES_HOST_PORT:-5432}" -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-postgres}"`
+-  - ClickHouse: `clickhouse client --host "${HOST_IP:-127.0.0.1}" --port "${CLICKHOUSE_NATIVE_PORT:-9000}" --user "${CLICKHOUSE_USER:-clickhouse}" --password "${CLICKHOUSE_PASSWORD:-clickhouse}" --database default`
++
+   - Redis: `REDISCLI_AUTH="${REDIS_AUTH:-myredissecret}" redis-cli -h "${HOST_IP:-127.0.0.1}" -p "${REDIS_HOST_PORT:-6379}"`
+ - If any connection fails, check `docker-compose.dev.yml` for local override
+   variables and confirm the services are running.
+@@ -128,16 +114,6 @@
+ - Cross-package refactors: `pnpm run lint`, `pnpm run typecheck`, and targeted
+   tests for impacted packages.
+ - Client-bundle soundness: CI scans every prod web build
+-  (`pnpm run scan:client-bundle`) for minifier-dropped bindings and Node-only
+-  globals leaking into browser chunks — the SWC dropped-binding class ships
+-  runtime-only `ReferenceError`s that dev builds and type checks cannot see
+-  (LFE-10645). On failure, `scripts/scan-client-bundle.mjs`'s header explains
+-  the canonical fix.
+-
+-End your turn with evidence, not claims: quote each check's summary line —
+-e.g. `Tasks: 8 successful, 8 total` (turbo lint/typecheck) or
+-`Tests  12 passed (12)` (vitest) — say which checks you skipped and why,
+-never report unverified work as done, and never end with work pending.
+ 
+ ## Generated Files
+ 
+--- a/packages/shared/AGENTS.md
++++ b/packages/shared/AGENTS.md
+@@ -79,9 +79,7 @@
+ - For the cross-package system view, read the architecture handbook:
+   [langfuse.com/handbook/product-engineering/architecture](https://langfuse.com/handbook/product-engineering/architecture).
+ - Source markdown lives in
+-  `../langfuse-docs/content/handbook/product-engineering/architecture.mdx`
+-  (GitHub mirror:
+-  [architecture.mdx](https://github.com/langfuse/langfuse-docs/blob/4188c1ba453240c90a763a8067ef442d68839323/content/handbook/product-engineering/architecture.mdx#L4)).
++
+ - Consult it when changing shared contracts that affect the web container,
+   worker container, ingestion flow, or storage-layer boundaries.
+ 

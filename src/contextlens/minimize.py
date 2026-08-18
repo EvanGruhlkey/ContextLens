@@ -77,6 +77,17 @@ class MinimizationCandidate:
     def context_sources(self) -> tuple[Any, ...]:
         return tuple(source.to_context_source() for source in self.sources)
 
+    def repository_scan(self) -> RepositoryScan:
+        """Materialize the in-memory candidate for task-effective verification."""
+
+        contents = {source.path: source.content for source in self.sources}
+        return scan_repository_files(
+            Path(self.original.root),
+            contents,
+            revision="minimization-candidate",
+            known_paths=self.original.known_paths | frozenset(contents),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class CandidateExperiment:
@@ -205,6 +216,8 @@ def minimize_repository(
             config_path,
             base_context=scan.to_context_sources(),
             candidate_context=tuple(isolated.context_sources()),
+            base_scan=scan,
+            candidate_scan=isolated.repository_scan(),
             root=root,
             base_label="current-context",
         )
@@ -243,6 +256,8 @@ def minimize_repository(
         config_path,
         base_context=scan.to_context_sources(),
         candidate_context=tuple(combined.context_sources()),
+        base_scan=scan,
+        candidate_scan=combined.repository_scan(),
         root=root,
         base_label="current-context-final-combination",
     )
@@ -423,7 +438,11 @@ def _candidate_from_edits(
             contents[edit.replacement_path] = (
                 existing.rstrip() + separator + edit.replacement_text.strip() + "\n"
             )
-    candidate_scan = scan_repository_files(Path(scan.root), contents)
+    candidate_scan = scan_repository_files(
+        Path(scan.root),
+        contents,
+        known_paths=scan.known_paths | frozenset(contents),
+    )
     return MinimizationCandidate(scan, candidate_scan.sources, edits)
 
 

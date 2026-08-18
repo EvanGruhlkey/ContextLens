@@ -1,0 +1,85 @@
+{
+  "grader_valid": true,
+  "hidden_grader_sha256": "c758df15e2f6c0f59da960c5dfeaadd7d145f33214689dd5730681dfecc11c4c",
+  "schema_version": "1.0",
+  "setup_valid": true,
+  "status": "ready_for_agent_run",
+  "study_id": "infisical",
+  "task_id": "infisical-frontend-null-connection-message",
+  "valid": true,
+  "validated_at": "2026-08-18T20:49:48.440269+00:00",
+  "variants": {
+    "buggy": {
+      "grader": {
+        "command": [
+          "npx",
+          "tsx",
+          "--tsconfig",
+          "tsconfig.app.json",
+          "src/components/secret-syncs/forms/schemas/base-secret-sync-schema.contextlens.ts"
+        ],
+        "duration_seconds": 2.099493,
+        "ended_at": "2026-08-18T20:48:20.304627+00:00",
+        "exit_code": 1,
+        "resolved_executable": "C:\\Program Files\\nodejs\\npx.CMD",
+        "started_at": "2026-08-18T20:48:18.205134+00:00",
+        "stderr": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-infisical-b-138bce11\\frontend\\src\\components\\secret-syncs\\forms\\schemas\\base-secret-sync-schema.contextlens.ts:59\n  throw new Error(\n        ^\n\nError: expected Connection Required, received Expected object, received null\n    at <anonymous> (C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-infisical-b-138bce11\\frontend\\src\\components\\secret-syncs\\forms\\schemas\\base-secret-sync-schema.contextlens.ts:59:9)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)\n\nNode.js v24.15.0\n",
+        "stdout": "",
+        "working_directory": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-infisical-b-138bce11\\frontend"
+      },
+      "revision": "40abbafa1903ec4c02fcb260009f96517ffad280",
+      "setup": {
+        "command": [
+          "npm",
+          "ci"
+        ],
+        "duration_seconds": 26.525721,
+        "ended_at": "2026-08-18T20:48:18.203697+00:00",
+        "exit_code": 0,
+        "resolved_executable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "started_at": "2026-08-18T20:47:51.677976+00:00",
+        "stderr": "npm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: 'frontend-v2@0.0.0',\nnpm warn EBADENGINE   required: { npm: '>=11.10.0' },\nnpm warn EBADENGINE   current: { node: 'v24.15.0', npm: '10.8.3' }\nnpm warn EBADENGINE }\nnpm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.\nnpm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead\nnpm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported\nnpm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me\nnpm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead\nnpm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me\nnpm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.\n",
+        "stdout": "\nadded 1127 packages, and audited 1128 packages in 26s\n\n309 packages are looking for funding\n  run `npm fund` for details\n\n31 vulnerabilities (7 low, 14 moderate, 9 high, 1 critical)\n\nTo address issues that do not require attention, run:\n  npm audit fix\n\nTo address all issues (including breaking changes), run:\n  npm audit fix --force\n\nRun `npm audit` for details.\n",
+        "working_directory": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-infisical-b-138bce11\\frontend"
+      },
+      "workspace": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-infisical-b-138bce11",
+      "workspace_retained": false
+    },
+    "upstream_fixed": {
+      "grader": {
+        "command": [
+          "npx",
+          "tsx",
+          "--tsconfig",
+          "tsconfig.app.json",
+          "src/components/secret-syncs/forms/schemas/base-secret-sync-schema.contextlens.ts"
+        ],
+        "duration_seconds": 2.283282,
+        "ended_at": "2026-08-18T20:49:27.483421+00:00",
+        "exit_code": 0,
+        "resolved_executable": "C:\\Program Files\\nodejs\\npx.CMD",
+        "started_at": "2026-08-18T20:49:25.200139+00:00",
+        "stderr": "",
+        "stdout": "ContextLens hidden connection-schema grader: PASS\n",
+        "working_directory": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-infisical-u-f4c191c0\\frontend"
+      },
+      "revision": "c1f4fc904a5b5df6121ec77f97b59b248840d432",
+      "setup": {
+        "command": [
+          "npm",
+          "ci"
+        ],
+        "duration_seconds": 27.353887,
+        "ended_at": "2026-08-18T20:49:25.198190+00:00",
+        "exit_code": 0,
+        "resolved_executable": "C:\\Program Files\\nodejs\\npm.CMD",
+        "started_at": "2026-08-18T20:48:57.844303+00:00",
+        "stderr": "npm warn EBADENGINE Unsupported engine {\nnpm warn EBADENGINE   package: 'frontend-v2@0.0.0',\nnpm warn EBADENGINE   required: { npm: '>=11.10.0' },\nnpm warn EBADENGINE   current: { node: 'v24.15.0', npm: '10.8.3' }\nnpm warn EBADENGINE }\nnpm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.\nnpm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead\nnpm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported\nnpm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me\nnpm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead\nnpm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me\nnpm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.\n",
+        "stdout": "\nadded 1127 packages, and audited 1128 packages in 27s\n\n309 packages are looking for funding\n  run `npm fund` for details\n\n31 vulnerabilities (7 low, 14 moderate, 9 high, 1 critical)\n\nTo address issues that do not require attention, run:\n  npm audit fix\n\nTo address all issues (including breaking changes), run:\n  npm audit fix --force\n\nRun `npm audit` for details.\n",
+        "working_directory": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-infisical-u-f4c191c0\\frontend"
+      },
+      "workspace": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\workspaces\\v-infisical-u-f4c191c0",
+      "workspace_retained": false
+    }
+  }
+}

@@ -132,6 +132,8 @@ separately.
 A trustworthy verification records:
 
 - Git base, candidate content hashes, ordered context manifest;
+- per-task target paths, context provider, exact effective source paths,
+  effective initial tokens, resolution mode, and scope warnings;
 - task, workspace digest, agent/provider/model identity, and settings;
 - evaluator/check commands, sampling policy, trial, and run IDs;
 - raw success/score evidence and failed attempts;

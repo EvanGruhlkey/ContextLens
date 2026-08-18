@@ -1,0 +1,111 @@
+--- a/.agents/AGENTS.md
++++ b/.agents/AGENTS.md
+@@ -8,15 +8,7 @@
+ - Read the minimal local context required for the task.
+ - Keep changes scoped and avoid unrelated refactors.
+ - For bug fixes, first write the smallest failing test that proves the reported
+-  behavior and confirm it fails against the buggy behavior before changing
+-  production code. Add another test only when it exercises a distinct adapter,
+-  contract, or execution path. Extend the closest existing test suite; do not
+-  create a standalone constant test when an existing feature suite owns the
+-  behavior. If the bug depends on a data shape, pause and ask: can
+-  `pnpm run seed` prefill that shape locally? If not, consider extending a
+-  seeder scenario so the bug stays cheaply reproducible
+-  (`packages/shared/scripts/seeder/AGENTS.md`), or note why a seed cannot
+-  express it.
++
+ - Prefill local test data with the seed CLI (`pnpm run seed -- list` shows
+   scenarios; runs print UI deep links) — never with ad-hoc scripts or raw
+   ClickHouse inserts.
+@@ -33,10 +25,7 @@
+   commands, to avoid zsh glob expansion issues with dynamic Next.js routes.
+ - Never invoke Node-installed binaries through `./node_modules/.bin/*`. Always run them through `pnpm`.
+ - Never put internal ticket ids (`LFE-1234`, `LFINT-1234`, `CLI-Q226-12`) or
+-  Linear URLs into anything this repo publishes: code comments, docs prose,
+-  commit messages, PR titles and descriptions, or changelog entries. They mean
+-  nothing to OSS readers. Describe the problem on its own terms; a
+-  ticket-prefixed branch name is the one place the identifier belongs.
++
+ - Never commit secrets or credentials. Keep `.env*.example` files in
+   sync with required env vars.
+ 
+@@ -128,16 +117,6 @@
+ - Cross-package refactors: `pnpm run lint`, `pnpm run typecheck`, and targeted
+   tests for impacted packages.
+ - Client-bundle soundness: CI scans every prod web build
+-  (`pnpm run scan:client-bundle`) for minifier-dropped bindings and Node-only
+-  globals leaking into browser chunks — the SWC dropped-binding class ships
+-  runtime-only `ReferenceError`s that dev builds and type checks cannot see
+-  (LFE-10645). On failure, `scripts/scan-client-bundle.mjs`'s header explains
+-  the canonical fix.
+-
+-End your turn with evidence, not claims: quote each check's summary line —
+-e.g. `Tasks: 8 successful, 8 total` (turbo lint/typecheck) or
+-`Tests  12 passed (12)` (vitest) — say which checks you skipped and why,
+-never report unverified work as done, and never end with work pending.
+ 
+ ## Generated Files
+ 
+--- a/web/AGENTS.md
++++ b/web/AGENTS.md
+@@ -41,21 +41,10 @@
+   `@langfuse/shared/encryption` only when that focused surface is the clearest
+   dependency.
+ - The in-app-agent runtime lives in shared:
+-  `@langfuse/shared/in-app-agent` is the client-safe contracts entry;
+-  its `AgUiRunAgentInput` is a compile-time-only execution contract;
+-  `@langfuse/shared/in-app-agent/server` (and per-module subpaths) is
+-  server-only. Web keeps only the thin adapters in
+-  `src/features/in-app-agent/` (router and UI), plus the authenticated watch
+-  route in `src/app/api/in-app-agent/watch/`.
++
+ - See `../packages/shared/AGENTS.md` for the full shared export map and what
+   each entrypoint contains.
+ - For the higher-level platform topology across web, worker, Postgres,
+-  ClickHouse, Redis, and S3, also read the architecture handbook:
+-  [langfuse.com/handbook/product-engineering/architecture](https://langfuse.com/handbook/product-engineering/architecture)
+-  with source markdown in
+-  `../langfuse-docs/content/handbook/product-engineering/architecture.mdx`
+-  (GitHub mirror:
+-  [architecture.mdx](https://github.com/langfuse/langfuse-docs/blob/4188c1ba453240c90a763a8067ef442d68839323/content/handbook/product-engineering/architecture.mdx#L4)).
+ 
+ ## Package-Local Skills
+ 
+@@ -163,22 +152,7 @@
+   `min-h-screen-with-banner` instead of raw `top-0` so banners do not overlap
+   the UI.
+ - **Z-index / layers — key idea: we are migrating from z-indexes to a layer
+-  system** (start of a developing design system; extend it, don't work around
+-  it). **To put something on top of something else, use a layer, not a
+-  z-index.** The app renders inside `#__next`, isolated into one stacking
+-  context (`globals.css`), so its z-indexes can't escape; overlays go in layers
+-  that sit outside it and always win. `LAYER_ORDER` is
+-  `["panel", "agent", "modal", "popover", "tooltip", "toast"]` — containers declared
+-  in `_document.tsx`, ordered by that array (later = on top), carrying NO z-index.
+-  `panel` is for docked side surfaces like Sheet, Drawer, and the table peek;
+-  `modal` is for true blocking Dialog and AlertDialog surfaces.
+-  **THE RULE (see `src/components/ui/layer.tsx` JSDoc — source of truth): every
+-  overlay portals through a layer container; never let a Radix/Vaul `*.Portal`
+-  fall back to `<body>`.** Radix/Vaul primitives route via their `*.Portal`'s
+-  `container` (the `ui/*` wrappers do this with `useLayerContainer`); bespoke
+-  imperatively-positioned content renders via `<Layer name="…">`. z-index stays
+-  local to a layer or component (1–2 max), never to escape the app — the
+-  `@repo/no-overlay-zindex` lint rule enforces it.
++
+ - **Overlay lifecycle — a dropdown that opens a modal should close first**, not
+   linger under it (a lifecycle bug, not z-order — don't fix it by re-ranking
+   layers). Radix unmounts a Select/DropdownMenu's content on close, so render the
+@@ -203,12 +177,7 @@
+ - Put pure server unit tests that do not need Postgres bootstrap under
+   `src/__tests__/server/unit/**` so they skip the shared DB setup hook.
+ - Server tests that drive the public REST API over HTTP need a web server on
+-  port 3000 **serving the test database**. `web/vitest.config.mts` loads
+-  `../.env.test`, which points `DATABASE_URL` at its own database, while
+-  `pnpm run dev:web` loads only `.env` — so that server talks to a different
+-  database, finds none of the API keys the tests just created, and every
+-  authenticated call comes back 401 `Invalid credentials`. Start it with
+-  `pnpm exec dotenv -e .env.test -e .env -- pnpm --filter web run dev`.
++
+ - Preserve the server-test project split in `vitest.config.mts`. Most tests
+   consume the built `@langfuse/shared` package; only tests importing
+   `@langfuse/shared/in-app-agent` or `@langfuse/shared/src/env` use the

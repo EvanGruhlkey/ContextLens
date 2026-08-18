@@ -245,6 +245,14 @@ With `--target`, or task `target_paths` read from the eval config, static CI als
 reports the effective-context delta. A context increase does not fail unless a
 user explicitly configures a threshold.
 
+Verified evaluation also uses `target_paths`: base and candidate context are
+resolved independently for each task, so moved or newly scoped instruction
+files are reflected correctly. Set `context_provider` on each task or once at
+the config root. Codex adapters default to `codex`; targeted non-Codex adapters
+must choose a provider explicitly. An empty `target_paths` list intentionally
+preserves repository-wide context for compatibility and emits a scope warning
+in every trial record.
+
 ## Existing advanced commands
 
 The original experimental interfaces remain supported:

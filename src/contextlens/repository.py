@@ -6,6 +6,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import posixpath
 import re
 import subprocess
 from collections.abc import Iterable, Mapping
@@ -17,6 +18,7 @@ from contextlens.trace import ContextSource, SourceKind
 
 TOKEN_COUNT_METHOD = "estimated_utf8_bytes_div_4"
 STATIC_EVIDENCE = "observed/static"
+CONTEXT_PROVIDERS = frozenset({"portable", "codex", "claude", "copilot", "cursor"})
 
 _IGNORED_DIRECTORIES = frozenset(
     {
@@ -253,6 +255,11 @@ class EffectiveContext:
     def total_tokens(self) -> int:
         return sum(item.source.tokens for item in self.sources)
 
+    def to_context_sources(self) -> tuple[ContextSource, ...]:
+        """Return the exact provider-resolved sources supplied to a replay."""
+
+        return tuple(item.source.to_context_source() for item in self.sources)
+
     def to_dict(self, *, include_content: bool = False) -> dict[str, Any]:
         return {
             "schema_version": "1.0",
@@ -368,6 +375,7 @@ def scan_repository(root: Path = Path(".")) -> RepositoryScan:
         raise ValueError(f"repository path is not a directory: {resolved}")
     files: dict[str, str] = {}
     known_paths: set[str] = set()
+    symlink_paths = _worktree_git_symlinks(resolved)
     for directory, directory_names, file_names in os.walk(resolved):
         directory_path = Path(directory)
         parent_name = directory_path.name.casefold()
@@ -386,8 +394,16 @@ def scan_repository(root: Path = Path(".")) -> RepositoryScan:
             if classify_context_path(normalized) is None:
                 continue
             try:
-                files[normalized] = path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
+                content = path.read_text(encoding="utf-8")
+                if normalized in symlink_paths and not path.is_symlink():
+                    link_target = (path.parent / content.strip()).resolve()
+                    try:
+                        link_target.relative_to(resolved)
+                    except ValueError:
+                        continue
+                    content = link_target.read_text(encoding="utf-8")
+                files[normalized] = content
+            except (OSError, UnicodeDecodeError):
                 continue
     return scan_repository_files(
         resolved,
@@ -401,17 +417,29 @@ def scan_git_ref(root: Path, ref: str) -> RepositoryScan:
 
     resolved = root.resolve()
     _git(resolved, "rev-parse", "--verify", f"{ref}^{{commit}}")
-    listing = _git(resolved, "ls-tree", "-r", "--name-only", ref)
+    listing = _git(resolved, "ls-tree", "-r", "-z", ref)
     files: dict[str, str] = {}
     known_paths: set[str] = set()
-    for raw_path in listing.splitlines():
-        path = raw_path.strip().replace("\\", "/")
+    entries: dict[str, str] = {}
+    for raw_entry in listing.split("\0"):
+        if not raw_entry or "\t" not in raw_entry:
+            continue
+        metadata, raw_path = raw_entry.split("\t", 1)
+        path = raw_path.replace("\\", "/")
         if not path:
             continue
         known_paths.add(path)
+        entries[path] = metadata.split()[0]
+    for path, mode in entries.items():
         if _ignored_discovery_path(path) or classify_context_path(path) is None:
             continue
-        content = _git_bytes(resolved, "show", f"{ref}:{path}")
+        content = _git_context_bytes(
+            resolved,
+            ref,
+            path,
+            mode=mode,
+            entries=entries,
+        )
         try:
             files[path] = content.decode("utf-8")
         except UnicodeDecodeError:
@@ -470,12 +498,11 @@ def resolve_effective_context(
     The resolver is lexical, so deleted or moved paths remain analyzable.
     """
 
-    supported = {"portable", "codex", "claude", "copilot", "cursor"}
     selected_provider = provider.casefold()
-    if selected_provider not in supported:
+    if selected_provider not in CONTEXT_PROVIDERS:
         raise ValueError(
             f"unknown context provider {provider!r}; choose one of "
-            f"{', '.join(sorted(supported))}"
+            f"{', '.join(sorted(CONTEXT_PROVIDERS))}"
         )
     root = Path(scan.root)
     normalized_targets = _normalize_targets(root, targets)
@@ -1063,6 +1090,55 @@ def _target_matches(target: str, pattern: str) -> bool:
         return normalized in {".", "*", "**", "**/*"}
     pure = PurePosixPath(target)
     return pure.match(normalized) or fnmatch.fnmatchcase(target, normalized)
+
+
+def _worktree_git_symlinks(root: Path) -> frozenset[str]:
+    try:
+        listing = _git(root, "ls-files", "--stage", "-z")
+    except RuntimeError:
+        return frozenset()
+    paths: set[str] = set()
+    for raw_entry in listing.split("\0"):
+        if not raw_entry or "\t" not in raw_entry:
+            continue
+        metadata, raw_path = raw_entry.split("\t", 1)
+        if metadata.split()[0] == "120000":
+            paths.add(raw_path.replace("\\", "/"))
+    return frozenset(paths)
+
+
+def _git_context_bytes(
+    root: Path,
+    ref: str,
+    path: str,
+    *,
+    mode: str,
+    entries: Mapping[str, str],
+) -> bytes:
+    content = _git_bytes(root, "show", f"{ref}:{path}")
+    current_path = path
+    current_mode = mode
+    visited = {path}
+    for _ in range(8):
+        if current_mode != "120000":
+            return content
+        try:
+            link = content.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            return content
+        target = posixpath.normpath(
+            posixpath.join(posixpath.dirname(current_path), link)
+        )
+        if target.startswith("../") or target == ".." or target in visited:
+            return content
+        target_mode = entries.get(target)
+        if target_mode is None:
+            return content
+        visited.add(target)
+        current_path = target
+        current_mode = target_mode
+        content = _git_bytes(root, "show", f"{ref}:{target}")
+    return content
 
 
 def _static_findings(
