@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Fixed clean editable installs so the development-only `evals` harness is
+  importable without shipping it in the production wheel or mutating `sys.path`.
+- Added `contextlens init` with conservative ecosystem, check, context, and
+  agent detection plus explicit non-runnable TODO fallbacks.
+- Split repository footprint from target-effective context and added Codex,
+  Claude, Copilot, and Cursor scope resolvers with accuracy labels.
+- Hardened minimization with prioritized deduplicate/remove/scope proposals,
+  isolated candidate screening, and a separate final combined verification.
+- Added effective-context CI reporting, cross-platform argument generation,
+  and robust action result output on failing gates.
+- Added a pinned seven-change public repository corpus and a checked-in,
+  reproducible static VS Code report without inventing agent results.
 - Repositioned ContextLens as CI and regression testing for repository-owned
   agent context: "test your AGENTS.md like you test your code."
 - Added credential-free repository discovery and static `scan` for AGENTS.md,
@@ -13,8 +25,9 @@
   economics, behavior, and latency reporting.
 - Added provider-usage normalization for cached, uncached, cache-write, output,
   and reasoning categories plus explicit historical pricing snapshots.
-- Added conservative `minimize`: static evidence generates an in-memory
-  candidate, combined verification gates it, and source files are never edited.
+- Added conservative `minimize`: static evidence generates in-memory
+  candidates, isolated and combined verification gates them, and source files
+  are never edited.
 - Added static and verified `ci` modes, stable exit codes, JSON/Markdown
   artifacts, a composite GitHub Action, and path-filtered workflow examples.
 - Added `profile` as the explicit trace-profiler command while preserving

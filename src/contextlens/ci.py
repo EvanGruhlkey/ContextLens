@@ -63,6 +63,8 @@ class CiResult:
 def evaluate_static_ci(
     report: RepositoryDiff,
     policy: StaticCiPolicy,
+    *,
+    effective_context: dict[str, Any] | None = None,
 ) -> CiResult:
     """Gate deterministic footprint deltas without asserting causal impact."""
 
@@ -101,11 +103,14 @@ def evaluate_static_ci(
             f"stale references increased by {report.stale_reference_delta}, above "
             f"the {policy.max_stale_reference_increase} limit"
         )
+    report_value = report.to_dict()
+    if effective_context is not None:
+        report_value["effective_context"] = effective_context
     return CiResult(
         passed=not reasons,
         mode="static",
         reasons=tuple(reasons),
-        report=report.to_dict(),
+        report=report_value,
     )
 
 
@@ -130,3 +135,43 @@ def write_summary(path: Path, content: str) -> None:
         stream.write(content)
         if not content.endswith("\n"):
             stream.write("\n")
+
+
+def build_ci_arguments(
+    *,
+    mode: str,
+    base: str,
+    config: str = ".contextlens/evals.json",
+    provider: str = "portable",
+    targets: tuple[str, ...] = (),
+    max_context_increase: str = "",
+    max_duplicate_increase: str = "",
+    max_stale_increase: str = "",
+) -> tuple[str, ...]:
+    """Build a shell-independent CI argv for integrations and tests."""
+
+    if mode not in {"static", "verified"}:
+        raise ValueError("CI mode must be static or verified")
+    arguments = [
+        "ci",
+        "--mode",
+        mode,
+        "--base",
+        base,
+        "--provider",
+        provider,
+        "--json-output",
+        ".contextlens/ci-result.json",
+    ]
+    if mode == "verified":
+        arguments.extend(("--config", config))
+    for flag, value in (
+        ("--max-context-increase", max_context_increase),
+        ("--max-duplicate-increase", max_duplicate_increase),
+        ("--max-stale-increase", max_stale_increase),
+    ):
+        if value:
+            arguments.extend((flag, value))
+    for target in targets:
+        arguments.extend(("--target", target))
+    return tuple(arguments)

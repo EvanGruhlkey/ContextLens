@@ -163,6 +163,7 @@ class RepositoryScan:
     sources: tuple[RepositoryContext, ...]
     findings: tuple[StaticFinding, ...]
     revision: str = "worktree"
+    known_paths: frozenset[str] = frozenset()
 
     @property
     def total_tokens(self) -> int:
@@ -211,6 +212,70 @@ class RepositoryScan:
             "disclaimer": (
                 "Static findings identify context footprint and review candidates; "
                 "they do not establish performance impact or safety of removal."
+            ),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class EffectiveContextSource:
+    """One source resolved as applicable to at least one requested target."""
+
+    source: RepositoryContext
+    targets: tuple[str, ...]
+    scope_accuracy: str
+    reason: str
+
+    def to_dict(self, *, include_content: bool = False) -> dict[str, Any]:
+        value = self.source.to_dict(include_content=include_content)
+        value.update(
+            {
+                "targets": list(self.targets),
+                "scope_accuracy": self.scope_accuracy,
+                "scope_reason": self.reason,
+            }
+        )
+        return value
+
+
+@dataclass(frozen=True, slots=True)
+class EffectiveContext:
+    """Conservative target-specific context resolution over an inventory."""
+
+    root: str
+    provider: str
+    targets: tuple[str, ...]
+    sources: tuple[EffectiveContextSource, ...]
+    missing_targets: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+    revision: str = "worktree"
+
+    @property
+    def total_tokens(self) -> int:
+        return sum(item.source.tokens for item in self.sources)
+
+    def to_dict(self, *, include_content: bool = False) -> dict[str, Any]:
+        return {
+            "schema_version": "1.0",
+            "report_type": "effective_repository_context",
+            "evidence": STATIC_EVIDENCE,
+            "verified": False,
+            "root": self.root,
+            "revision": self.revision,
+            "provider": self.provider,
+            "targets": list(self.targets),
+            "missing_targets": list(self.missing_targets),
+            "summary": {
+                "source_count": len(self.sources),
+                "effective_estimated_tokens": self.total_tokens,
+                "token_count_method": TOKEN_COUNT_METHOD,
+            },
+            "sources": [
+                item.to_dict(include_content=include_content) for item in self.sources
+            ],
+            "warnings": list(self.warnings),
+            "disclaimer": (
+                "Effective context is a deterministic scope resolution, not proof "
+                "of exact provider prompt injection or performance impact."
             ),
         }
 
@@ -387,6 +452,122 @@ def scan_repository_files(
         sources=sources,
         findings=findings,
         revision=revision,
+        known_paths=repository_paths,
+    )
+
+
+def resolve_effective_context(
+    scan: RepositoryScan,
+    targets: Iterable[str | Path],
+    *,
+    provider: str = "portable",
+) -> EffectiveContext:
+    """Resolve the union of context applicable to explicit repository targets.
+
+    ``portable`` applies documented path conventions across supported formats and
+    labels provider-dependent behavior as approximate. Provider-specific modes
+    restrict resolution to the selected convention plus AGENTS.md where relevant.
+    The resolver is lexical, so deleted or moved paths remain analyzable.
+    """
+
+    supported = {"portable", "codex", "claude", "copilot", "cursor"}
+    selected_provider = provider.casefold()
+    if selected_provider not in supported:
+        raise ValueError(
+            f"unknown context provider {provider!r}; choose one of "
+            f"{', '.join(sorted(supported))}"
+        )
+    root = Path(scan.root)
+    normalized_targets = _normalize_targets(root, targets)
+    if not normalized_targets:
+        raise ValueError("effective context requires at least one --target")
+    missing = tuple(
+        target
+        for target in normalized_targets
+        if target != "."
+        and target not in scan.known_paths
+        and not any(path.startswith(f"{target}/") for path in scan.known_paths)
+    )
+    warnings: set[str] = set()
+    if any(
+        source.kind in {"agent_skill", "mcp_configuration", "tool_schema"}
+        for source in scan.sources
+    ):
+        warnings.add(
+            "Skills, MCP configuration, and tool schemas remain repository "
+            "inventory because providers differ on whether and when they enter "
+            "model-visible context."
+        )
+    resolved: list[EffectiveContextSource] = []
+    for source in scan.sources:
+        if source.kind == "cursor_rule" and selected_provider == "portable":
+            metadata = _frontmatter(source.content)
+            if (
+                not _metadata_patterns(metadata, "globs")
+                and metadata.get("alwaysapply", "").casefold() != "true"
+            ):
+                warnings.add(
+                    f"{source.path} has relevance/manual Cursor semantics and "
+                    "was not assumed to be injected."
+                )
+        matched: list[str] = []
+        accuracy = "documented"
+        reason = ""
+        for target in normalized_targets:
+            applicability = _source_applies(
+                source,
+                target,
+                provider=selected_provider,
+            )
+            if applicability is None:
+                continue
+            matched.append(target)
+            source_accuracy, source_reason, source_warning = applicability
+            if source_accuracy == "approximated":
+                accuracy = source_accuracy
+            reason = source_reason
+            if source_warning:
+                warnings.add(source_warning)
+        if matched:
+            resolved.append(
+                EffectiveContextSource(
+                    source=source,
+                    targets=tuple(matched),
+                    scope_accuracy=accuracy,
+                    reason=reason,
+                )
+            )
+    if missing:
+        warnings.add(
+            "Missing/deleted targets were resolved lexically; file existence was "
+            "not required for ancestor and glob scope matching."
+        )
+    if selected_provider == "copilot":
+        agent_items = [item for item in resolved if item.source.kind == "agents_md"]
+        if agent_items:
+            nearest_depth = max(
+                _scope_depth_value(item.source.scope) for item in agent_items
+            )
+            resolved = [
+                item
+                for item in resolved
+                if item.source.kind != "agents_md"
+                or _scope_depth_value(item.source.scope) == nearest_depth
+            ]
+    resolved.sort(
+        key=lambda item: (
+            _scope_depth_value(item.source.scope),
+            item.source.path.casefold(),
+        )
+    )
+    return EffectiveContext(
+        root=scan.root,
+        provider=selected_provider,
+        targets=normalized_targets,
+        sources=tuple(resolved),
+        missing_targets=missing,
+        warnings=tuple(sorted(warnings)),
+        revision=scan.revision,
     )
 
 
@@ -399,6 +580,23 @@ def diff_repository(
     selected_ref = base_ref or default_base_ref(resolved)
     base = scan_git_ref(resolved, selected_ref)
     candidate = scan_repository(resolved)
+    return compare_repository_scans(
+        resolved,
+        base_ref=selected_ref,
+        base=base,
+        candidate=candidate,
+    )
+
+
+def compare_repository_scans(
+    root: Path,
+    *,
+    base_ref: str,
+    base: RepositoryScan,
+    candidate: RepositoryScan,
+) -> RepositoryDiff:
+    """Build a diff from explicit scans, including two immutable Git trees."""
+
     by_base = {source.path: source for source in base.sources}
     by_candidate = {source.path: source for source in candidate.sources}
     sources = tuple(
@@ -415,12 +613,36 @@ def diff_repository(
         != (by_candidate[path].content if path in by_candidate else None)
     )
     return RepositoryDiff(
-        root=str(resolved),
-        base_ref=selected_ref,
+        root=str(root.resolve()),
+        base_ref=base_ref,
         base=base,
         candidate=candidate,
         sources=sources,
     )
+
+
+def diff_effective_context(
+    report: RepositoryDiff,
+    targets: Iterable[str | Path],
+    *,
+    provider: str = "portable",
+) -> dict[str, Any]:
+    """Resolve the same targets against both immutable base and candidate scans."""
+
+    base = resolve_effective_context(report.base, targets, provider=provider)
+    candidate = resolve_effective_context(report.candidate, targets, provider=provider)
+    delta = candidate.total_tokens - base.total_tokens
+    change = delta / base.total_tokens if base.total_tokens else None
+    return {
+        "provider": provider,
+        "targets": list(candidate.targets),
+        "base_estimated_tokens": base.total_tokens,
+        "candidate_estimated_tokens": candidate.total_tokens,
+        "delta_estimated_tokens": delta,
+        "change_fraction": change,
+        "base": base.to_dict(),
+        "candidate": candidate.to_dict(),
+    }
 
 
 def default_base_ref(root: Path) -> str:
@@ -484,7 +706,7 @@ def classify_context_path(path: str) -> tuple[str, str, bool] | None:
 def render_scan_terminal(report: RepositoryScan) -> str:
     """Render the fast human-facing repository inventory."""
 
-    lines = ["ContextLens", "", "Agent context                         Tokens"]
+    lines = ["ContextLens", "", "Repository context footprint          Tokens"]
     lines.append("-" * 49)
     for source in report.sources:
         lines.append(f"{_clip(source.path, 35):35} {source.tokens:>12,}")
@@ -502,6 +724,41 @@ def render_scan_terminal(report: RepositoryScan) -> str:
             "",
             "Static findings do not establish performance impact or safe removal.",
             "Run `contextlens verify` to measure whether a context change helps.",
+        )
+    )
+    return "\n".join(lines) + "\n"
+
+
+def render_effective_context_terminal(report: EffectiveContext) -> str:
+    """Render target-specific context without implying exact provider injection."""
+
+    target_label = ", ".join(report.targets)
+    lines = [
+        "Effective Agent Context",
+        "",
+        f"Target: {target_label}",
+        f"Resolver: {report.provider}",
+        "",
+        "Source                                Tokens  Scope",
+        "-" * 63,
+    ]
+    for item in report.sources:
+        lines.append(
+            f"{_clip(item.source.path, 35):35} {item.source.tokens:>8,}  "
+            f"{item.scope_accuracy}"
+        )
+    lines.append("-" * 63)
+    lines.append(f"{'Effective context':35} {report.total_tokens:>8,}")
+    if not report.sources:
+        lines.append("No recognized context resolved for the requested target(s).")
+    if report.warnings:
+        lines.extend(("", "Scope notes"))
+        lines.extend(f"- {warning}" for warning in report.warnings)
+    lines.extend(
+        (
+            "",
+            "Scope resolution is observed/static — NOT VERIFIED.",
+            "It does not claim exact provider prompt injection or task impact.",
         )
     )
     return "\n".join(lines) + "\n"
@@ -550,7 +807,7 @@ def render_diff_terminal(report: RepositoryDiff) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_markdown(value: RepositoryScan | RepositoryDiff) -> str:
+def render_markdown(value: RepositoryScan | RepositoryDiff | EffectiveContext) -> str:
     """Render a GitHub-summary-friendly Markdown report."""
 
     if isinstance(value, RepositoryDiff):
@@ -580,6 +837,29 @@ def render_markdown(value: RepositoryScan | RepositoryDiff) -> str:
             f"Duplicate context delta: **{value.duplicate_delta:+,} tokens**  \n"
             f"Stale-reference delta: **{value.stale_reference_delta:+,}**\n\n"
             "Static findings are review candidates, not causal evidence.\n"
+        )
+    if isinstance(value, EffectiveContext):
+        rows = (
+            "\n".join(
+                f"| `{item.source.path}` | {item.source.tokens:,} | "
+                f"{item.scope_accuracy} | {', '.join(item.targets)} |"
+                for item in value.sources
+            )
+            or "| _No resolved context_ | 0 | — | — |"
+        )
+        warnings = "\n".join(f"- {warning}" for warning in value.warnings) or "- None."
+        return (
+            "## ContextLens — Effective Agent Context\n\n"
+            f"**Targets:** {', '.join(f'`{item}`' for item in value.targets)}  \n"
+            f"**Resolver:** `{value.provider}`  \n"
+            "**Evidence:** observed / static — **NOT VERIFIED**\n\n"
+            "| Source | Estimated tokens | Scope | Applies to |\n"
+            "| --- | ---: | --- | --- |\n"
+            f"{rows}\n"
+            f"| **Effective context** | **{value.total_tokens:,}** | | |\n\n"
+            f"### Scope notes\n\n{warnings}\n\n"
+            "Resolution does not claim exact provider prompt injection or "
+            "task impact.\n"
         )
     rows = (
         "\n".join(
@@ -617,6 +897,172 @@ def _repository_context(path: str, content: str) -> RepositoryContext:
         cold_start=cold_start,
         format=PurePosixPath(path).suffix.casefold().lstrip(".") or "text",
     )
+
+
+def _normalize_targets(root: Path, targets: Iterable[str | Path]) -> tuple[str, ...]:
+    normalized: list[str] = []
+    for raw_target in targets:
+        path = Path(raw_target)
+        if path.is_absolute():
+            try:
+                path = path.resolve().relative_to(root.resolve())
+            except ValueError as error:
+                raise ValueError(
+                    f"target is outside repository root {root}: {raw_target}"
+                ) from error
+        value = _normalize_path(path.as_posix())
+        if value in {"", "."}:
+            value = "."
+        if value.startswith("../") or value == "..":
+            raise ValueError(f"target is outside repository root: {raw_target}")
+        if value not in normalized:
+            normalized.append(value)
+    return tuple(normalized)
+
+
+def _source_applies(
+    source: RepositoryContext,
+    target: str,
+    *,
+    provider: str,
+) -> tuple[str, str, str | None] | None:
+    target_parent = _target_parent(target)
+    if source.kind == "agents_md":
+        if provider not in {"portable", "codex", "copilot"}:
+            return None
+        if _scope_contains(source.scope, target_parent):
+            if provider == "portable":
+                return (
+                    "approximated",
+                    "AGENTS.md ancestor scope",
+                    (
+                        "AGENTS.md combination differs by provider: Codex combines "
+                        "ancestor guidance, while some Copilot surfaces give the "
+                        "nearest file precedence."
+                    ),
+                )
+            if provider == "codex" and target != ".":
+                return (
+                    "approximated",
+                    "AGENTS.md chain assuming the target parent is the run directory",
+                    (
+                        "Codex discovers project AGENTS.md from the run working "
+                        "directory; --target approximates that directory with the "
+                        "target's parent."
+                    ),
+                )
+            return (
+                "documented",
+                (
+                    "nearest AGENTS.md precedence"
+                    if provider == "copilot"
+                    else "AGENTS.md ancestor inheritance"
+                ),
+                None,
+            )
+        return None
+    if source.kind == "claude_md":
+        if provider not in {"portable", "claude"}:
+            return None
+        if _scope_contains(source.scope, target_parent):
+            warning = (
+                "CLAUDE.md ancestor resolution is an approximation; Claude Code "
+                "loading can depend on launch directory and runtime discovery."
+            )
+            return "approximated", "CLAUDE.md ancestor scope", warning
+        return None
+    if source.kind == "copilot_instructions":
+        if provider not in {"portable", "copilot"}:
+            return None
+        if source.path.casefold() == ".github/copilot-instructions.md":
+            return "documented", "repository-wide Copilot instructions", None
+        metadata = _frontmatter(source.content)
+        patterns = _metadata_patterns(metadata, "applyto")
+        if not patterns:
+            return None
+        if any(_target_matches(target, pattern) for pattern in patterns):
+            return "documented", f"Copilot applyTo: {', '.join(patterns)}", None
+        return None
+    if source.kind == "cursor_rule":
+        if provider not in {"portable", "cursor"}:
+            return None
+        metadata = _frontmatter(source.content)
+        if metadata.get("alwaysapply", "").casefold() == "true":
+            return "documented", "Cursor alwaysApply rule", None
+        patterns = _metadata_patterns(metadata, "globs")
+        if patterns and any(_target_matches(target, pattern) for pattern in patterns):
+            return "documented", f"Cursor globs: {', '.join(patterns)}", None
+        if not patterns:
+            warning = (
+                f"{source.path} has no recognized Cursor globs/alwaysApply metadata "
+                "and was not assumed to be injected."
+            )
+            return (
+                None
+                if provider != "cursor"
+                else (
+                    "approximated",
+                    "Cursor metadata unavailable",
+                    warning,
+                )
+            )
+        return None
+    # Skills, MCP configuration, and tool schemas describe available runtime
+    # context, but providers vary on whether and when their contents enter a prompt.
+    return None
+
+
+def _target_parent(target: str) -> str:
+    if target == ".":
+        return "."
+    parent = PurePosixPath(target).parent.as_posix()
+    return "." if parent == "." else parent
+
+
+def _scope_contains(scope: str, target_parent: str) -> bool:
+    return (
+        scope == "." or target_parent == scope or target_parent.startswith(f"{scope}/")
+    )
+
+
+def _scope_depth_value(scope: str) -> int:
+    return 0 if scope == "." else len(PurePosixPath(scope).parts)
+
+
+def _frontmatter(content: str) -> dict[str, str]:
+    lines = content.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}
+    values: dict[str, str] = {}
+    for raw_line in lines[1:]:
+        line = raw_line.strip()
+        if line == "---":
+            break
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        values[key.strip().casefold()] = value.strip().strip("'\"")
+    return values
+
+
+def _metadata_patterns(metadata: Mapping[str, str], key: str) -> tuple[str, ...]:
+    value = metadata.get(key.casefold(), "").strip()
+    if not value:
+        return ()
+    value = value.removeprefix("[").removesuffix("]")
+    return tuple(
+        item.strip().strip("'\"")
+        for item in value.split(",")
+        if item.strip().strip("'\"")
+    )
+
+
+def _target_matches(target: str, pattern: str) -> bool:
+    normalized = _normalize_path(pattern)
+    if target == ".":
+        return normalized in {".", "*", "**", "**/*"}
+    pure = PurePosixPath(target)
+    return pure.match(normalized) or fnmatch.fnmatchcase(target, normalized)
 
 
 def _static_findings(

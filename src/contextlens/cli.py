@@ -18,6 +18,7 @@ from contextlens.analysis import (
     SavingsAnalyzer,
     Workload,
 )
+from contextlens.bootstrap import initialize_repository, render_init_terminal
 from contextlens.ci import (
     StaticCiPolicy,
     evaluate_static_ci,
@@ -65,10 +66,14 @@ from contextlens.reports import (
     render_terminal,
 )
 from contextlens.repository import (
+    EffectiveContext,
+    diff_effective_context,
     diff_repository,
     render_diff_terminal,
+    render_effective_context_terminal,
     render_markdown,
     render_scan_terminal,
+    resolve_effective_context,
     scan_repository,
 )
 from contextlens.runtime import apply_context_policy
@@ -98,16 +103,39 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command")
 
+    init = commands.add_parser(
+        "init",
+        help="detect repository checks and create a starter verification suite",
+    )
+    init.add_argument("repository", nargs="?", type=Path, default=Path("."))
+    init.add_argument("--output", type=Path)
+    init.add_argument("--force", action="store_true")
+    init.add_argument("--format", choices=("terminal", "json"), default="terminal")
+    init.set_defaults(handler=_init)
+
     scan = commands.add_parser(
         "scan",
         help="discover and statically inspect repository agent context",
     )
     scan.add_argument(
-        "target",
+        "repository",
         nargs="?",
         type=Path,
         default=Path("."),
         help="repository path (default: current directory)",
+    )
+    scan.add_argument(
+        "--target",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="resolve effective context for a target path (repeatable)",
+    )
+    scan.add_argument(
+        "--provider",
+        choices=("portable", "codex", "claude", "copilot", "cursor"),
+        default="portable",
+        help="scope resolver used with --target (default: portable)",
     )
     scan.add_argument("--request-id", help=argparse.SUPPRESS)
     scan.add_argument("--observation", type=Path, help=argparse.SUPPRESS)
@@ -126,6 +154,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     context_diff.add_argument("repository", nargs="?", type=Path, default=Path("."))
     context_diff.add_argument("--base")
+    context_diff.add_argument("--target", action="append", default=[])
+    context_diff.add_argument(
+        "--provider",
+        choices=("portable", "codex", "claude", "copilot", "cursor"),
+        default="portable",
+    )
     context_diff.add_argument(
         "--format", choices=("terminal", "json", "markdown"), default="terminal"
     )
@@ -174,6 +208,12 @@ def _parser() -> argparse.ArgumentParser:
     ci.add_argument("--max-context-increase", type=float)
     ci.add_argument("--max-duplicate-increase", type=int)
     ci.add_argument("--max-stale-increase", type=int)
+    ci.add_argument("--target", action="append", default=[])
+    ci.add_argument(
+        "--provider",
+        choices=("portable", "codex", "claude", "copilot", "cursor"),
+        default="portable",
+    )
     ci.add_argument("--json-output", type=Path)
     ci.add_argument("--summary", type=Path)
     ci.set_defaults(handler=_ci)
@@ -297,23 +337,51 @@ def _record(arguments: argparse.Namespace) -> int:
 
 
 def _scan(arguments: argparse.Namespace) -> int:
-    target = arguments.target
-    if target.is_file() and target.suffix.casefold() == ".jsonl":
-        return _profile_trace(arguments, target)
-    report = scan_repository(target)
+    repository = arguments.repository
+    if repository.is_file() and repository.suffix.casefold() == ".jsonl":
+        return _profile_trace(arguments, repository)
+    inventory = scan_repository(repository)
+    report = (
+        resolve_effective_context(
+            inventory,
+            arguments.target,
+            provider=arguments.provider,
+        )
+        if arguments.target
+        else inventory
+    )
     if arguments.format in {"csv", "html"}:
         raise ValueError(
             "repository scan supports terminal, json, or markdown; "
             "use `contextlens profile` for legacy report formats"
         )
     content = (
-        render_scan_terminal(report)
+        (
+            render_effective_context_terminal(report)
+            if isinstance(report, EffectiveContext)
+            else render_scan_terminal(report)
+        )
         if arguments.format == "terminal"
         else json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n"
         if arguments.format == "json"
         else render_markdown(report)
     )
     _write_text(content, arguments.output)
+    return 0
+
+
+def _init(arguments: argparse.Namespace) -> int:
+    result = initialize_repository(
+        arguments.repository,
+        output=arguments.output,
+        force=arguments.force,
+    )
+    content = (
+        render_init_terminal(result)
+        if arguments.format == "terminal"
+        else json.dumps(result.to_dict(), indent=2, ensure_ascii=False) + "\n"
+    )
+    sys.stdout.write(content)
     return 0
 
 
@@ -347,12 +415,24 @@ def _profile_trace(arguments: argparse.Namespace, trace: Path) -> int:
 
 def _diff(arguments: argparse.Namespace) -> int:
     report = diff_repository(arguments.repository, base_ref=arguments.base)
+    effective = (
+        diff_effective_context(
+            report,
+            arguments.target,
+            provider=arguments.provider,
+        )
+        if arguments.target
+        else None
+    )
+    report_value = report.to_dict()
+    if effective is not None:
+        report_value["effective_context"] = effective
     content = (
-        render_diff_terminal(report)
+        render_diff_terminal(report) + _render_effective_diff_terminal(effective)
         if arguments.format == "terminal"
-        else json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n"
+        else json.dumps(report_value, indent=2, ensure_ascii=False) + "\n"
         if arguments.format == "json"
-        else render_markdown(report)
+        else render_markdown(report) + _render_effective_diff_markdown(effective)
     )
     _write_text(content, arguments.output)
     return 0
@@ -402,6 +482,16 @@ def _minimize(arguments: argparse.Namespace) -> int:
 def _ci(arguments: argparse.Namespace) -> int:
     if arguments.mode == "static":
         context_diff = diff_repository(arguments.repository, base_ref=arguments.base)
+        targets = tuple(arguments.target) or _configured_targets(arguments.config)
+        effective = (
+            diff_effective_context(
+                context_diff,
+                targets,
+                provider=arguments.provider,
+            )
+            if targets
+            else None
+        )
         result = evaluate_static_ci(
             context_diff,
             StaticCiPolicy(
@@ -409,8 +499,11 @@ def _ci(arguments: argparse.Namespace) -> int:
                 max_duplicate_increase_tokens=arguments.max_duplicate_increase,
                 max_stale_reference_increase=arguments.max_stale_increase,
             ),
+            effective_context=effective,
         )
-        summary = render_markdown(context_diff)
+        summary = render_markdown(context_diff) + _render_effective_diff_markdown(
+            effective
+        )
     else:
         verification = verify_repository(
             arguments.config,
@@ -740,6 +833,56 @@ def _write_text(content: str, output: Path | None) -> None:
     resolved.parent.mkdir(parents=True, exist_ok=True)
     resolved.write_text(content, encoding="utf-8", newline="\n")
     print(resolved)
+
+
+def _configured_targets(config: Path) -> tuple[str, ...]:
+    if not config.is_file():
+        return ()
+    value = _load_json(config)
+    if not isinstance(value, dict) or not isinstance(value.get("tasks"), list):
+        return ()
+    targets: list[str] = []
+    for raw_task in value["tasks"]:
+        if not isinstance(raw_task, dict):
+            continue
+        raw_targets = raw_task.get("target_paths", ())
+        if not isinstance(raw_targets, list):
+            continue
+        for target in raw_targets:
+            normalized = str(target)
+            if normalized and normalized not in targets:
+                targets.append(normalized)
+    return tuple(targets)
+
+
+def _render_effective_diff_terminal(value: dict[str, Any] | None) -> str:
+    if value is None:
+        return ""
+    base = int(value["base_estimated_tokens"])
+    candidate = int(value["candidate_estimated_tokens"])
+    delta = int(value["delta_estimated_tokens"])
+    return (
+        "\nEffective target context\n"
+        f"Targets: {', '.join(value['targets'])}\n"
+        f"Resolver: {value['provider']}\n"
+        f"Estimated tokens: {base:,} -> {candidate:,} ({delta:+,})\n"
+        "Observed/static — NOT VERIFIED.\n"
+    )
+
+
+def _render_effective_diff_markdown(value: dict[str, Any] | None) -> str:
+    if value is None:
+        return ""
+    base = int(value["base_estimated_tokens"])
+    candidate = int(value["candidate_estimated_tokens"])
+    delta = int(value["delta_estimated_tokens"])
+    return (
+        "\n### Effective target context\n\n"
+        f"Targets: {', '.join(f'`{item}`' for item in value['targets'])}  \n"
+        f"Resolver: `{value['provider']}`  \n"
+        f"Estimated tokens: **{base:,} → {candidate:,} ({delta:+,})**\n\n"
+        "Observed/static — **NOT VERIFIED**.\n"
+    )
 
 
 def _select_request(

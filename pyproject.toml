@@ -48,6 +48,12 @@ Repository = "https://github.com/EvanGruhlkey/ContextLens.git"
 [project.scripts]
 contextlens = "contextlens.cli:main"
 
+[tool.hatch.build]
+# The repository evaluation harness is intentionally development-only. Expose
+# it to editable installs without shipping the generic top-level `evals`
+# package in the production wheel.
+dev-mode-dirs = ["src", "."]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/contextlens"]
 

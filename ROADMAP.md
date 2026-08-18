@@ -25,6 +25,11 @@ issue/PR imports for mature teams.
   and tool-schema findings.
 - Git-tree base comparison and worktree diff.
 - Terminal, JSON, and Markdown output with explicit static labels.
+- Repository-footprint versus target-effective context reporting.
+- Provider-specific Codex, Claude, Copilot, and Cursor scope resolvers with
+  documented/approximated labels.
+- `contextlens init` detection for Python, Node, Rust, Go, Codex, and generic
+  subprocess agents.
 
 Next:
 
@@ -50,18 +55,17 @@ Next:
 - Container/worktree isolation adapters and distributed runners.
 - Historical issue/PR task import with leakage controls.
 
-## Phase 3 — Verified minimization (initial implementation)
+## Phase 3 — Verified minimization (hardened initial implementation)
 
-- Exact duplicate candidate generation.
-- Combined target-model verification.
+- Exact duplicate, stale-guidance removal, and scoped-move candidate generation.
+- Interpretable savings × confidence prioritization.
+- Isolated candidate verification followed by combined final verification.
 - Patch artifact only after a PASS verdict; no source auto-edit.
 
 Next:
 
-- Candidate generation for scoped moves, summaries, lazy loading, and stale
-  guidance using the existing mutation model.
-- Adaptive screening and interaction search over candidate patches.
-- Incremental plus final combined verification with explicit budgets.
+- Explicit summarizer and lazy-retrieval adapters using the existing mutation model.
+- Full adaptive group splitting over instruction sections, not only candidates.
 - Human-review annotations explaining every patch hunk.
 
 ## Phase 4 — CI (implemented)
@@ -69,6 +73,7 @@ Next:
 - Static and verified CLI modes.
 - Composite GitHub Action, JSON artifact, Markdown step summary, stable exits.
 - Path-filtered dogfood workflow and reusable examples.
+- Optional effective-context deltas from explicit targets or eval task metadata.
 
 Next:
 
@@ -103,6 +108,11 @@ Progression:
 
 Future work includes task sampling, flaky-test handling, evaluation budget
 estimation, and repository-specific quality tolerances.
+
+The real-context-change corpus currently pins seven changes across six public
+repositories and checks in one reproducible static report. Cases stay
+`static_ready` until realistic task definitions and repeated agent evidence are
+available; static history is not mislabeled as a verified benchmark.
 
 ## Retained research engine
 

@@ -18,6 +18,7 @@ from contextlens.repository import (
     RepositoryScan,
     estimate_tokens,
     scan_repository,
+    scan_repository_files,
 )
 
 
@@ -30,6 +31,14 @@ class MinimizationEdit:
     description: str
     removed_text: str
     estimated_tokens: int
+    replacement_path: str | None = None
+    replacement_text: str | None = None
+    confidence: float = 1.0
+    signal: str = "static"
+
+    @property
+    def priority(self) -> float:
+        return self.estimated_tokens * self.confidence
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -37,6 +46,9 @@ class MinimizationEdit:
             "operation": self.operation,
             "description": self.description,
             "estimated_tokens": self.estimated_tokens,
+            "replacement_path": self.replacement_path,
+            "priority": self.priority,
+            "signal": self.signal,
             "evidence": "candidate/static",
             "verified": False,
         }
@@ -67,6 +79,28 @@ class MinimizationCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class CandidateExperiment:
+    """One explainable candidate and its optional isolated verification."""
+
+    candidate: MinimizationCandidate
+    verification: VerificationReport | None
+    accepted: bool
+    rationale: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "edits": [edit.to_dict() for edit in self.candidate.edits],
+            "candidate_estimated_tokens": self.candidate.candidate_tokens,
+            "saved_estimated_tokens": self.candidate.saved_tokens,
+            "accepted": self.accepted,
+            "rationale": self.rationale,
+            "verification": (
+                self.verification.to_dict() if self.verification is not None else None
+            ),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class MinimizationReport:
     """Static candidate plus optional target-model verification evidence."""
 
@@ -76,6 +110,7 @@ class MinimizationReport:
     patch: str | None
     status: str
     rationale: str
+    experiments: tuple[CandidateExperiment, ...] = ()
 
     @property
     def exit_code(self) -> int:
@@ -101,6 +136,9 @@ class MinimizationReport:
                 ),
             },
             "candidate_edits": [edit.to_dict() for edit in self.candidate.edits],
+            "candidate_experiments": [
+                experiment.to_dict() for experiment in self.experiments
+            ],
             "verification": (
                 self.verification.to_dict() if self.verification is not None else None
             ),
@@ -115,7 +153,7 @@ def minimize_repository(
     selected_paths: tuple[str, ...] = (),
     max_candidates: int = 8,
 ) -> MinimizationReport:
-    """Generate exact-duplicate removals and verify the combined patch."""
+    """Prioritize candidates, test them independently, then verify the combination."""
 
     scan = scan_repository(root)
     candidate = build_minimization_candidate(
@@ -145,22 +183,78 @@ def minimize_repository(
                 "Provide --config to test them before recommendation."
             ),
         )
+    experiments: list[CandidateExperiment] = []
+    accepted_edits: list[MinimizationEdit] = []
+    for edit in candidate.edits:
+        isolated = _candidate_from_edits(scan, (edit,))
+        if isolated.saved_tokens <= 0:
+            experiments.append(
+                CandidateExperiment(
+                    candidate=isolated,
+                    verification=None,
+                    accepted=False,
+                    rationale=(
+                        "Candidate changes scope rather than repository footprint; "
+                        "it remains a review proposal until target-effective replay "
+                        "is configured."
+                    ),
+                )
+            )
+            continue
+        isolated_verification = verify_context_candidate(
+            config_path,
+            base_context=scan.to_context_sources(),
+            candidate_context=tuple(isolated.context_sources()),
+            root=root,
+            base_label="current-context",
+        )
+        accepted = minimization_is_safe(
+            isolated_verification.verdict,
+            saved_tokens=isolated.saved_tokens,
+        )
+        experiments.append(
+            CandidateExperiment(
+                candidate=isolated,
+                verification=isolated_verification,
+                accepted=accepted,
+                rationale=(
+                    "Candidate passed isolated quality and economics gates."
+                    if accepted
+                    else (
+                        "Candidate failed or was inconclusive in isolated verification."
+                    )
+                ),
+            )
+        )
+        if accepted:
+            accepted_edits.append(edit)
+    if not accepted_edits:
+        return MinimizationReport(
+            candidate=candidate,
+            verification=None,
+            recommended=False,
+            patch=None,
+            status="rejected",
+            rationale="No candidate passed isolated fail-closed verification.",
+            experiments=tuple(experiments),
+        )
+    combined = _candidate_from_edits(scan, tuple(accepted_edits))
     verification = verify_context_candidate(
         config_path,
         base_context=scan.to_context_sources(),
-        candidate_context=tuple(candidate.context_sources()),
+        candidate_context=tuple(combined.context_sources()),
         root=root,
-        base_label="current-context",
+        base_label="current-context-final-combination",
     )
     recommended = minimization_is_safe(
         verification.verdict,
-        saved_tokens=candidate.saved_tokens,
+        saved_tokens=combined.saved_tokens,
     )
     return MinimizationReport(
-        candidate=candidate,
+        candidate=combined,
         verification=verification,
         recommended=recommended,
-        patch=patch if recommended else None,
+        patch=render_candidate_patch(combined) if recommended else None,
         status="verified_improvement" if recommended else "rejected",
         rationale=(
             "Combined candidate preserved measured quality and passed the "
@@ -171,6 +265,7 @@ def minimize_repository(
                 "did not pass."
             )
         ),
+        experiments=tuple(experiments),
     )
 
 
@@ -180,12 +275,29 @@ def build_minimization_candidate(
     selected_paths: tuple[str, ...] = (),
     max_candidates: int = 8,
 ) -> MinimizationCandidate:
-    """Turn exact repeated instructions into a bounded review candidate."""
+    """Turn prioritized static signals into one bounded review candidate."""
+
+    if max_candidates < 1:
+        raise ValueError("max_candidates must be positive")
+    edits = generate_minimization_edits(
+        scan,
+        selected_paths=selected_paths,
+        max_candidates=max_candidates,
+    )
+    return _candidate_from_edits(scan, edits)
+
+
+def generate_minimization_edits(
+    scan: RepositoryScan,
+    *,
+    selected_paths: tuple[str, ...] = (),
+    max_candidates: int = 8,
+) -> tuple[MinimizationEdit, ...]:
+    """Generate explainable remove, deduplicate, and scope experiments."""
 
     if max_candidates < 1:
         raise ValueError("max_candidates must be positive")
     selected = set(selected_paths)
-    contents = {source.path: source.content for source in scan.sources}
     edits: list[MinimizationEdit] = []
     occurrences: dict[str, list[tuple[RepositoryContext, str]]] = {}
     for source in scan.sources:
@@ -205,37 +317,114 @@ def build_minimization_candidate(
                 continue
             if selected and source.path not in selected:
                 continue
-            current = contents[source.path]
-            updated = _remove_fragment(current, fragment)
-            if updated == current:
-                continue
-            contents[source.path] = updated
             edits.append(
                 MinimizationEdit(
                     path=source.path,
-                    operation="remove_exact_duplicate",
+                    operation="deduplicate",
                     description=f"remove instruction duplicated in {keep[0].path}",
                     removed_text=fragment,
                     estimated_tokens=estimate_tokens(fragment),
+                    confidence=0.98,
+                    signal="exact_duplicate",
                 )
             )
-            if len(edits) >= max_candidates:
-                break
-        if len(edits) >= max_candidates:
-            break
-    sources = tuple(
-        RepositoryContext(
-            path=source.path,
-            kind=source.kind,
-            scope=source.scope,
-            content=contents[source.path],
-            tokens=estimate_tokens(contents[source.path]),
-            cold_start=source.cold_start,
-            format=source.format,
-        )
-        for source in scan.sources
+    by_path = {source.path: source for source in scan.sources}
+    for finding in scan.findings:
+        if finding.category == "stale_reference" and finding.paths:
+            stale_source = by_path.get(finding.paths[0])
+            reference_match = re.search(r"`([^`]+)`", finding.message)
+            if stale_source is None or reference_match is None:
+                continue
+            reference = reference_match.group(1)
+            stale_fragment = next(
+                (
+                    item
+                    for item in _fragments(stale_source.content)
+                    if reference in item
+                ),
+                None,
+            )
+            if stale_fragment is not None and (
+                not selected or stale_source.path in selected
+            ):
+                edits.append(
+                    MinimizationEdit(
+                        path=stale_source.path,
+                        operation="remove",
+                        description=(
+                            f"test removal of stale-path guidance for {reference}"
+                        ),
+                        removed_text=stale_fragment,
+                        estimated_tokens=estimate_tokens(stale_fragment),
+                        confidence=0.65,
+                        signal="stale_reference",
+                    )
+                )
+        if finding.category == "potential_scope" and finding.paths:
+            scoped_source = by_path.get(finding.paths[0])
+            scope_match = re.search(r"`([^`/]+)/`", finding.message)
+            if scoped_source is None or scope_match is None:
+                continue
+            target_scope = scope_match.group(1)
+            scoped_fragment = next(
+                (
+                    item
+                    for item in _fragments(scoped_source.content)
+                    if f"{target_scope}/" in item
+                ),
+                None,
+            )
+            if scoped_fragment is None or (
+                selected and scoped_source.path not in selected
+            ):
+                continue
+            target_name = (
+                "CLAUDE.md" if scoped_source.kind == "claude_md" else "AGENTS.md"
+            )
+            edits.append(
+                MinimizationEdit(
+                    path=scoped_source.path,
+                    operation="scope",
+                    description=f"test moving subtree guidance to {target_scope}/",
+                    removed_text=scoped_fragment,
+                    estimated_tokens=estimate_tokens(scoped_fragment),
+                    replacement_path=f"{target_scope}/{target_name}",
+                    replacement_text=scoped_fragment,
+                    confidence=0.55,
+                    signal="single_subtree_reference",
+                )
+            )
+    unique: dict[tuple[str, str], MinimizationEdit] = {}
+    for edit in edits:
+        key = (edit.path, edit.removed_text)
+        existing = unique.get(key)
+        if existing is None or edit.priority > existing.priority:
+            unique[key] = edit
+    prioritized = sorted(
+        unique.values(),
+        key=lambda edit: (-edit.priority, edit.operation, edit.path),
     )
-    return MinimizationCandidate(scan, sources, tuple(edits))
+    return tuple(prioritized[:max_candidates])
+
+
+def _candidate_from_edits(
+    scan: RepositoryScan,
+    edits: tuple[MinimizationEdit, ...],
+) -> MinimizationCandidate:
+    contents = {source.path: source.content for source in scan.sources}
+    for edit in edits:
+        current = contents.get(edit.path)
+        if current is None:
+            continue
+        contents[edit.path] = _remove_fragment(current, edit.removed_text)
+        if edit.replacement_path and edit.replacement_text:
+            existing = contents.get(edit.replacement_path, "")
+            separator = "\n\n" if existing.strip() else ""
+            contents[edit.replacement_path] = (
+                existing.rstrip() + separator + edit.replacement_text.strip() + "\n"
+            )
+    candidate_scan = scan_repository_files(Path(scan.root), contents)
+    return MinimizationCandidate(scan, candidate_scan.sources, edits)
 
 
 def minimization_is_safe(
@@ -254,15 +443,17 @@ def render_candidate_patch(candidate: MinimizationCandidate) -> str:
     before = {source.path: source.content for source in candidate.original.sources}
     after = {source.path: source.content for source in candidate.sources}
     lines: list[str] = []
-    for path in sorted(before):
-        if before[path] == after[path]:
+    for path in sorted(set(before) | set(after)):
+        original = before.get(path, "")
+        updated = after.get(path, "")
+        if original == updated:
             continue
         lines.extend(
             difflib.unified_diff(
-                before[path].splitlines(keepends=True),
-                after[path].splitlines(keepends=True),
-                fromfile=f"a/{path}",
-                tofile=f"b/{path}",
+                original.splitlines(keepends=True),
+                updated.splitlines(keepends=True),
+                fromfile=f"a/{path}" if path in before else "/dev/null",
+                tofile=f"b/{path}" if path in after else "/dev/null",
             )
         )
     return "".join(lines)

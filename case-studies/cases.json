@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0",
+  "methodology": "Pinned public Git commits selected because the commit itself changes recognized repository-owned agent context. Static reports are observed/not verified; no agent-performance claim is made until tasks and repeated matched trials are recorded.",
+  "cases": [
+    {
+      "id": "vscode-add-agents",
+      "repository": "microsoft/vscode",
+      "clone_url": "https://github.com/microsoft/vscode.git",
+      "base_commit": "884364539d18dc24c40530359a95da7fc187aeef",
+      "candidate_commit": "ea130eeb3ab7e0f81a81bf137c5161ae5377e47c",
+      "commit_url": "https://github.com/microsoft/vscode/commit/ea130eeb3ab7e0f81a81bf137c5161ae5377e47c",
+      "commit_date": "2025-12-01T13:59:21Z",
+      "change": "docs - add instructions for AI coding agents (#280321)",
+      "context_paths": [
+        "AGENTS.md"
+      ],
+      "study_status": "static_ready"
+    },
+    {
+      "id": "mcp-remove-redundant-context",
+      "repository": "modelcontextprotocol/servers",
+      "clone_url": "https://github.com/modelcontextprotocol/servers.git",
+      "base_commit": "211ba87a3f81aa800e63ba26a4d92a3ec80789d2",
+      "candidate_commit": "99c85da5264196ed8b666e0b1df3ac3ac546b01b",
+      "commit_url": "https://github.com/modelcontextprotocol/servers/commit/99c85da5264196ed8b666e0b1df3ac3ac546b01b",
+      "commit_date": "2025-10-27T01:03:39Z",
+      "change": "Remove redundant AGENTS.md and CLAUDE.md files",
+      "context_paths": [
+        "AGENTS.md",
+        "CLAUDE.md"
+      ],
+      "study_status": "static_ready"
+    },
+    {
+      "id": "uv-better-test-guidance",
+      "repository": "astral-sh/uv",
+      "clone_url": "https://github.com/astral-sh/uv.git",
+      "base_commit": "5eb386a63803b56ac7516020fc6a3cce92a3e1eb",
+      "candidate_commit": "4893645bd894472866eb8ea478654c9418e46536",
+      "commit_url": "https://github.com/astral-sh/uv/commit/4893645bd894472866eb8ea478654c9418e46536",
+      "commit_date": "2026-07-29T14:45:17Z",
+      "change": "Better test guidance for codex (#20696)",
+      "context_paths": [
+        "AGENTS.md"
+      ],
+      "study_status": "static_ready"
+    },
+    {
+      "id": "uv-snapshot-guidance",
+      "repository": "astral-sh/uv",
+      "clone_url": "https://github.com/astral-sh/uv.git",
+      "base_commit": "821ffeb0158946df495ce5e3ec2bf28a5ac04b87",
+      "candidate_commit": "01893f1e59c646d083bc489d5bc77bbd48664068",
+      "commit_url": "https://github.com/astral-sh/uv/commit/01893f1e59c646d083bc489d5bc77bbd48664068",
+      "commit_date": "2026-04-07T19:13:49Z",
+      "change": "Tell agents to use snapshots (#18903)",
+      "context_paths": [
+        "AGENTS.md"
+      ],
+      "study_status": "static_ready"
+    },
+    {
+      "id": "rust-local-x-guidance",
+      "repository": "rust-lang/rust",
+      "clone_url": "https://github.com/rust-lang/rust.git",
+      "base_commit": "ba616d963ad463301de5fa1e56cf7f30f00c2b14",
+      "candidate_commit": "ea0aa2bae068be628e2c1b36a6fa25614e58ef6e",
+      "commit_url": "https://github.com/rust-lang/rust/commit/ea0aa2bae068be628e2c1b36a6fa25614e58ef6e",
+      "commit_date": "2026-08-14T05:42:56Z",
+      "change": "recommend ./x, not global x",
+      "context_paths": [
+        "AGENTS.md"
+      ],
+      "study_status": "static_ready"
+    },
+    {
+      "id": "codex-remote-executor-guidance",
+      "repository": "openai/codex",
+      "clone_url": "https://github.com/openai/codex.git",
+      "base_commit": "c2b3e3b4f5f0002979285431112245cde404c64e",
+      "candidate_commit": "31e428a1ef3396a0e962687e61f11c224b9f4dbc",
+      "commit_url": "https://github.com/openai/codex/commit/31e428a1ef3396a0e962687e61f11c224b9f4dbc",
+      "commit_date": "2026-06-24T05:55:36Z",
+      "change": "docs: document remote executor integration testing (#29790)",
+      "context_paths": [
+        "AGENTS.md"
+      ],
+      "study_status": "static_ready"
+    },
+    {
+      "id": "awesome-copilot-plugin-guidance",
+      "repository": "github/awesome-copilot",
+      "clone_url": "https://github.com/github/awesome-copilot.git",
+      "base_commit": "0a6e37e4e242c944380228fa29dbd14e64ac1b63",
+      "candidate_commit": "55b952d2f9bd5b092d2f4b87fdbcf205a1a5ccc5",
+      "commit_url": "https://github.com/github/awesome-copilot/commit/55b952d2f9bd5b092d2f4b87fdbcf205a1a5ccc5",
+      "commit_date": "2026-08-13T01:24:06Z",
+      "change": "fix(plugins): namespace Copilot materialized content (#2643)",
+      "context_paths": [
+        "AGENTS.md"
+      ],
+      "study_status": "static_ready"
+    }
+  ]
+}

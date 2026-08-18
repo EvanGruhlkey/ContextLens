@@ -11,11 +11,13 @@ replays verify whether changing that context preserves task quality before you
 ship it.
 
 ```bash
-# No API key, model call, config, or agent instrumentation
+# Value immediately: no API key, model call, config, or instrumentation
 contextlens scan
+contextlens scan --target packages/api/src/auth.ts --provider codex
 contextlens diff --base origin/main
 
-# Optional: run your checked-in task suite against base and candidate context
+# Bootstrap and run matched base/candidate task trials
+contextlens init
 contextlens verify .contextlens/evals.json --base origin/main
 ```
 
@@ -40,14 +42,15 @@ can compensate by searching more, taking more turns, losing cache hits, or
 triggering compaction differently. ContextLens therefore keeps two measurements
 separate:
 
-1. **Context footprint** — the context initially injected or resident.
-2. **Agent economics** — provider input, cached and uncached input, output,
-   reasoning, explicit pricing, and latency where available.
+1. **Repository footprint** — all recognized context configuration in Git.
+2. **Effective task context** — context whose documented scope matches targets.
+3. **Agent economics** — what the provider processed across the complete run,
+   including cached/uncached input, output, reasoning, pricing, and latency.
 
 ContextLens does not assume more context is good or less context is good. It
 measures the effect on your repository, tasks, and agent.
 
-## A 30-second example
+## The 60-second workflow
 
 Install from a checkout and scan any repository:
 
@@ -55,12 +58,13 @@ Install from a checkout and scan any repository:
 python -m pip install -e .
 cd /path/to/your/repository
 contextlens scan
+contextlens init
 ```
 
 ```text
 ContextLens
 
-Agent context                         Tokens
+Repository context footprint          Tokens
 -------------------------------------------------
 AGENTS.md                              3,420
 packages/api/AGENTS.md                 1,180
@@ -88,6 +92,54 @@ python examples/context-regression/run_demo.py
 
 The fixture's usage numbers demonstrate the workflow only; they are not a
 benchmark or production-savings claim.
+
+`init` detects common Python, Node, Rust, and Go checks and writes a minimal
+`.contextlens/evals.json`. If it cannot find an agent or meaningful mechanical
+check, it writes explicit TODO placeholders and says the suite is not runnable
+instead of manufacturing a task.
+
+## Repository footprint versus effective context
+
+Plain `scan` inventories every recognized context file in the repository. It
+does **not** claim every file is injected for every task. Resolve context for
+one or more concrete targets when task scope matters:
+
+```bash
+contextlens scan --target backend/api/user.py --provider codex
+contextlens scan --target frontend/app.tsx --provider copilot
+contextlens scan --target src/a.py --target src/b.py --format json
+```
+
+```text
+Effective Agent Context
+
+Target: backend/api/user.py
+Resolver: codex
+
+Source                                Tokens  Scope
+---------------------------------------------------------------
+AGENTS.md                              2,840  approximated
+backend/AGENTS.md                      1,120  approximated
+---------------------------------------------------------------
+Effective context                     3,960
+```
+
+Scoped Copilot instructions and metadata-scoped Cursor rules use deterministic
+path resolution where documented. Codex target resolution assumes the target's
+parent is the run directory; CLAUDE.md and relevance-based Cursor behavior are
+also labeled `approximated`. Missing or moved targets are resolved lexically
+and reported as such.
+
+## `contextlens init`
+
+```bash
+contextlens init
+contextlens init --output .contextlens/evals.json
+```
+
+The generated suite is a starting point, not automatically trustworthy ground
+truth. Replace its broad repository-check task with small historical bugs or
+explicit coding tasks before publishing causal claims.
 
 ## `contextlens scan`
 
@@ -318,6 +370,8 @@ context configuration
 ## Current limitations
 
 - Static token counts are estimates, not provider tokenizer counts.
+- Effective-context resolution models documented path scope; it cannot promise
+  byte-for-byte equality with every proprietary provider prompt.
 - Discovery recognizes documented conventions; provider-specific formats can
   require an adapter.
 - Directory-copy workspaces isolate file mutations, not the OS, network, or
@@ -335,11 +389,36 @@ context configuration
   provider input by 2.2%; this negative result is retained in
   [the evaluation documentation](evals/README.md).
 
+## Real repository context changes
+
+[`case-studies/cases.json`](case-studies/cases.json) pins seven public context
+changes across six repositories, including VS Code adding `AGENTS.md`, MCP
+Servers removing redundant `AGENTS.md`/`CLAUDE.md`, and focused changes in uv,
+Rust, Codex, and Awesome Copilot. The checked-in VS Code reproduction reports:
+
+```text
+Repository footprint: 5,966 -> 6,034 estimated tokens (+68, +1.1%)
+Changed source: AGENTS.md (added)
+Evidence: observed/static — NOT VERIFIED
+```
+
+Reproduce it with:
+
+```bash
+python case-studies/run_static.py --case vscode-add-agents \
+  --output case-studies/reports/vscode-add-agents.json
+```
+
+This is a real Git-history report, not a model-performance benchmark. The
+corpus deliberately withholds `verified` status until realistic tasks,
+mechanical graders, repeated matched trials, and raw usage evidence exist.
+
 ## Architecture for contributors
 
 The public product layer is additive:
 
 - `repository.py` — convention discovery, static findings, and Git comparison;
+- `bootstrap.py` — repository/test/agent detection for `contextlens init`;
 - `regression.py` — matched base/candidate orchestration and verdicts;
 - `telemetry.py` — provider usage and explicit cache-aware pricing categories;
 - `minimize.py` — static candidate generation plus fail-closed verification;
@@ -362,6 +441,11 @@ cd ContextLens
 python -m pip install -e .
 contextlens --help
 ```
+
+The `contextlens` PyPI project name was unclaimed when this release was
+prepared, but similarly named and unrelated projects already exist. Until an
+official package is published from this repository, install from Git or a
+locally built wheel and verify the repository URL above.
 
 ## Development
 

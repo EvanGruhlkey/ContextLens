@@ -1,15 +1,6 @@
-"""Real-model evaluation fixtures for the production ContextLens pipeline."""
+"""Development-only real-model evaluation harness for ContextLens."""
 
-import sys
-from pathlib import Path
-
-# Keep the documented ``python -m evals.run`` command usable from a source
-# checkout without requiring an editable install in the caller's interpreter.
-_SOURCE_ROOT = Path(__file__).resolve().parents[1] / "src"
-if str(_SOURCE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_SOURCE_ROOT))
-
-from evals.cases import (  # noqa: E402
+from evals.cases import (
     DEVELOPMENT_CASES,
     HELDOUT_CASES,
     SMOKE_CASES,

@@ -40,7 +40,12 @@ trial policy. Only the context tuple changes.
 
 `repository.py` discovers context by convention and performs conservative
 static analysis. It reads base content from Git objects without checking out a
-branch. Results are `observed/static` and never causal.
+branch. Repository-wide footprint and target-effective context are distinct;
+provider resolvers label scope semantics as documented or approximated.
+
+`bootstrap.py` detects common repository ecosystems, mechanical commands, and
+available adapters for `contextlens init`. It never executes project code while
+detecting configuration and emits explicit TODOs when evidence is insufficient.
 
 `regression.py` wraps the replay engine around two first-class context versions.
 It alternates trial order, keeps complete per-run evidence, aggregates matched
@@ -50,9 +55,10 @@ runs, and applies fail-closed quality/economics verdicts.
 usage objects. Cached, uncached, cache-write, visible output, and reasoning
 tokens stay distinct. Pricing is explicit and dated.
 
-`minimize.py` uses static evidence only to generate candidates. It recommends a
-patch only after combined target-model verification passes. It never edits
-source files.
+`minimize.py` uses explainable static signals only to generate and prioritize
+candidates. Each footprint-reducing edit is tested independently; passing edits
+receive a separate combined target-model verification to catch interactions.
+It recommends a patch only after final PASS and never edits source files.
 
 `ci.py` provides stable static/verified exit semantics and machine-readable
 results. `action.yml` exposes that contract as a composite GitHub Action.

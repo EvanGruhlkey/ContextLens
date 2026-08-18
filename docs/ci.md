@@ -15,10 +15,15 @@ worktree with a Git base and writes a Markdown summary plus JSON artifact.
     max-context-increase: "0.25"
     max-duplicate-increase: "0"
     max-stale-increase: "0"
+    targets: "packages/api/src/auth.ts,packages/api/src/user.ts"
+    provider: codex
 ```
 
 All thresholds are optional. A threshold gates only an observed static
 property; it does not claim the change harms agent performance.
+Without thresholds, static mode is report-only and passes even when context
+grows. `targets` enables effective-context delta reporting; it does not create
+an additional gate.
 
 ## Verified CI
 
