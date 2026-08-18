@@ -1,136 +1,121 @@
 # ContextLens roadmap
 
-ContextLens is a context profiler and adaptive experiment coordinator for AI
-agents. It should provide useful evidence after one normal run, then spend
-additional model calls only where they are likely to change a decision.
+ContextLens is CI and regression testing for AI-agent repository context.
 
-Every result is labeled by evidence level:
+The roadmap follows an adoption ladder: useful static evidence first, a small
+mechanical suite next, reusable checked-in evals after that, and historical
+issue/PR imports for mature teams.
 
-- **Observed** — directly measured during the original run, such as tokens,
-  citations, access, position, duplication, and tool use.
-- **Predicted** — an estimate based on observed signals and prior experiments.
-- **Verified** — a causal effect measured through controlled counterfactual
-  replays.
+## Product principles
 
-## Milestone 1 — Foundation ✅
+- Value before instrumentation: `scan` works immediately.
+- Static is not causal: heuristics generate review candidates only.
+- Git-native: context changes are configuration changes.
+- End-to-end economics: footprint and provider usage stay distinct.
+- Cache-aware: smaller prompts can still cost more.
+- Fail closed: an observed quality regression cannot ship as verified-safe.
+- Mechanical evaluation before model judging.
+- Simple public UX over sophisticated retained experimentation internals.
 
-- Define the product boundary and local-first architecture.
-- Establish the Python package and contribution conventions.
-- Document recording, replay, evaluation, and reporting boundaries.
+## Phase 1 — Repository context core (implemented)
 
-## Milestone 2 — Context recording ✅
+- Convention discovery for AGENTS.md, CLAUDE.md, Copilot/Cursor rules, skills,
+  MCP configs, and static tool schemas.
+- Deterministic footprint, duplicate, nested-scope, path, conflict, scoping,
+  and tool-schema findings.
+- Git-tree base comparison and worktree diff.
+- Terminal, JSON, and Markdown output with explicit static labels.
 
-- Implement the versioned context-source data model.
-- Store ordered traces as inspectable JSONL.
-- Store large payloads as verified content-addressed artifacts.
-- Support configurable redaction before persistence.
+Next:
 
-## Milestone 3 — One-run profiler ✅
+- Provider-specific discovery plugins with declared scope semantics.
+- Better Markdown-aware instruction identity and configurable ignore rules.
+- Optional exact tokenizer plugins without adding a default provider
+  dependency.
 
-Deliver useful results without rerunning the task.
+## Phase 2 — Context regression evaluation (implemented)
 
-- Detect which sources were cited, copied, opened, or used by tool calls.
-- Measure tokens, context position, age, retrieval rank, and repeated content.
-- Detect exact and semantic duplication between sources.
-- Connect output claims, commands, and file edits to likely supporting context.
-- Report `used`, `unused`, `duplicated`, and `uncertain` signals without
-  presenting them as causal effects.
-- Define optional model-internals adapters for log-probability, attention, or
-  gradient signals while keeping the core compatible with black-box APIs.
+- Base and candidate context as first-class versions.
+- Matched isolated tasks and alternating repeated trial order.
+- Mechanical command and exact-output evaluation.
+- Quality, catastrophic failure, footprint, provider usage, cache, behavior,
+  and latency reporting.
+- PASS/WARN/CONTEXT REGRESSION/INCONCLUSIVE verdicts.
+- Generic subprocess and Codex CLI paths.
 
-## Milestone 4 — Isolated replay workers ✅
+Next:
 
-Create trustworthy, reproducible counterfactual runs.
+- Stratified/randomized execution order for larger suites.
+- Confidence intervals over multi-task resource deltas.
+- Container/worktree isolation adapters and distributed runners.
+- Historical issue/PR task import with leakage controls.
 
-- Define task suites, agent adapters, and evaluator contracts.
-- Snapshot the initial task state.
-- Run every worker in an isolated temporary workspace or Git worktree.
-- Hold the model, task, tools, settings, evaluator, and initial files constant.
-- Change only the selected context configuration.
-- Capture outputs, patches, commands, tests, tokens, latency, and errors.
-- Add concurrency, timeout, retry, caching, and spending controls.
+## Phase 3 — Verified minimization (initial implementation)
 
-## Milestone 5 — Adaptive context search ✅
+- Exact duplicate candidate generation.
+- Combined target-model verification.
+- Patch artifact only after a PASS verdict; no source auto-edit.
 
-Find valuable context without naively running one worker per source.
+Next:
 
-- Establish a full-context baseline.
-- Begin with meaningful groups such as tool schemas, memories, repository
-  instructions, message history, and command output.
-- Run group ablations in parallel.
-- Split groups only when their removal produces a meaningful result.
-- Prioritize experiments by expected information gain and possible token
-  savings.
-- Stop early when confidence is sufficient or further testing is not worth its
-  projected cost.
-- Support individual leave-one-out verification when precision is needed.
-- Preserve grouped and interaction evidence so duplicated sources are not
-  incorrectly declared useless.
+- Candidate generation for scoped moves, summaries, lazy loading, and stale
+  guidance using the existing mutation model.
+- Adaptive screening and interaction search over candidate patches.
+- Incremental plus final combined verification with explicit budgets.
+- Human-review annotations explaining every patch hunk.
 
-## Milestone 6 — Evaluation and statistics ✅
+## Phase 4 — CI (implemented)
 
-- Support exact, programmatic, test-suite, human, and model-graded evaluators.
-- Track success, quality, latency, input/output tokens, and estimated cost.
-- Compare paired baseline and experimental trials.
-- Compute effect sizes, uncertainty intervals, and stability warnings.
-- Distinguish screening evidence from production-model verification.
-- Support repeated trials for nondeterministic models.
+- Static and verified CLI modes.
+- Composite GitHub Action, JSON artifact, Markdown step summary, stable exits.
+- Path-filtered dogfood workflow and reusable examples.
 
-## Milestone 7 — Context optimization ✅
+Next:
 
-Recommend the best context configuration for a chosen objective.
+- Published tagged action releases.
+- Optional PR-comment/update integration with minimal permissions.
+- Baseline artifact caching and budget-aware verified scheduling.
+- Policy templates for monorepos and high-cost task suites.
 
-- Optimize for maximum quality, minimum cost, minimum latency, or a token
-  budget.
-- Use fixed-answer log-probability scoring as a cheaper screening method when
-  an adapter supports it.
-- Verify promising configurations with real task reruns.
-- Learn a context-value predictor from previous verified experiments.
-- Use predictions to reduce future experiments while periodically
-  recalibrating them.
-- Never promote predicted value to verified value without an intervention.
+## Phase 5 — Bring existing telemetry (initial interface)
 
-## Milestone 8 — Reports and CLI ✅
+- Common OpenAI, Anthropic, and generic provider-usage normalization.
+- Existing ContextLens trace and evaluation records retained.
 
-- Produce terminal, JSON, CSV, and self-contained HTML reports.
-- Show observed, predicted, and verified findings separately.
-- Rank helpful, neutral, harmful, duplicated, and uncertain context.
-- Show quality gained or lost per 1,000 tokens and per dollar.
-- Display the experiment tree, stopping decisions, sample sizes, and evidence.
-- Provide drill-down from aggregate findings to individual worker runs.
+Next:
 
-Target workflow:
+- OpenTelemetry GenAI span ingestion.
+- Codex execution-log import without replay.
+- Claude agent/API telemetry import.
+- Generic JSON trace mapping profiles.
 
-```bash
-contextlens record --output traces/task-001.jsonl -- your-agent-command
-contextlens scan traces/task-001.jsonl
-contextlens optimize experiments/example.json --format json --output runs/latest.json
-contextlens report runs/latest
-```
+ContextLens will not become a general observability backend. Adapters normalize
+evidence needed to compare context versions.
 
-## Milestone 9 — Open-source release preparation ✅
+## Phase 6 — Evaluation suites
 
-- Ship deterministic fixtures and end-to-end examples.
-- Add CI, issue templates, and a code of conduct.
-- Document adapters, isolation requirements, and third-party data handling.
-- Benchmark adaptive search against exhaustive leave-one-out evaluation.
-- Build and validate the initial MIT-licensed release artifacts.
+Progression:
 
-## Publication
+0. Static analysis only.
+1. A few existing deterministic tasks/commands.
+2. Checked-in `.contextlens/evals/` suites.
+3. Imported historical issues and PR tasks.
 
-Maintainer action is still required to choose the final repository/package
-destinations, push `main`, create the `v0.1.0` tag, and publish the validated
-artifacts. ContextLens does not store publishing credentials or upload packages
-from local release validation.
+Future work includes task sampling, flaky-test handling, evaluation budget
+estimation, and repository-specific quality tolerances.
 
-## Product guardrails
+## Retained research engine
 
-- One-run signals describe apparent utilization, not causal value.
-- Parallelism reduces elapsed time, not model-token cost.
-- Cheap-model experiments are screening evidence until verified on the target
-  model.
-- Workers must not share mutable task state.
-- Reports must include experiment cost alongside projected future savings.
-- Production savings require target-model evidence and a declared workload;
-  individual projections are not additive until the combined context is tested.
-- Users set hard limits for workers, concurrency, tokens, dollars, and time.
+Versioned traces, passive profiling, isolated replay workers, mutation records,
+adaptive search, paired bootstrap analysis, mechanical evaluators, normalized
+persistence, reports, policy generation, predictor screening, and runtime
+policy application remain supported. They power future minimization and
+research workflows without burdening first-time users.
+
+## Release work
+
+- Update package/repository metadata and publish the first pivot release.
+- Run static ContextLens CI on ContextLens itself.
+- Publish a verified example with reproducible, non-secret provider settings.
+- Establish a compatibility policy for eval config and CI JSON schemas.
+- Add repository description and topics listed in the README/release docs.

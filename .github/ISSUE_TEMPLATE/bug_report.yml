@@ -20,6 +20,12 @@ body:
     attributes:
       label: Area
       options:
+        - Repository discovery / scan
+        - Git context diff
+        - Context verification
+        - Minimization
+        - GitHub Action / CI
+        - Telemetry normalization
         - Recording
         - One-run profiler
         - Replay workers
@@ -49,4 +55,3 @@ body:
       label: Actual behavior
     validations:
       required: true
-

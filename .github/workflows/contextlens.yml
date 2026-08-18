@@ -1,0 +1,28 @@
+name: Agent context
+
+on:
+  pull_request:
+    paths:
+      - "**/AGENTS.md"
+      - "**/CLAUDE.md"
+      - ".github/copilot-instructions.md"
+      - ".github/instructions/**"
+      - ".cursor/rules/**"
+      - "**/SKILL.md"
+      - "**/mcp.json"
+      - "**/.mcp.json"
+
+permissions:
+  contents: read
+
+jobs:
+  static-context-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./
+        with:
+          mode: static
+          base: ${{ github.event.pull_request.base.sha }}

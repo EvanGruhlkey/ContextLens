@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from contextlens.cli import main
+from contextlens.policy import ContextPolicy, PolicyRule, PolicyStrategy
 from contextlens.reports import (
     Finding,
     Report,
@@ -79,6 +80,92 @@ class ReportRendererTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
+    def test_trim_emits_prompt_lazy_store_and_token_audit(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            sources = (
+                ContextSource(
+                    source_id="keep",
+                    kind=SourceKind.AGENT_INSTRUCTION,
+                    name="AGENTS.md",
+                    content="keep",
+                    token_count=10,
+                    token_count_method="fixture",
+                ),
+                ContextSource(
+                    source_id="drop",
+                    kind=SourceKind.GIT_HISTORY,
+                    name="history.txt",
+                    content="drop",
+                    token_count=20,
+                    token_count_method="fixture",
+                ),
+                ContextSource(
+                    source_id="lazy",
+                    kind=SourceKind.TOOL_SCHEMA,
+                    name="tools.json",
+                    content="lazy",
+                    token_count=30,
+                    token_count_method="fixture",
+                ),
+            )
+            context = root / "context.json"
+            policy_path = root / "policy.json"
+            output = root / "trimmed.json"
+            audit = root / "audit.json"
+            context.write_text(
+                json.dumps({"context": [item.to_dict() for item in sources]}),
+                encoding="utf-8",
+            )
+            policy_path.write_text(
+                ContextPolicy(
+                    context={
+                        "keep": PolicyRule(
+                            sources=("AGENTS.md",),
+                            strategy=PolicyStrategy.ALWAYS_INCLUDE,
+                        ),
+                        "drop": PolicyRule(
+                            sources=("history.txt",),
+                            strategy=PolicyStrategy.EXCLUDE,
+                        ),
+                        "lazy": PolicyRule(
+                            sources=("tools.json",),
+                            strategy=PolicyStrategy.LAZY_LOAD,
+                        ),
+                    }
+                ).to_json(),
+                encoding="utf-8",
+            )
+
+            with redirect_stdout(io.StringIO()) as stdout:
+                main(
+                    [
+                        "trim",
+                        str(context),
+                        "--policy",
+                        str(policy_path),
+                        "--output",
+                        str(output),
+                        "--audit-output",
+                        str(audit),
+                        "--min-reduction",
+                        "0.8",
+                    ]
+                )
+
+            trimmed = json.loads(output.read_text(encoding="utf-8"))
+            lazy = json.loads((root / "trimmed.lazy.json").read_text(encoding="utf-8"))
+            audit_value = json.loads(audit.read_text(encoding="utf-8"))
+            self.assertEqual(
+                [item["source_id"] for item in trimmed["context"]],
+                ["keep"],
+            )
+            self.assertEqual(lazy["context"][0]["source_id"], "lazy")
+            self.assertEqual(trimmed["savings"]["before_tokens"], 60)
+            self.assertEqual(trimmed["savings"]["after_tokens"], 10)
+            self.assertEqual(audit_value["savings"]["saved_tokens"], 50)
+            self.assertIn("83.3% reduction", stdout.getvalue())
+
     def test_scan_and_report_commands(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)

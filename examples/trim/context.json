@@ -1,0 +1,44 @@
+{
+  "context": [
+    {
+      "source_id": "repo-instructions",
+      "kind": "repo_instruction",
+      "name": "AGENTS.md",
+      "content": "Follow repository conventions and run focused tests.",
+      "token_count": 120,
+      "token_count_method": "provider"
+    },
+    {
+      "source_id": "architecture",
+      "kind": "architecture_decision",
+      "name": "architecture.md",
+      "content": "The service uses a ports-and-adapters architecture.",
+      "token_count": 300,
+      "token_count_method": "provider"
+    },
+    {
+      "source_id": "tool-schemas",
+      "kind": "tool_schema",
+      "name": "all-tool-schemas.json",
+      "content": "Large tool schema bundle available through retrieval.",
+      "token_count": 2400,
+      "token_count_method": "provider"
+    },
+    {
+      "source_id": "terminal-history",
+      "kind": "terminal_output",
+      "name": "previous-terminal-output.txt",
+      "content": "Old command output from unrelated completed work.",
+      "token_count": 1600,
+      "token_count_method": "provider"
+    },
+    {
+      "source_id": "conversation-history",
+      "kind": "conversation",
+      "name": "conversation-history.txt",
+      "content": "Long conversation history whose current decision is to preserve API compatibility.",
+      "token_count": 900,
+      "token_count_method": "provider"
+    }
+  ]
+}

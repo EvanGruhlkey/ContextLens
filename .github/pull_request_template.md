@@ -16,3 +16,5 @@ Describe the change and why it belongs in ContextLens.
 Explain whether new findings are observed, predicted, screening, or verified,
 and how the implementation prevents one level from being presented as another.
 
+If this changes context economics, report initial context separately from
+provider input, cache categories, output/reasoning, and measured quality.

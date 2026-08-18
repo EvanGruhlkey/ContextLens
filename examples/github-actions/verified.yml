@@ -1,0 +1,26 @@
+name: Verified agent context
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "**/AGENTS.md"
+      - "**/CLAUDE.md"
+      - ".cursor/rules/**"
+      - "**/SKILL.md"
+
+permissions:
+  contents: read
+
+jobs:
+  contextlens:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: EvanGruhlkey/ContextLens@main
+        with:
+          mode: verified
+          base: ${{ github.event.pull_request.base.sha || 'origin/main' }}
+          config: .contextlens/evals.json

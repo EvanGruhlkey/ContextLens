@@ -89,6 +89,11 @@ The paired result also reports:
 
 Positive “saved” values mean the ablated variant used fewer resources.
 
+This legacy `Measurement` shape aggregates input tokens. The repository
+regression report used by `contextlens verify` additionally keeps cached,
+uncached, cache-write, reasoning, behavior, and model/tool latency categories
+separate. Prefer that report for shipping decisions involving prompt caches.
+
 ## Pricing
 
 `CostCalculator` calculates cost from a caller-provided `ModelPricing` snapshot:

@@ -1,71 +1,53 @@
-# Production savings
+# Agent economics and savings claims
 
-ContextLens turns verified context effects into operational decisions for a real
-agent workload.
+ContextLens distinguishes an initial-context footprint reduction from an
+end-to-end agent savings result.
+
+An agent with less preloaded context can search more files, take more turns,
+lose prompt-cache hits, produce more output or reasoning tokens, or trigger
+compaction differently. Therefore:
 
 ```text
-Context source       Tokens   Effect   Action        30-day token saving
-AGENTS.md              4,820    +14%    Keep                           0
-Git history            7,430     +2%    Investigate                    0
-Unused MCP schemas    19,410     -8%    Remove              1,941,000,000
-Terminal output       11,220     -3%    Remove              1,122,000,000
-Architecture notes     2,180    +21%    Keep                           0
+injected-context reduction != total agent efficiency
 ```
 
-The example assumes 100,000 production runs during the projection window.
-Actual reports use the workload and paired measurements supplied by the user.
+## Categories
+
+Where available, verification reports:
+
+- initial injected context;
+- total provider input;
+- cached input;
+- uncached input;
+- cache-write input;
+- visible output;
+- reasoning tokens;
+- turns, tool calls, searches, and files read;
+- total, model, and tool latency;
+- explicit provider-reported or snapshot-calculated dollar cost.
+
+Missing provider data remains missing. ContextLens does not treat all token
+categories as equally priced and does not substitute initial-context estimates
+for provider usage.
 
 ## Decision rules
 
-- `keep`: removing the context caused a verified quality loss.
-- `remove`: removal improved quality or remained inside the configured
-  equivalence tolerance.
-- `investigate`: evidence is uncertain or came from a screening model.
+- A candidate with an observed quality regression is rejected regardless of
+  footprint savings.
+- A smaller context that increases provider or uncached input without a
+  measured quality gain is an economics regression.
+- A dollar claim requires a complete, explicit, dated pricing snapshot or
+  provider-reported cost.
+- A combined configuration must be verified; individual mutation projections
+  cannot simply be added.
+- A static finding is never a production-savings claim.
 
-Only `remove` recommendations produce projected savings. ContextLens does not
-claim hypothetical savings for context that should remain deployed.
+## Legacy projection API
 
-## Projection
+`contextlens analyze` and `SavingsAnalyzer` remain available for callers with
+paired measurements and a declared workload. Their projections are credible
+only when measurements represent the target model, real workload, actual
+provider usage/cost, mechanical outcome, and combined deployed configuration.
 
-```bash
-contextlens analyze measurements.json \
-  --baseline baseline \
-  --ablated without-unused-mcp \
-  --label "Unused MCP schemas" \
-  --runs-per-day 10000 \
-  --projection-days 30 \
-  --experiment-cost-usd 25
-```
-
-The result includes:
-
-- Input and output tokens saved per production run.
-- Gross and net projected dollar savings.
-- Latency saved.
-- Experiment cost.
-- Break-even production runs.
-- Expected quality change from removal and its interval.
-
-Net savings are:
-
-```text
-(verified cost saved per run × projected production runs)
-− experiment cost
-```
-
-## Real-agent requirement
-
-A production projection is credible only when:
-
-1. Tasks used in the evaluation represent the real workload.
-2. Baseline and ablated trials use the target model and settings.
-3. Token and cost measurements come from the agent/provider integration.
-4. The evaluator measures the outcome the team actually values.
-5. The combined optimized configuration is tested, not just each removal
-   separately.
-
-Individual source projections must not be added together unless their combined
-configuration has been verified. To project deployable portfolio savings, run
-paired analysis with the full baseline and the verified combined candidate as
-the ablated variant.
-
+Use `contextlens verify` for new repository-context comparisons because it
+makes cache and end-to-end usage visible alongside footprint.

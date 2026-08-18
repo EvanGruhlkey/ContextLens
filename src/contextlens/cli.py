@@ -18,6 +18,12 @@ from contextlens.analysis import (
     SavingsAnalyzer,
     Workload,
 )
+from contextlens.ci import (
+    StaticCiPolicy,
+    evaluate_static_ci,
+    evaluate_verified_ci,
+    write_summary,
+)
 from contextlens.evaluators import ExactMatchEvaluator, TestResultsEvaluator
 from contextlens.experiments import (
     AdaptiveAblationPlanner,
@@ -33,14 +39,23 @@ from contextlens.experiments import (
     SearchConfig,
     SubprocessAgentAdapter,
 )
+from contextlens.minimize import (
+    minimize_repository,
+    render_minimization_terminal,
+)
 from contextlens.optimization import (
     ContextOptimizer,
     ContextValuePredictor,
     OptimizationObjective,
     OptimizationPolicy,
 )
-from contextlens.policy import policy_from_report
+from contextlens.policy import ContextPolicy, policy_from_report
 from contextlens.profiler import ContextProfiler, RunObservation
+from contextlens.regression import (
+    render_verification_markdown,
+    render_verification_terminal,
+    verify_repository,
+)
 from contextlens.reports import (
     Report,
     ReportBuilder,
@@ -49,7 +64,15 @@ from contextlens.reports import (
     render_json,
     render_terminal,
 )
-from contextlens.trace import ArtifactStore, TraceReader
+from contextlens.repository import (
+    diff_repository,
+    render_diff_terminal,
+    render_markdown,
+    render_scan_terminal,
+    scan_repository,
+)
+from contextlens.runtime import apply_context_policy
+from contextlens.trace import ArtifactStore, ContextSource, TraceReader
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -70,10 +93,90 @@ def main(argv: list[str] | None = None) -> None:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="contextlens",
-        description="Measure which context helps an AI agent.",
+        description="Test repository agent context changes for regressions.",
     )
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command")
+
+    scan = commands.add_parser(
+        "scan",
+        help="discover and statically inspect repository agent context",
+    )
+    scan.add_argument(
+        "target",
+        nargs="?",
+        type=Path,
+        default=Path("."),
+        help="repository path (default: current directory)",
+    )
+    scan.add_argument("--request-id", help=argparse.SUPPRESS)
+    scan.add_argument("--observation", type=Path, help=argparse.SUPPRESS)
+    scan.add_argument("--artifacts", type=Path, help=argparse.SUPPRESS)
+    scan.add_argument(
+        "--format",
+        choices=("terminal", "json", "markdown", "csv", "html"),
+        default="terminal",
+    )
+    scan.add_argument("--output", type=Path)
+    scan.set_defaults(handler=_scan)
+
+    context_diff = commands.add_parser(
+        "diff",
+        help="compare worktree agent context with a Git base",
+    )
+    context_diff.add_argument("repository", nargs="?", type=Path, default=Path("."))
+    context_diff.add_argument("--base")
+    context_diff.add_argument(
+        "--format", choices=("terminal", "json", "markdown"), default="terminal"
+    )
+    context_diff.add_argument("--output", type=Path)
+    context_diff.set_defaults(handler=_diff)
+
+    verify = commands.add_parser(
+        "verify",
+        help="run matched base-versus-candidate context trials",
+    )
+    verify.add_argument(
+        "config",
+        nargs="?",
+        type=Path,
+        default=Path(".contextlens/evals.json"),
+    )
+    verify.add_argument("--repository", type=Path, default=Path("."))
+    verify.add_argument("--base")
+    verify.add_argument(
+        "--format", choices=("terminal", "json", "markdown"), default="terminal"
+    )
+    verify.add_argument("--output", type=Path)
+    verify.set_defaults(handler=_verify)
+
+    minimize = commands.add_parser(
+        "minimize",
+        help="generate static candidates and verify a safe context patch",
+    )
+    minimize.add_argument("paths", nargs="*")
+    minimize.add_argument("--repository", type=Path, default=Path("."))
+    minimize.add_argument("--config", type=Path)
+    minimize.add_argument("--max-candidates", type=int, default=8)
+    minimize.add_argument("--patch-output", type=Path)
+    minimize.add_argument("--report-output", type=Path)
+    minimize.add_argument("--format", choices=("terminal", "json"), default="terminal")
+    minimize.set_defaults(handler=_minimize)
+
+    ci = commands.add_parser(
+        "ci",
+        help="run static or verified agent-context regression gates",
+    )
+    ci.add_argument("--mode", choices=("static", "verified"), default="static")
+    ci.add_argument("--repository", type=Path, default=Path("."))
+    ci.add_argument("--base")
+    ci.add_argument("--config", type=Path, default=Path(".contextlens/evals.json"))
+    ci.add_argument("--max-context-increase", type=float)
+    ci.add_argument("--max-duplicate-increase", type=int)
+    ci.add_argument("--max-stale-increase", type=int)
+    ci.add_argument("--json-output", type=Path)
+    ci.add_argument("--summary", type=Path)
+    ci.set_defaults(handler=_ci)
 
     record = commands.add_parser(
         "record",
@@ -83,16 +186,16 @@ def _parser() -> argparse.ArgumentParser:
     record.add_argument("agent_command", nargs=argparse.REMAINDER)
     record.set_defaults(handler=_record)
 
-    scan = commands.add_parser(
-        "scan",
-        help="profile one recorded request without another model call",
+    profile = commands.add_parser(
+        "profile",
+        help="profile one recorded ContextLens request (legacy trace workflow)",
     )
-    scan.add_argument("trace", type=Path)
-    scan.add_argument("--request-id")
-    scan.add_argument("--observation", type=Path)
-    scan.add_argument("--artifacts", type=Path)
-    _format_arguments(scan)
-    scan.set_defaults(handler=_scan)
+    profile.add_argument("trace", type=Path)
+    profile.add_argument("--request-id")
+    profile.add_argument("--observation", type=Path)
+    profile.add_argument("--artifacts", type=Path)
+    _format_arguments(profile)
+    profile.set_defaults(handler=_profile)
 
     analyze = commands.add_parser(
         "analyze",
@@ -137,6 +240,25 @@ def _parser() -> argparse.ArgumentParser:
     policy.add_argument("--format", choices=("yaml", "json"), default="yaml")
     policy.add_argument("--output", required=True, type=Path)
     policy.set_defaults(handler=_export_policy)
+
+    trim = commands.add_parser(
+        "trim",
+        help="apply a verified policy and emit prompt-ready context",
+    )
+    trim.add_argument("context", type=Path)
+    trim.add_argument("--policy", required=True, type=Path)
+    trim.add_argument("--output", type=Path)
+    trim.add_argument("--lazy-output", type=Path)
+    trim.add_argument("--audit-output", type=Path)
+    trim.add_argument("--request-id")
+    trim.add_argument("--agent-id")
+    trim.add_argument("--phase")
+    trim.add_argument("--max-tokens", type=int)
+    trim.add_argument("--min-reduction", type=float, default=0.0)
+    trim.add_argument("--strict", action="store_true")
+    trim.add_argument("--dry-run", action="store_true")
+    trim.add_argument("--force", action="store_true")
+    trim.set_defaults(handler=_trim)
     return parser
 
 
@@ -175,13 +297,36 @@ def _record(arguments: argparse.Namespace) -> int:
 
 
 def _scan(arguments: argparse.Namespace) -> int:
-    events = list(TraceReader(arguments.trace).events())
+    target = arguments.target
+    if target.is_file() and target.suffix.casefold() == ".jsonl":
+        return _profile_trace(arguments, target)
+    report = scan_repository(target)
+    if arguments.format in {"csv", "html"}:
+        raise ValueError(
+            "repository scan supports terminal, json, or markdown; "
+            "use `contextlens profile` for legacy report formats"
+        )
+    content = (
+        render_scan_terminal(report)
+        if arguments.format == "terminal"
+        else json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n"
+        if arguments.format == "json"
+        else render_markdown(report)
+    )
+    _write_text(content, arguments.output)
+    return 0
+
+
+def _profile(arguments: argparse.Namespace) -> int:
+    return _profile_trace(arguments, arguments.trace)
+
+
+def _profile_trace(arguments: argparse.Namespace, trace: Path) -> int:
+    events = list(TraceReader(trace).events())
     selected = _select_request(events, arguments.request_id)
     observation = _observation(_load_json(arguments.observation))
     artifact_store = (
-        ArtifactStore(arguments.artifacts)
-        if arguments.artifacts is not None
-        else None
+        ArtifactStore(arguments.artifacts) if arguments.artifacts is not None else None
     )
     profile = ContextProfiler(artifact_store=artifact_store).profile(
         selected,
@@ -191,13 +336,105 @@ def _scan(arguments: argparse.Namespace) -> int:
         ReportBuilder("ContextLens one-run profile")
         .add_profile(profile)
         .metadata(
-            trace=str(arguments.trace),
+            trace=str(trace),
             request_id=profile.request_id,
         )
         .build()
     )
     _write_report(report, arguments.format, arguments.output)
     return 0
+
+
+def _diff(arguments: argparse.Namespace) -> int:
+    report = diff_repository(arguments.repository, base_ref=arguments.base)
+    content = (
+        render_diff_terminal(report)
+        if arguments.format == "terminal"
+        else json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n"
+        if arguments.format == "json"
+        else render_markdown(report)
+    )
+    _write_text(content, arguments.output)
+    return 0
+
+
+def _verify(arguments: argparse.Namespace) -> int:
+    report = verify_repository(
+        arguments.config,
+        root=arguments.repository,
+        base_ref=arguments.base,
+    )
+    content = (
+        render_verification_terminal(report)
+        if arguments.format == "terminal"
+        else json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n"
+        if arguments.format == "json"
+        else render_verification_markdown(report)
+    )
+    _write_text(content, arguments.output)
+    return report.exit_code
+
+
+def _minimize(arguments: argparse.Namespace) -> int:
+    report = minimize_repository(
+        arguments.repository,
+        config_path=arguments.config,
+        selected_paths=tuple(arguments.paths),
+        max_candidates=arguments.max_candidates,
+    )
+    if arguments.patch_output is not None:
+        if not report.recommended or report.patch is None:
+            raise ValueError(
+                "refusing to write a minimization patch that did not pass verification"
+            )
+        patch_output = arguments.patch_output.resolve()
+        patch_output.parent.mkdir(parents=True, exist_ok=True)
+        patch_output.write_text(report.patch, encoding="utf-8", newline="\n")
+    content = (
+        render_minimization_terminal(report)
+        if arguments.format == "terminal"
+        else json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n"
+    )
+    _write_text(content, arguments.report_output)
+    return report.exit_code
+
+
+def _ci(arguments: argparse.Namespace) -> int:
+    if arguments.mode == "static":
+        context_diff = diff_repository(arguments.repository, base_ref=arguments.base)
+        result = evaluate_static_ci(
+            context_diff,
+            StaticCiPolicy(
+                max_context_increase_fraction=arguments.max_context_increase,
+                max_duplicate_increase_tokens=arguments.max_duplicate_increase,
+                max_stale_reference_increase=arguments.max_stale_increase,
+            ),
+        )
+        summary = render_markdown(context_diff)
+    else:
+        verification = verify_repository(
+            arguments.config,
+            root=arguments.repository,
+            base_ref=arguments.base,
+        )
+        result = evaluate_verified_ci(verification)
+        summary = render_verification_markdown(verification)
+    if arguments.json_output is not None:
+        _write_text(
+            json.dumps(result.to_dict(), indent=2, ensure_ascii=False) + "\n",
+            arguments.json_output,
+        )
+    summary_path = arguments.summary
+    if summary_path is None:
+        github_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        summary_path = Path(github_summary) if github_summary else None
+    if summary_path is not None:
+        write_summary(summary_path, summary)
+    sys.stdout.write(summary)
+    if result.reasons:
+        for reason in result.reasons:
+            print(f"contextlens ci: {reason}", file=sys.stderr)
+    return result.exit_code
 
 
 def _analyze(arguments: argparse.Namespace) -> int:
@@ -233,15 +470,12 @@ def _analyze(arguments: argparse.Namespace) -> int:
             name=arguments.label or arguments.ablated,
         )
         builder.add_savings(recommendation)
-    report = (
-        builder.metadata(
-            baseline_variant_id=arguments.baseline,
-            ablated_variant_id=arguments.ablated,
-            confidence=arguments.confidence,
-            equivalence_tolerance=arguments.equivalence_tolerance,
-        )
-        .build()
-    )
+    report = builder.metadata(
+        baseline_variant_id=arguments.baseline,
+        ablated_variant_id=arguments.ablated,
+        confidence=arguments.confidence,
+        equivalence_tolerance=arguments.equivalence_tolerance,
+    ).build()
     _write_report(report, arguments.format, arguments.output)
     return 0
 
@@ -288,9 +522,7 @@ def _optimize(arguments: argparse.Namespace) -> int:
             tuple(str(item) for item in agent_value["command"]),
             adapter_id=str(agent_value.get("adapter_id", "subprocess-v1")),
         ),
-        snapshot=DirectorySnapshot(
-            _relative_path(base, task_value["workspace"])
-        ),
+        snapshot=DirectorySnapshot(_relative_path(base, task_value["workspace"])),
         task=task,
         context=context,
         settings=settings,
@@ -327,9 +559,7 @@ def _optimize(arguments: argparse.Namespace) -> int:
         baseline_result.run_id,
     )
     optimization_value = dict(config.get("optimization", {}))
-    objective = OptimizationObjective(
-        optimization_value.pop("objective", "min_cost")
-    )
+    objective = OptimizationObjective(optimization_value.pop("objective", "min_cost"))
     predictor_path = optimization_value.pop("predictor", None)
     predictor = (
         ContextValuePredictor.from_dict(
@@ -357,9 +587,7 @@ def _optimize(arguments: argparse.Namespace) -> int:
         score_name=score_name,
         baseline_score=baseline_evaluation.scores[score_name],
         baseline_cost_usd=(
-            baseline_outcome.cost_usd
-            if baseline_outcome is not None
-            else None
+            baseline_outcome.cost_usd if baseline_outcome is not None else None
         ),
         baseline_latency_seconds=baseline_result.duration_seconds,
         estimated_cost_usd=_optional_float(verify_estimated_cost),
@@ -417,6 +645,73 @@ def _export_policy(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _trim(arguments: argparse.Namespace) -> int:
+    if arguments.max_tokens is not None and arguments.max_tokens < 0:
+        raise ValueError("--max-tokens cannot be negative")
+    if not 0 <= arguments.min_reduction <= 1:
+        raise ValueError("--min-reduction must be between 0 and 1")
+    if not arguments.dry_run and arguments.output is None:
+        raise ValueError("trim requires --output unless --dry-run is used")
+    try:
+        policy = ContextPolicy.from_json(arguments.policy.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            "trim requires a JSON policy; export one with "
+            "`contextlens policy --format json`"
+        ) from error
+    context = _load_context(arguments.context, arguments.request_id)
+    applied = apply_context_policy(
+        context,
+        policy,
+        agent_id=arguments.agent_id,
+        phase=arguments.phase,
+        strict=arguments.strict,
+    )
+    if arguments.max_tokens is not None and applied.after_tokens > arguments.max_tokens:
+        raise ValueError(
+            f"trimmed context has {applied.after_tokens} tokens, exceeding "
+            f"--max-tokens {arguments.max_tokens}"
+        )
+    if applied.reduction_fraction < arguments.min_reduction:
+        raise ValueError(
+            f"context reduction {applied.reduction_fraction:.1%} is below "
+            f"--min-reduction {arguments.min_reduction:.1%}"
+        )
+    if not arguments.dry_run:
+        assert arguments.output is not None
+        output = arguments.output.resolve()
+        _write_json_artifact(
+            output,
+            applied.prompt_dict(),
+            force=arguments.force,
+        )
+        if applied.lazy or arguments.lazy_output is not None:
+            lazy_output = (
+                arguments.lazy_output.resolve()
+                if arguments.lazy_output is not None
+                else output.with_name(f"{output.stem}.lazy.json")
+            )
+            _write_json_artifact(
+                lazy_output,
+                applied.lazy_dict(),
+                force=arguments.force,
+            )
+        if arguments.audit_output is not None:
+            _write_json_artifact(
+                arguments.audit_output.resolve(),
+                applied.audit_dict(),
+                force=arguments.force,
+            )
+    print(
+        f"Context: {applied.before_tokens:,} -> {applied.after_tokens:,} tokens "
+        f"({applied.saved_tokens:,} saved, "
+        f"{applied.reduction_fraction:.1%} reduction)"
+    )
+    if applied.warnings:
+        print(f"Warnings: {len(applied.warnings)}", file=sys.stderr)
+    return 0
+
+
 def _write_report(
     report: Report,
     output_format: str,
@@ -435,6 +730,16 @@ def _write_report(
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(content, encoding="utf-8", newline="\n")
     print(output)
+
+
+def _write_text(content: str, output: Path | None) -> None:
+    if output is None:
+        sys.stdout.write(content)
+        return
+    resolved = output.resolve()
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    resolved.write_text(content, encoding="utf-8", newline="\n")
+    print(resolved)
 
 
 def _select_request(
@@ -459,14 +764,9 @@ def _observation(value: Any) -> RunObservation:
         accessed_source_ids=frozenset(value.get("accessed_source_ids", ())),
         commands=tuple(str(item) for item in value.get("commands", ())),
         tool_inputs=tuple(str(item) for item in value.get("tool_inputs", ())),
-        changed_files=tuple(
-            str(item)
-            for item in value.get("changed_files", ())
-        ),
+        changed_files=tuple(str(item) for item in value.get("changed_files", ())),
         task_text=str(value.get("task_text", "")),
-        searched_queries=tuple(
-            str(item) for item in value.get("searched_queries", ())
-        ),
+        searched_queries=tuple(str(item) for item in value.get("searched_queries", ())),
     )
 
 
@@ -516,6 +816,35 @@ def _load_json(path: Path | None) -> Any:
     if path is None:
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _load_context(path: Path, request_id: str | None) -> tuple[ContextSource, ...]:
+    if path.suffix.casefold() == ".jsonl":
+        return tuple(
+            event.source
+            for event in _select_request(
+                list(TraceReader(path).events()),
+                request_id,
+            )
+        )
+    value = _load_json(path)
+    raw_items = value.get("context") if isinstance(value, dict) else value
+    if not isinstance(raw_items, list) or not raw_items:
+        raise ValueError("context JSON must be a nonempty list or contain `context`")
+    if not all(isinstance(item, dict) for item in raw_items):
+        raise ValueError("every context item must be a JSON object")
+    return tuple(ContextSource.from_dict(item) for item in raw_items)
+
+
+def _write_json_artifact(path: Path, value: Any, *, force: bool) -> None:
+    if path.exists() and not force:
+        raise ValueError(f"refusing to overwrite existing file: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
 
 
 def _relative_path(base: Path, value: Any) -> Path:
