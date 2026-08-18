@@ -1,184 +1,228 @@
 # Command-line workflows
 
-## Export a context-loading policy
-
-Export the strongest finding for each source from a saved JSON report:
-
-```bash
-contextlens policy runs/latest.json \
-  --objective balanced \
-  --format yaml \
-  --output runs/context-policy.yaml
-```
-
-Unverified or inconclusive sources are emitted as `needs_more_evidence`.
-Supported output formats are YAML and JSON. Policies are validated against the
-version 1 in-process model; the portable schema is
-`schemas/context-policy.schema.json`.
-
-Install the package in a Python 3.11+ environment:
+The default ContextLens workflow is Git-native and requires no proprietary
+trace format:
 
 ```bash
-python -m pip install -e .
-contextlens --help
+contextlens scan
+contextlens diff --base origin/main
+contextlens verify .contextlens/evals.json --base origin/main
+contextlens minimize AGENTS.md --config .contextlens/evals.json
 ```
 
-## Record
+`scan` and `diff` never call a model. `verify` and verified `minimize` invoke
+the configured agent and should be budgeted accordingly.
+
+## Scan repository context
 
 ```bash
-contextlens record --output traces/task-001.jsonl -- your-agent-command
+contextlens scan [repository]
+contextlens scan --format json --output .contextlens/scan.json
+contextlens scan --format markdown --output .contextlens/scan.md
 ```
 
-`record` sets `CONTEXTLENS_TRACE` to the requested absolute path and launches
-the command without a shell. The agent must use the ContextLens recording API
-to write that file. The command fails if it exits unsuccessfully, does not
-produce a trace, or produces an invalid trace.
+Discovery recognizes root and nested `AGENTS.md`/`CLAUDE.md`, Copilot
+instructions, Cursor rules, repository skills, MCP configs, and conventional
+static tool-schema files. UTF-8 bytes divided by four is used as an explicitly
+labeled estimate because `scan` has no provider/model dependency.
 
-This wrapper does not claim that it can intercept an uninstrumented provider
-SDK automatically.
+Findings include duplicate and nested-scope duplicate instructions, explicit
+missing path references, potential modal conflicts, narrowly targeted root
+guidance, and tool/schema footprint. They are always `observed / static` and
+`NOT VERIFIED`.
 
-## Scan one run
+Backwards compatibility: `contextlens scan trace.jsonl ...` still profiles a
+recorded request. New integrations should use the explicit spelling:
 
 ```bash
-contextlens scan traces/task-001.jsonl \
-  --observation observations/task-001.json \
-  --format terminal
+contextlens profile trace.jsonl --observation observation.json
 ```
 
-Observation JSON may contain:
-
-```json
-{
-  "output_text": "The final response",
-  "accessed_source_ids": ["agents-md"],
-  "commands": ["pytest"],
-  "tool_inputs": ["src/parser.py"],
-  "changed_files": ["src/parser.py"]
-}
-```
-
-Use `--request-id` for a multi-request trace and `--artifacts` when content was
-externalized.
-
-## Analyze paired measurements
+## Diff context versions
 
 ```bash
-contextlens analyze measurements.json \
-  --baseline baseline \
-  --ablated without-tool-schemas \
-  --label "Unused MCP schemas" \
-  --runs-per-day 10000 \
-  --projection-days 30 \
-  --experiment-cost-usd 25 \
-  --format html \
-  --output reports/tool-schemas.html
+contextlens diff [repository] --base origin/main
 ```
 
-The input is a JSON list of `Measurement` fields. Supported report formats are
-`terminal`, `json`, `csv`, and `html`.
+If `--base` is omitted, ContextLens tries the merge-base with `origin/main`,
+`main`, `origin/master`, or `master`, then `HEAD^`. Base files are read with
+`git ls-tree` and `git show`; the worktree is never changed.
 
-When production workload arguments are supplied, the report recommends
-`keep`, `remove`, or `investigate` and projects tokens, dollars, latency, net
-savings, and break-even runs. Project a combined candidate rather than summing
-individual source projections.
+Formats are `terminal`, `json`, and `markdown`.
 
-## Optimize
+## Verify a context change
 
 ```bash
-contextlens optimize experiment.json \
+contextlens verify .contextlens/evals.json \
+  --repository . \
+  --base origin/main \
   --format json \
-  --output runs/latest.json
+  --output .contextlens/verify.json
 ```
 
-The command performs:
+The config is intentionally small:
 
-1. Trace loading and one-run profiling.
-2. Baseline replay.
-3. Adaptive group ablation.
-4. Evaluation of every completed worker.
-5. Objective-specific candidate construction.
-6. Combined target-model verification.
-7. Report assembly with the experiment tree and worker evidence.
-
-An optimization configuration uses JSON:
+The portable JSON Schema is
+[`schemas/contextlens-evals.schema.json`](../schemas/contextlens-evals.schema.json).
 
 ```json
 {
-  "trace": "traces/task-001.jsonl",
-  "artifacts": "traces/artifacts",
-  "task": {
-    "task_id": "parser-1",
-    "instruction": "Fix the parser.",
-    "workspace": "fixtures/parser"
-  },
+  "trials": 3,
+  "quality_tolerance": 0,
+  "economics_tolerance": 0.02,
+  "require_provider_usage": true,
+  "max_runs": 30,
   "agent": {
-    "command": ["python", "agent_wrapper.py"],
-    "adapter_id": "my-agent-v1",
+    "type": "subprocess",
+    "command": ["python", "tools/contextlens_agent.py"],
+    "adapter_id": "our-agent-v1",
     "provider": "provider",
     "model": "model",
     "seed": 42,
     "temperature": 0,
-    "tools": ["shell"]
+    "tools": ["shell"],
+    "parameters": {}
   },
-  "evaluator": {
-    "type": "test_results"
-  },
-  "limits": {
-    "max_workers": 4,
-    "max_runs": 25,
-    "timeout_seconds": 300,
-    "retries": 1
-  },
-  "search": {
-    "score_name": "success",
-    "quality_tolerance": 0,
-    "max_experiments": 20,
-    "batch_size": 4
-  },
-  "optimization": {
-    "objective": "min_cost",
-    "quality_tolerance": 0.01,
-    "max_cost_usd": 0.05
-  }
+  "tasks": [
+    {
+      "id": "parser-regression",
+      "instruction": "Fix the parser regression.",
+      "workspace": ".",
+      "checks": [
+        ["python", "-m", "pytest", "tests/test_parser.py", "-q"],
+        ["python", "-m", "mypy", "src/parser.py"]
+      ],
+      "allowed_files": ["src/parser.py"],
+      "timeout_seconds": 300
+    }
+  ]
 }
 ```
 
-Paths are resolved relative to the configuration file.
+For deterministic question/answer tasks, replace `checks` with
+`"expected_output": "..."`. Mechanical checks are preferred; ContextLens does
+not insert an LLM judge.
 
-Built-in CLI evaluators are `exact_match` and `test_results`. Library users can
-use custom, human, or model-graded evaluators directly.
+Every base and candidate trial receives a fresh copy of the same workspace.
+The built-in Codex adapter uses `--ignore-rules` and injects only the selected
+discovered context. The generic subprocess contract receives the exact context
+version in the request JSON. Custom subprocesses must not independently load
+repository instructions, because doing so would invalidate the intervention.
 
-### Subprocess result contract
+### Subprocess contract
 
-The worker sets:
+ContextLens sets:
 
-- `CONTEXTLENS_REQUEST` to the complete replay request JSON.
-- `CONTEXTLENS_RESULT` to the path where the agent may write result JSON.
+- `CONTEXTLENS_REQUEST`: complete JSON request path;
+- `CONTEXTLENS_RESULT`: result JSON path.
 
-Result JSON can contain:
+The result may contain:
 
 ```json
 {
   "output_text": "Completed",
-  "commands": ["pytest"],
-  "test_results": ["42 passed"],
+  "commands": ["pytest tests/test_parser.py -q"],
+  "test_results": ["12 passed"],
   "input_tokens": 12000,
+  "cached_input_tokens": 9000,
   "output_tokens": 800,
   "cost_usd": 0.08,
-  "metadata": {}
+  "tool_calls": 7,
+  "retries": 0,
+  "metadata": {
+    "reasoning_tokens": 220,
+    "turns": 5,
+    "files_read": ["src/parser.py", "tests/test_parser.py"],
+    "searches": ["parse_header"],
+    "model_latency_ms": 18000,
+    "tool_latency_ms": 3200
+  }
 }
 ```
 
-If no result file is written, standard output becomes `output_text`. Nonzero
-exit status and timeouts become failed worker results.
+Missing categories remain unavailable; ContextLens does not replace them with
+context-footprint estimates.
 
-## Rerender
+### Pricing
 
-```bash
-contextlens report runs/latest.json --format html --output runs/latest.html
+Optional pricing is a dated, explicit snapshot:
+
+```json
+{
+  "pricing": {
+    "provider": "provider",
+    "model": "model",
+    "effective_date": "2026-08-18",
+    "uncached_input_per_million_usd": 2.0,
+    "cached_input_per_million_usd": 0.2,
+    "output_per_million_usd": 8.0,
+    "reasoning_per_million_usd": 8.0
+  }
+}
 ```
 
-JSON reports are stable, rerenderable artifacts. HTML reports are
-self-contained. Reports include aggregate findings, adaptive decisions,
-stopping reasons, warnings, and compact per-worker drill-down without embedding
-raw model output.
+ContextLens does not bundle live prices. If an observed token category lacks a
+price, calculated dollar cost stays unavailable rather than using a false
+equivalence.
+
+### Verdict and exit codes
+
+- `PASS` — quality passed and measured economics did not regress beyond policy;
+- `WARN` — quality passed but optional provider economics were unavailable;
+- `CONTEXT REGRESSION` — candidate quality or measured economics regressed;
+- `INCONCLUSIVE` — required evidence was missing or only one pair was run.
+
+Exit codes: `0` for PASS/WARN, `4` for regression, `5` for inconclusive, and
+`2` for invalid input/configuration.
+
+## Minimize context
+
+```bash
+contextlens minimize AGENTS.md packages/api/AGENTS.md \
+  --config .contextlens/evals.json \
+  --max-candidates 8 \
+  --patch-output .contextlens/patches/context-minimized.diff \
+  --report-output .contextlens/minimize.json \
+  --format json
+```
+
+Static analysis generates candidates. The combined candidate is compared with
+the current context using the verification suite. A patch is written only for
+a PASS verdict and positive footprint reduction. The repository source files
+are never edited.
+
+Without `--config`, candidates are printed as `candidate/static — NOT VERIFIED`
+and no patch can be written.
+
+## CI
+
+```bash
+contextlens ci --mode static --base origin/main \
+  --max-context-increase 0.25 \
+  --max-duplicate-increase 0 \
+  --json-output .contextlens/ci-result.json
+
+contextlens ci --mode verified --base origin/main \
+  --config .contextlens/evals.json
+```
+
+When `GITHUB_STEP_SUMMARY` is set, Markdown is appended automatically. Use
+`--summary path.md` elsewhere. Static thresholds are optional and gate only
+deterministic footprint/configuration properties—not claimed task performance.
+
+## Existing advanced commands
+
+The original experimental interfaces remain supported:
+
+- `record`: launch an instrumented agent that writes a ContextLens JSONL trace;
+- `profile`: one-run utilization analysis from a trace;
+- `analyze`: paired bootstrap analysis from normalized measurements;
+- `optimize`: adaptive ablation and combined target-model verification;
+- `policy`: export a validated policy from a saved report;
+- `trim`: apply a previously verified policy before an agent request;
+- `report`: render a saved report as terminal, JSON, CSV, or HTML.
+
+These commands are useful for custom research and deeply integrated systems.
+Teams do not need them to obtain value from `scan` or `diff`.
+
+See [migration notes](migration.md) for exact compatibility behavior.

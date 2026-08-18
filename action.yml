@@ -1,0 +1,75 @@
+name: ContextLens Agent Context Regression
+description: Static or verified CI checks for changes to AI-agent repository context
+author: ContextLens contributors
+
+inputs:
+  mode:
+    description: "static (no model calls) or verified (configured replay suite)"
+    required: false
+    default: static
+  base:
+    description: Git ref used as the base context version
+    required: false
+    default: origin/main
+  config:
+    description: Verification suite used in verified mode
+    required: false
+    default: .contextlens/evals.json
+  max-context-increase:
+    description: Optional maximum fractional static footprint increase (for example 0.25)
+    required: false
+    default: ""
+  max-duplicate-increase:
+    description: Optional maximum increase in estimated duplicate tokens
+    required: false
+    default: ""
+  max-stale-increase:
+    description: Optional maximum increase in stale path references
+    required: false
+    default: ""
+
+outputs:
+  result:
+    description: Path to the machine-readable ContextLens CI result
+    value: ${{ steps.contextlens.outputs.result }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: pip
+    - name: Install ContextLens
+      shell: bash
+      run: python -m pip install "${{ github.action_path }}"
+    - id: contextlens
+      name: Test agent context
+      shell: bash
+      env:
+        CONTEXTLENS_MODE: ${{ inputs.mode }}
+        CONTEXTLENS_BASE: ${{ inputs.base }}
+        CONTEXTLENS_CONFIG: ${{ inputs.config }}
+        CONTEXTLENS_MAX_CONTEXT_INCREASE: ${{ inputs['max-context-increase'] }}
+        CONTEXTLENS_MAX_DUPLICATE_INCREASE: ${{ inputs['max-duplicate-increase'] }}
+        CONTEXTLENS_MAX_STALE_INCREASE: ${{ inputs['max-stale-increase'] }}
+      run: |
+        args=(ci --mode "$CONTEXTLENS_MODE" --base "$CONTEXTLENS_BASE" --json-output .contextlens/ci-result.json)
+        if [[ "$CONTEXTLENS_MODE" == "verified" ]]; then
+          args+=(--config "$CONTEXTLENS_CONFIG")
+        fi
+        if [[ -n "$CONTEXTLENS_MAX_CONTEXT_INCREASE" ]]; then
+          args+=(--max-context-increase "$CONTEXTLENS_MAX_CONTEXT_INCREASE")
+        fi
+        if [[ -n "$CONTEXTLENS_MAX_DUPLICATE_INCREASE" ]]; then
+          args+=(--max-duplicate-increase "$CONTEXTLENS_MAX_DUPLICATE_INCREASE")
+        fi
+        if [[ -n "$CONTEXTLENS_MAX_STALE_INCREASE" ]]; then
+          args+=(--max-stale-increase "$CONTEXTLENS_MAX_STALE_INCREASE")
+        fi
+        contextlens "${args[@]}"
+        echo "result=$GITHUB_WORKSPACE/.contextlens/ci-result.json" >> "$GITHUB_OUTPUT"
+
+branding:
+  icon: check-circle
+  color: purple

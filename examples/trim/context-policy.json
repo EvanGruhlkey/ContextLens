@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "objective": "cost_without_regression",
+  "context": {
+    "architecture": {
+      "sources": ["architecture.md"],
+      "strategy": "always_include"
+    },
+    "conversation_history": {
+      "sources": ["conversation-history.txt"],
+      "strategy": "summarize",
+      "max_tokens": 80,
+      "summary": "Current decision: preserve API compatibility."
+    },
+    "repo_instructions": {
+      "sources": ["AGENTS.md"],
+      "strategy": "always_include"
+    },
+    "terminal_history": {
+      "sources": ["previous-terminal-output.txt"],
+      "strategy": "exclude"
+    },
+    "tool_schemas": {
+      "sources": ["all-tool-schemas.json"],
+      "strategy": "lazy_load"
+    }
+  }
+}

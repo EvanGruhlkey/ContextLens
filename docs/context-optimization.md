@@ -1,7 +1,11 @@
 # Context optimization
 
-Context optimization turns adaptive-search findings into a deployable context
-configuration.
+Context optimization is the retained advanced engine beneath verified
+minimization. New repository workflows should start with `contextlens minimize`,
+which generates a patch candidate and runs base-versus-candidate verification.
+
+The library API below turns adaptive-search findings into a deployable context
+configuration for custom integrations.
 
 ## Why combined verification matters
 
@@ -34,6 +38,10 @@ All objectives retain a quality tolerance. Cost and latency objectives compare
 the verified candidate with recorded baseline resources. Token-budget
 candidates must fit the requested budget. Quality-per-dollar compares the
 quality/cost ratio rather than quality or cost alone.
+
+For new integrations, calculate `cost_usd` from the cache-aware categories in
+`contextlens.telemetry` or report them separately. Injected context alone is not
+an end-to-end cost objective.
 
 ```python
 from contextlens.optimization import (
@@ -116,4 +124,3 @@ Every candidate distinguishes:
 Every verification records quality change, objective values, objective
 improvement, replay evidence, evaluator evidence, resource limits, and explicit
 rejection reasons.
-

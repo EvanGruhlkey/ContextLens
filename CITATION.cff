@@ -6,6 +6,5 @@ date-released: 2026-07-27
 license: MIT
 authors:
   - name: "ContextLens contributors"
-repository-code: "https://github.com/contextlens/contextlens"
+repository-code: "https://github.com/EvanGruhlkey/ContextLens"
 type: software
-

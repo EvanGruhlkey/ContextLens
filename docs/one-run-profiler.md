@@ -4,6 +4,10 @@ The one-run profiler extracts inexpensive, deterministic signals from a
 completed agent request. It does not call a model and does not claim to measure
 causal value.
 
+The profiler is the legacy trace-based analysis path. Repository context can be
+scanned without instrumentation through `contextlens scan`; recorded traces use
+`contextlens profile trace.jsonl`.
+
 ```python
 from contextlens.profiler import ContextProfiler, RunObservation
 from contextlens.trace import TraceReader
@@ -61,4 +65,3 @@ Serialized profiler reports always contain:
 
 Later adaptive experiments use these observations to choose which context
 groups are worth verifying with isolated counterfactual workers.
-

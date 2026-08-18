@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Repositioned ContextLens as CI and regression testing for repository-owned
+  agent context: "test your AGENTS.md like you test your code."
+- Added credential-free repository discovery and static `scan` for AGENTS.md,
+  CLAUDE.md, Copilot/Cursor rules, skills, MCP configs, and tool schemas.
+- Added Git-aware `diff` that compares the worktree with an immutable base tree
+  and reports footprint, duplicate, and stale-reference deltas.
+- Added matched `verify` trials with mechanical evaluation, fail-closed
+  PASS/WARN/CONTEXT REGRESSION/INCONCLUSIVE verdicts, and separate quality,
+  economics, behavior, and latency reporting.
+- Added provider-usage normalization for cached, uncached, cache-write, output,
+  and reasoning categories plus explicit historical pricing snapshots.
+- Added conservative `minimize`: static evidence generates an in-memory
+  candidate, combined verification gates it, and source files are never edited.
+- Added static and verified `ci` modes, stable exit codes, JSON/Markdown
+  artifacts, a composite GitHub Action, and path-filtered workflow examples.
+- Added `profile` as the explicit trace-profiler command while preserving
+  `scan trace.jsonl` compatibility.
+- Added migration, CI, adapter, architecture, and deterministic local-demo
+  documentation.
 - Added complete agent-run and step records alongside structured context JSONL.
 - Added content hashing, expanded coding-agent source kinds, and built-in secret
   redaction.
@@ -18,15 +37,15 @@
   observed final regression.
 - Fixed matched-random controls so they match the target token total without
   overshooting or duplicating the ContextLens candidate subset.
-- Made fail-closed deployable injected-context reduction the headline metric;
-  provider input tokens remain a secondary diagnostic.
+- Previously made fail-closed deployable injected-context reduction the eval
+  harness headline metric; the repository-regression pivot now retains it as a
+  compatibility footprint field rather than an economic-savings claim.
+- Added a production `trim` command and runtime API that apply policies before
+  an agent request, emit prompt and lazy-load payloads, report context savings,
+  enforce token/reduction thresholds, and fail closed on policy drift.
 
-All notable project changes will be documented here.
-
-The format follows Keep a Changelog principles, and releases use semantic
-versioning.
-
-## [Unreleased]
+All notable project changes will be documented here. The format follows Keep a
+Changelog principles, and releases use semantic versioning.
 
 ## [0.1.0] - 2026-07-27
 

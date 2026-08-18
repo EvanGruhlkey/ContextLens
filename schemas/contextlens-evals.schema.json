@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/EvanGruhlkey/ContextLens/blob/main/schemas/contextlens-evals.schema.json",
+  "title": "ContextLens repository context evaluation suite",
+  "type": "object",
+  "required": ["agent", "tasks"],
+  "properties": {
+    "base_ref": {"type": "string", "minLength": 1},
+    "trials": {"type": "integer", "minimum": 1, "default": 3},
+    "quality_tolerance": {"type": "number", "minimum": 0, "default": 0},
+    "economics_tolerance": {"type": "number", "minimum": 0, "default": 0},
+    "require_provider_usage": {"type": "boolean", "default": false},
+    "max_runs": {"type": "integer", "minimum": 1},
+    "agent": {
+      "type": "object",
+      "required": ["type", "provider", "model"],
+      "properties": {
+        "type": {"enum": ["subprocess", "codex"]},
+        "command": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1
+        },
+        "adapter_id": {"type": "string"},
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "seed": {"type": "integer"},
+        "temperature": {"type": "number", "minimum": 0},
+        "tools": {"type": "array", "items": {"type": "string"}},
+        "parameters": {"type": "object"},
+        "reasoning_effort": {"type": "string"},
+        "sandbox": {"type": "string"},
+        "secret_environment": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      },
+      "additionalProperties": true
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "instruction"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "instruction": {"type": "string", "minLength": 1},
+          "workspace": {"type": "string", "default": "."},
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {"type": "string"},
+              "minItems": 1
+            }
+          },
+          "expected_output": {"type": "string"},
+          "allowed_files": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "timeout_seconds": {"type": "number", "exclusiveMinimum": 0}
+        },
+        "anyOf": [
+          {"required": ["checks"]},
+          {"required": ["expected_output"]}
+        ],
+        "additionalProperties": false
+      }
+    },
+    "pricing": {
+      "type": "object",
+      "required": [
+        "uncached_input_per_million_usd",
+        "cached_input_per_million_usd",
+        "output_per_million_usd"
+      ],
+      "properties": {
+        "provider": {"type": "string"},
+        "model": {"type": "string"},
+        "effective_date": {"type": "string"},
+        "uncached_input_per_million_usd": {"type": "number", "minimum": 0},
+        "cached_input_per_million_usd": {"type": "number", "minimum": 0},
+        "cache_write_input_per_million_usd": {"type": "number", "minimum": 0},
+        "output_per_million_usd": {"type": "number", "minimum": 0},
+        "reasoning_per_million_usd": {"type": "number", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

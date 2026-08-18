@@ -109,6 +109,56 @@ class ContextPolicy:
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
 
+    @classmethod
+    def from_dict(cls, value: Mapping[str, Any]) -> ContextPolicy:
+        raw_context = value.get("context")
+        if not isinstance(raw_context, Mapping):
+            raise ValueError("policy context must be an object")
+        rules: dict[str, PolicyRule] = {}
+        known = {
+            "sources",
+            "strategy",
+            "max_tokens",
+            "target_agent_ids",
+            "target_phases",
+        }
+        for name, raw_rule in raw_context.items():
+            if not isinstance(raw_rule, Mapping):
+                raise ValueError(f"policy rule {name!r} must be an object")
+            raw_sources = raw_rule.get("sources")
+            if not isinstance(raw_sources, list):
+                raise ValueError(f"policy rule {name!r} sources must be a list")
+            rules[str(name)] = PolicyRule(
+                sources=tuple(str(item) for item in raw_sources),
+                strategy=PolicyStrategy(str(raw_rule["strategy"])),
+                max_tokens=(
+                    int(raw_rule["max_tokens"])
+                    if raw_rule.get("max_tokens") is not None
+                    else None
+                ),
+                target_agent_ids=tuple(
+                    str(item) for item in raw_rule.get("target_agent_ids", ())
+                ),
+                target_phases=tuple(
+                    str(item) for item in raw_rule.get("target_phases", ())
+                ),
+                parameters={
+                    str(key): item for key, item in raw_rule.items() if key not in known
+                },
+            )
+        return cls(
+            context=rules,
+            objective=str(value.get("objective", "balanced")),
+            version=int(value.get("version", 1)),
+        )
+
+    @classmethod
+    def from_json(cls, content: str) -> ContextPolicy:
+        value = json.loads(content)
+        if not isinstance(value, Mapping):
+            raise ValueError("policy JSON must contain an object")
+        return cls.from_dict(value)
+
     def to_yaml(self) -> str:
         lines = [
             f"version: {self.version}",
@@ -224,6 +274,7 @@ def policy_from_verified_configuration(
             strategy=strategy,
             parameters={
                 "source_id": source.source_id,
+                "content_hash": source.content_hash,
                 "verification_run_id": verified.replay_result.run_id,
                 "evidence_scope": verified.evidence_scope,
             },

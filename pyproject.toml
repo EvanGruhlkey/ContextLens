@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "contextlens"
 version = "0.1.0"
-description = "Measure which parts of an AI agent's context improve performance"
+description = "CI and regression testing for AI-agent repository context"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -21,7 +21,16 @@ classifiers = [
   "Topic :: Software Development :: Testing",
 ]
 dependencies = []
-keywords = ["agents", "context", "evaluation", "llm", "mcp"]
+keywords = [
+  "agents-md",
+  "ai-agents",
+  "coding-agents",
+  "context-engineering",
+  "developer-tools",
+  "evaluation",
+  "llm",
+  "mcp",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -31,8 +40,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/contextlens/contextlens"
-Issues = "https://github.com/contextlens/contextlens/issues"
+Homepage = "https://github.com/EvanGruhlkey/ContextLens"
+Documentation = "https://github.com/EvanGruhlkey/ContextLens#readme"
+Issues = "https://github.com/EvanGruhlkey/ContextLens/issues"
+Repository = "https://github.com/EvanGruhlkey/ContextLens.git"
 
 [project.scripts]
 contextlens = "contextlens.cli:main"
@@ -43,6 +54,7 @@ packages = ["src/contextlens"]
 [tool.hatch.build.targets.wheel.force-include]
 "migrations/0001_normalized_contextlens.sql" = "contextlens/migrations/0001_normalized_contextlens.sql"
 "schemas/context-policy.schema.json" = "contextlens/schemas/context-policy.schema.json"
+"schemas/contextlens-evals.schema.json" = "contextlens/schemas/contextlens-evals.schema.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

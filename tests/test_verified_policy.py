@@ -80,6 +80,10 @@ class VerifiedPolicyTests(unittest.TestCase):
         self.assertEqual(rules["current"].strategy, PolicyStrategy.ALWAYS_INCLUDE)
         self.assertEqual(rules["stale"].strategy, PolicyStrategy.EXCLUDE)
         self.assertEqual(
+            rules["stale"].parameters["content_hash"],
+            self.context[1].content_hash,
+        )
+        self.assertEqual(
             rules["stale"].parameters["verification_run_id"],
             "verification-run",
         )
