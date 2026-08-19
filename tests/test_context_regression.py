@@ -127,6 +127,25 @@ class _AlwaysOkAdapter:
         )
 
 
+class _CandidateInfrastructureFailureAdapter:
+    adapter_id = "candidate-infrastructure-failure-fixture"
+
+    def run(self, request: ReplayRequest) -> AgentOutcome:
+        if "candidate" in {source.source_id for source in request.context}:
+            raise RuntimeError("provider unavailable")
+        return AgentOutcome(output_text="ok", input_tokens=100, output_tokens=5)
+
+
+class _NoNativeContextLeakAdapter:
+    adapter_id = "no-native-context-leak-fixture"
+
+    def run(self, request: ReplayRequest) -> AgentOutcome:
+        workspace = Path(request.workspace)
+        assert not (workspace / "evals.json").exists()
+        assert not tuple(workspace.rglob("AGENTS.md"))
+        return AgentOutcome(output_text="ok", input_tokens=100, output_tokens=5)
+
+
 def _task(tmp_path: Path) -> VerificationTask:
     (tmp_path / "fixture.txt").write_text("fixed workspace\n", encoding="utf-8")
     return VerificationTask(
@@ -294,6 +313,30 @@ def test_base_and_candidate_runs_use_fresh_isolated_workspaces(
     assert not (tmp_path / ".contextlens-run-marker").exists()
 
 
+def test_infrastructure_errors_are_retained_and_excluded_from_causal_results(
+    tmp_path: Path,
+) -> None:
+    report = run_context_verification(
+        base_context=(_source("base", 100),),
+        candidate_context=(_source("candidate", 50),),
+        tasks=(_task(tmp_path),),
+        agent_factory=_CandidateInfrastructureFailureAdapter,
+        settings=AgentSettings("fixture", "deterministic"),
+        policy=VerificationPolicy(trials=2),
+    )
+
+    assert report.verdict is RegressionVerdict.INCONCLUSIVE
+    assert report.infrastructure_invalid_runs == 2
+    assert report.base.runs == 2
+    assert report.candidate.runs == 0
+    assert report.candidate.infrastructure_errors == 2
+    assert len(report.trials) == 4
+    assert sum(not trial.infrastructure_valid for trial in report.trials) == 2
+    assert report.paired_runs == 0
+    raw = report.to_dict()
+    assert raw["experiments"][0]["execution_status"] == "infrastructure_invalid"
+
+
 def test_verify_uses_backend_effective_context_and_persists_resolution(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -314,7 +357,34 @@ def test_verify_uses_backend_effective_context_and_persists_resolution(
         raw = trial.to_dict()["context"]
         assert raw["source_paths"] == ["AGENTS.md", "backend/AGENTS.md"]
         assert raw["effective_initial_tokens"] == trial.initial_context_tokens
+        assert raw["content_hash"]
+        assert len(raw["content_hashes"]) == 2
+        assert all(raw["content_hashes"].values())
         assert all(item["scope_accuracy"] for item in raw["resolution"])
+    manifest = report.to_dict()["experiments"][0]["manifest"]
+    assert manifest["base_context"]["sources"] == [
+        "AGENTS.md",
+        "backend/AGENTS.md",
+    ]
+    assert manifest["candidate_context"]["content_hash"]
+
+
+def test_verify_hides_native_context_and_eval_definition_from_agent_workspace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _initialize_context_repository(tmp_path)
+    config = _verification_config(tmp_path, target_paths=["backend/api.py"])
+    monkeypatch.setattr(
+        regression_module,
+        "_agent_factory",
+        lambda value: _NoNativeContextLeakAdapter,
+    )
+
+    report = verify_repository(config, root=tmp_path, base_ref="HEAD")
+
+    assert report.trials[0].success
+    assert report.experiments[0].manifest["fixed_dimensions_hash"]
 
 
 def test_verify_unions_multiple_targets(

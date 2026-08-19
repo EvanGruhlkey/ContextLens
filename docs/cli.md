@@ -127,11 +127,22 @@ For deterministic question/answer tasks, replace `checks` with
 `"expected_output": "..."`. Mechanical checks are preferred; ContextLens does
 not insert an LLM judge.
 
-Every base and candidate trial receives a fresh copy of the same workspace.
-The built-in Codex adapter uses `--ignore-rules` and injects only the selected
-discovered context. The generic subprocess contract receives the exact context
-version in the request JSON. Custom subprocesses must not independently load
-repository instructions, because doing so would invalidate the intervention.
+Every base and candidate trial receives a fresh copy of the same workspace and
+a fresh agent execution. The built-in Codex adapter launches ephemeral
+`codex exec` with `--ignore-user-config` and `--ignore-rules`. Recognized native
+context files are also omitted from experimental workspace copies, and only the
+task-effective context variant is injected in the prompt. The generic
+subprocess contract receives the exact context version in the request JSON.
+Custom subprocesses must not independently load repository instructions,
+because doing so would invalidate the intervention.
+
+JSON reports include the execution manifest and raw paired experiment records:
+repository/commit identity, task and grader hashes, fixed-dimension hash,
+adapter/model settings, alternating order, task-effective source paths and
+scope decisions, context content hashes, workspace and agent-execution IDs,
+raw provider telemetry, changed files, classifications, and per-pair deltas.
+Infrastructure-invalid trials remain in `raw_trials` but are excluded from
+causal aggregates and force an inconclusive verdict.
 
 ### Subprocess contract
 

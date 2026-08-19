@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -36,10 +37,21 @@ def main() -> int:
         )
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(fixture, destination)
+    grader_config = workspace / ".contextlens-grader-config"
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "HOME": str(workspace),
+            "USERPROFILE": str(workspace),
+            "XDG_CONFIG_HOME": str(grader_config),
+            "BROWSER_USE_CONFIG_DIR": str(grader_config / "browser-use"),
+        }
+    )
     try:
         completed = subprocess.run(
             _normalize_path_arguments(args.command, working_directory),
             cwd=working_directory,
+            env=environment,
             check=False,
         )
         return completed.returncode
@@ -48,10 +60,11 @@ def main() -> int:
             destination.unlink(missing_ok=True)
         else:
             destination.write_bytes(original)
+        shutil.rmtree(grader_config, ignore_errors=True)
 
 
 def _normalize_path_arguments(command: list[str], working_directory: Path) -> list[str]:
-    normalized = [command[0]]
+    normalized = [shutil.which(command[0]) or command[0]]
     for argument in command[1:]:
         path = Path(argument)
         candidate = path if path.is_absolute() else working_directory / path

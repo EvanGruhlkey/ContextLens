@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
+
+import pytest
 
 
 def test_real_context_change_manifest_is_pinned_and_selection_neutral() -> None:
@@ -151,6 +154,95 @@ def test_hidden_grader_can_replace_and_restore_an_existing_test(
     assert completed.returncode == 0
     assert "replacement pass" in completed.stdout
     assert existing.read_text(encoding="utf-8") == "print('original')\n"
+
+
+def test_case_study_run_uses_verify_engine_and_keeps_config_outside_workspace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _case_study_module("run.py")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    grader = tmp_path / "hidden.py"
+    grader.write_text("hidden", encoding="utf-8")
+    study = {
+        "id": "fixture-study",
+        "repository": "owner/repo",
+        "context_provider": "codex",
+    }
+    task = {
+        "id": "fixture-task",
+        "task_prompt": "Fix the task.",
+        "pre_fix_commit": "a" * 40,
+        "fixed_commit": "b" * 40,
+        "target_paths": ["src/app.py"],
+        "hidden_grader": {
+            "destination_path": "tests/hidden.py",
+            "command": [sys.executable, "tests/hidden.py"],
+        },
+    }
+    observed: dict[str, Path] = {}
+
+    def fake_verify(config_path: Path, **kwargs: object) -> SimpleNamespace:
+        observed["config"] = config_path
+        observed["root"] = Path(str(kwargs["root"]))
+        assert not config_path.is_relative_to(workspace)
+        return SimpleNamespace(to_dict=lambda: {"verdict": "PASS"})
+
+    monkeypatch.setattr(module, "HERE", tmp_path)
+    monkeypatch.setattr(module, "_require_validated_task", lambda *args: None)
+    monkeypatch.setattr(
+        module,
+        "prepare_task",
+        lambda *args, **kwargs: {
+            "workspace": str(workspace),
+            "grader": str(grader),
+            "candidate": {"candidate_hash": "hash"},
+        },
+    )
+    monkeypatch.setattr(module, "verify_repository", fake_verify)
+    monkeypatch.setattr(module, "render_verification_markdown", lambda report: "ok\n")
+
+    result = module.run_agent_trials(
+        study,
+        task,
+        cache=tmp_path / "cache",
+        trials=1,
+        model="fixture-model",
+        codex_command="codex",
+        install=False,
+    )
+
+    assert result["verdict"] == "PASS"
+    assert observed["root"] == workspace
+    assert not (workspace / ".contextlens-case-study.json").exists()
+
+
+def test_locked_candidate_hash_is_verified_before_application(tmp_path: Path) -> None:
+    module = _case_study_module("run.py")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    target = workspace / "AGENTS.md"
+    target.write_text("keep\nremove\n", encoding="utf-8")
+    patch = "--- a/AGENTS.md\n+++ b/AGENTS.md\n@@ -1,2 +1 @@\n keep\n-remove\n"
+    patch_path = tmp_path / "candidate.diff"
+    patch_path.write_text(patch, encoding="utf-8")
+    metadata_path = tmp_path / "candidate.json"
+    metadata_path.write_text(
+        json.dumps(
+            {"candidate_hash": hashlib.sha256(patch.encode("utf-8")).hexdigest()}
+        ),
+        encoding="utf-8",
+    )
+
+    metadata = module._apply_locked_candidate(
+        workspace,
+        patch_path=patch_path,
+        metadata_path=metadata_path,
+    )
+
+    assert metadata["candidate_hash"]
+    assert target.read_text(encoding="utf-8") == "keep\n"
 
 
 def _case_study_module(name: str) -> ModuleType:

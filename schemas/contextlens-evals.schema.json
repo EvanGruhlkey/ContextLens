@@ -60,6 +60,22 @@
               "minItems": 1
             }
           },
+          "setup": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["command"],
+              "properties": {
+                "command": {
+                  "type": "array",
+                  "items": {"type": "string"},
+                  "minItems": 1
+                },
+                "working_directory": {"type": "string", "default": "."}
+              },
+              "additionalProperties": false
+            }
+          },
           "expected_output": {"type": "string"},
           "allowed_files": {
             "type": "array",
@@ -68,6 +84,7 @@
           "category": {"type": "string"},
           "language": {"type": "string"},
           "repository_scope": {"type": "string"},
+          "snapshot_identity": {"type": "string", "minLength": 1},
           "target_paths": {
             "type": "array",
             "items": {"type": "string"}

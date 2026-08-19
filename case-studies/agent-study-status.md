@@ -17,7 +17,20 @@ The token values above cover candidate-edited instruction files and use
 ContextLens' byte-based estimate. They are not measured prompt usage, model
 quality, latency, or dollar cost.
 
-Agent runs completed: **0**. The only discovered `codex` executable belongs to
-the WindowsApps desktop bundle and returns `Access is denied` when launched as a
-CLI. Accordingly there are no pass-rate, duration, usage, or cost results and no
-candidate is labeled performance-verified.
+The paired runner was exercised with the pinned `@openai/codex@0.146.0` CLI and
+ChatGPT authentication. Four Browser Use agent invocations completed. The first
+two exposed cleanup/report-retention defects in the experiment harness; the
+second paired attempt retained both raw provider traces, but both trials were
+correctly classified as infrastructure-invalid because workspace cleanup and
+the hidden grader environment failed. The retained descriptive measurements
+were 636,733 base versus 240,683 candidate provider-input tokens and 136.7 s
+versus 87.4 s latency. These are **not causal savings or performance results**:
+the pair is excluded from aggregates and its verdict is `INCONCLUSIVE`.
+
+The Infisical attempt stopped before agent launch when its filtered Git fetch
+stalled. The Langfuse attempt retained two setup failures before agent launch;
+a subsequent retry reached a real base-agent launch but was interrupted by the
+task runtime before a result artifact was written. No case study is labeled
+performance-verified. The checked-in smoke artifacts preserve all results that
+the harness successfully retained; missing raw traces from the two early
+Browser Use attempts are explicitly treated as a harness defect, not evidence.

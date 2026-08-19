@@ -242,10 +242,60 @@ observed candidate failure that passed under base context fails closed. A
 smaller initial context that increases provider or uncached input without a
 quality improvement is a context regression, not a token-saving success.
 
+## How the agent experiments work
+
+```text
+                         Same task
+                            |
+                 +----------+----------+
+                 |                     |
+                 v                     v
+           Fresh Agent A         Fresh Agent B
+             base context       candidate context
+                 |                     |
+                 v                     v
+            clean workspace       clean workspace
+                 |                     |
+                 +----------+----------+
+                            |
+                            v
+                      hidden grader
+                            |
+                            v
+                    compare paired outcomes
+```
+
+Each variant runs as a fresh coding-agent execution in an isolated copy of the
+same repository. ContextLens changes the supplied context while keeping the
+task, model, tools, evaluator, timeout, and starting repository state fixed.
+Every Codex replay is a new ephemeral `codex exec`; user configuration and
+native repository rules are disabled, and recognized context files are hidden
+from the experimental workspace so the supplied context is the intended
+independent variable.
+
+Raw JSON contains an execution manifest, hashes for the task, grader, fixed
+dimensions, and both context variants, explicit base/candidate pairing, trial
+order, task-effective source resolution, content hashes, raw agent telemetry,
+and retained infrastructure failures. Unavailable metrics remain `null`.
+
+The checked-in historical studies use this same verification engine:
+
+```bash
+python case-studies/run.py validate browser-use browser-use-redaction-cascade --install
+python case-studies/run.py run browser-use browser-use-redaction-cascade --install --trials 1
+python case-studies/run.py run browser-use browser-use-redaction-cascade --install --trials 3
+```
+
+The hidden grader is injected only after the coding agent exits. A study task
+must already demonstrate that its buggy revision fails and its upstream fixed
+revision passes before ContextLens will spend an agent run on it.
+
 ## `contextlens minimize`
 
-`minimize` is the advanced token-saving workflow. Static signals generate a
-bounded candidate; the configured task suite verifies the combined change:
+`minimize` is the advanced token-saving workflow. Static signals generate
+bounded deduplicate, remove, and scope candidates. Each candidate is tested in
+isolation with the shared paired-agent engine, then accepted candidates receive
+new fresh paired final trials as a combined change:
 
 ```bash
 contextlens minimize AGENTS.md packages/api/AGENTS.md \
@@ -253,12 +303,12 @@ contextlens minimize AGENTS.md packages/api/AGENTS.md \
   --patch-output .contextlens/patches/context-minimized.diff
 ```
 
-The first conservative implementation mutates exact repeated instructions.
-The underlying mutation engine also retains remove, summarize, lazy-load, and
-scope operations for programmatic and adaptive experiments. A suggested patch
-is written only after a `PASS` verdict with a smaller footprint. Source files
-are never modified. `WARN`, `INCONCLUSIVE`, any quality regression, or an
-economics regression produces no patch.
+Candidate ranking is bounded by expected savings and static confidence; it does
+not launch an agent for every sentence. Summarize and lazy-load are not active
+CLI minimization capabilities. A suggested patch is written only after a
+`PASS` verdict with a smaller footprint. Source files are never modified.
+`WARN`, `INCONCLUSIVE`, any quality regression, or an economics regression
+produces no patch.
 
 Without `--config`, the command lists static candidates as **NOT VERIFIED** and
 does not recommend them.

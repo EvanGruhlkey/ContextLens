@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added a first-class paired-agent experiment runner shared by `verify`,
+  verified `minimize`, and historical case studies, with fresh isolated agent
+  executions, alternating order, native-context suppression, explicit pairing,
+  reproducibility manifests, raw telemetry, and infrastructure-error retention.
+- Kept historical hidden grader definitions outside agent-visible workspaces,
+  required prior buggy/fixed grader validation, and added JSON plus Markdown
+  study outputs.
 - Made verified evaluation task-effective: each task now resolves base and
   candidate context independently from `target_paths` and `context_provider`,
   and persists exact sources, effective tokens, resolution mode, and warnings.

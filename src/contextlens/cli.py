@@ -31,6 +31,7 @@ from contextlens.experiments import (
     AdaptiveSearchRunner,
     AgentSettings,
     DirectorySnapshot,
+    ExperimentEvent,
     MemoryReplayCache,
     ReplayCoordinator,
     ReplayStatus,
@@ -439,10 +440,12 @@ def _diff(arguments: argparse.Namespace) -> int:
 
 
 def _verify(arguments: argparse.Namespace) -> int:
+    print("Running paired context experiment", file=sys.stderr, flush=True)
     report = verify_repository(
         arguments.config,
         root=arguments.repository,
         base_ref=arguments.base,
+        progress=_verification_progress,
     )
     content = (
         render_verification_terminal(report)
@@ -453,6 +456,34 @@ def _verify(arguments: argparse.Namespace) -> int:
     )
     _write_text(content, arguments.output)
     return report.exit_code
+
+
+def _verification_progress(event: ExperimentEvent) -> None:
+    label = event.variant.upper()
+    if event.phase == "starting":
+        if event.order_position == 1:
+            print(
+                f"\nTask: {event.task_id}\nTrial {event.trial}",
+                file=sys.stderr,
+            )
+        print(f"  {label:<10} starting...", file=sys.stderr, flush=True)
+        return
+    result = event.result
+    assert result is not None
+    outcome = result.outcome
+    input_tokens = outcome.input_tokens if outcome is not None else None
+    usage = (
+        f"{input_tokens:,} input tokens"
+        if input_tokens is not None
+        else "input unavailable"
+    )
+    classification = event.classification.value if event.classification else "unknown"
+    print(
+        f"  {label:<10} {classification.upper():<20} "
+        f"{result.duration_seconds:.1f}s  {usage}",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def _minimize(arguments: argparse.Namespace) -> int:

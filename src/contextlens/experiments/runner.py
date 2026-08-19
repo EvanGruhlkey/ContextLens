@@ -27,6 +27,7 @@ from contextlens.experiments.mutations import (
     Summarizer,
     apply_mutations,
 )
+from contextlens.experiments.setup import WorkspacePreparer
 from contextlens.experiments.verification import WorkspaceVerifier
 from contextlens.experiments.workspace import DirectorySnapshot, compare_workspace
 from contextlens.trace.model import ContextSource
@@ -48,6 +49,7 @@ class ReplayWorker:
         target_agent_id: str | None = None,
         target_phase: str | None = None,
         verifier: WorkspaceVerifier | None = None,
+        preparer: WorkspacePreparer | None = None,
     ) -> None:
         self.adapter = adapter
         self.snapshot = snapshot
@@ -59,6 +61,7 @@ class ReplayWorker:
         self.target_agent_id = target_agent_id
         self.target_phase = target_phase
         self.verifier = verifier
+        self.preparer = preparer
         source_ids = [source.source_id for source in context]
         if len(source_ids) != len(set(source_ids)):
             raise ValueError("context source IDs must be unique")
@@ -83,62 +86,88 @@ class ReplayWorker:
         run_id = str(uuid4())
         started_at = datetime.now(UTC).isoformat()
         started = time.monotonic()
+        duration_seconds = 0.0
         result_metadata: dict[str, object] = {}
         with self.snapshot.isolated() as (workspace, before):
             workspace_id = workspace.parent.name
-            request = ReplayRequest(
-                run_id=run_id,
-                task=self.task,
-                variant=variant,
-                context=selected,
-                settings=self.settings,
-                workspace=str(workspace),
-                timeout_seconds=self.timeout_seconds,
-                lazy_context=application.lazy_context,
+            workspace_root = workspace.parent
+            setup = (
+                self.preparer.prepare(workspace, self.task)
+                if self.preparer is not None
+                else None
             )
-            try:
-                outcome = self.adapter.run(request)
-                if self.verifier is not None:
-                    verification = self.verifier.verify(
-                        workspace,
-                        self.task,
-                        outcome,
-                    )
-                    verification_line = (
-                        "verification passed"
-                        if verification.passed
-                        else "verification failed"
-                    )
-                    outcome = replace(
-                        outcome,
-                        commands=(
-                            *outcome.commands,
-                            " ".join(verification.command),
-                        ),
-                        test_results=(
-                            *outcome.test_results,
-                            verification_line,
-                        ),
-                        metadata={
-                            **dict(outcome.metadata),
-                            "task_completion": verification.passed,
-                            "verification": verification.to_dict(),
-                            "verifier_id": self.verifier.verifier_id,
-                        },
-                    )
-                status = ReplayStatus.COMPLETED
-                error = None
-            except TimeoutError as exception:
-                outcome = None
-                status = ReplayStatus.TIMED_OUT
-                error = str(exception)
-                result_metadata = _exception_metadata(exception)
-            except Exception as exception:
+            if setup is not None:
+                result_metadata["setup"] = setup.to_dict()
+                before = self.snapshot.capture(workspace)
+            if setup is not None and not setup.passed:
                 outcome = None
                 status = ReplayStatus.FAILED
-                error = f"{type(exception).__name__}: {exception}"
-                result_metadata = _exception_metadata(exception)
+                error = setup.error or "workspace setup failed"
+                result_metadata["failure_stage"] = "setup"
+                duration_seconds = setup.duration_seconds
+            else:
+                request = ReplayRequest(
+                    run_id=run_id,
+                    task=self.task,
+                    variant=variant,
+                    context=selected,
+                    settings=self.settings,
+                    workspace=str(workspace),
+                    timeout_seconds=self.timeout_seconds,
+                    lazy_context=application.lazy_context,
+                )
+                started_at = datetime.now(UTC).isoformat()
+                started = time.monotonic()
+                try:
+                    outcome = self.adapter.run(request)
+                    if self.verifier is not None:
+                        verification = self.verifier.verify(
+                            workspace,
+                            self.task,
+                            outcome,
+                        )
+                        verification_line = (
+                            "verification passed"
+                            if verification.passed
+                            else "verification failed"
+                        )
+                        outcome = replace(
+                            outcome,
+                            commands=(
+                                *outcome.commands,
+                                " ".join(verification.command),
+                            ),
+                            test_results=(
+                                *outcome.test_results,
+                                verification_line,
+                            ),
+                            metadata={
+                                **dict(outcome.metadata),
+                                "task_completion": verification.passed,
+                                "verification": verification.to_dict(),
+                                "verifier_id": self.verifier.verifier_id,
+                            },
+                        )
+                    status = ReplayStatus.COMPLETED
+                    error = None
+                except TimeoutError as exception:
+                    outcome = None
+                    status = ReplayStatus.TIMED_OUT
+                    error = str(exception)
+                    result_metadata.update(_exception_metadata(exception))
+                except Exception as exception:
+                    outcome = None
+                    status = ReplayStatus.FAILED
+                    error = f"{type(exception).__name__}: {exception}"
+                    result_metadata.update(_exception_metadata(exception))
+                duration_seconds = time.monotonic() - started
             changes = compare_workspace(workspace, before)
+        workspace_discarded = not workspace_root.exists()
+        result_metadata["workspace_discarded"] = workspace_discarded
+        if not workspace_discarded:
+            status = ReplayStatus.FAILED
+            error = "isolated workspace cleanup failed"
+            result_metadata["failure_stage"] = "cleanup"
         return ReplayResult(
             run_id=run_id,
             task_id=self.task.task_id,
@@ -146,7 +175,7 @@ class ReplayWorker:
             removed_source_ids=_removed_source_ids(variant),
             status=status,
             attempt=attempt,
-            duration_seconds=time.monotonic() - started,
+            duration_seconds=duration_seconds,
             context_source_ids=tuple(source.source_id for source in selected),
             context_tokens=sum(_source_tokens(source) for source in selected),
             outcome=outcome,
@@ -185,6 +214,14 @@ class ReplayWorker:
             "mutations": [mutation.to_dict() for mutation in variant.mutations],
             "target_agent_id": self.target_agent_id,
             "target_phase": self.target_phase,
+            "preparer": (
+                {
+                    "id": self.preparer.preparer_id,
+                    "definition": self.preparer.definition,
+                }
+                if self.preparer is not None
+                else None
+            ),
         }
         encoded = json.dumps(
             value,
@@ -267,9 +304,8 @@ class ReplayCoordinator:
                 f"max_context_tokens={self.limits.max_context_tokens}"
             )
         estimated_costs = [variant.estimated_cost_usd for variant in variants]
-        if (
-            self.limits.max_estimated_cost_usd is not None
-            and any(cost is None for cost in estimated_costs)
+        if self.limits.max_estimated_cost_usd is not None and any(
+            cost is None for cost in estimated_costs
         ):
             raise ValueError("every variant needs an estimated cost under a cost limit")
         total_cost = sum(cost or 0.0 for cost in estimated_costs)

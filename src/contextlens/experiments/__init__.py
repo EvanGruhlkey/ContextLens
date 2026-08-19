@@ -38,10 +38,18 @@ from contextlens.experiments.mutations import (
     apply_mutations,
 )
 from contextlens.experiments.paired_runner import (
+    AgentTrial,
+    ContextExperimentRunner,
+    ExperimentContext,
+    ExperimentEvent,
     PairedAdaptiveSearchRun,
     PairedAdaptiveSearchRunner,
+    PairedAgentExperiment,
+    PairedAgentExperimentRun,
+    PairedAgentTrial,
     PairedInvocation,
     PairedRunError,
+    TrialClassification,
 )
 from contextlens.experiments.runner import ReplayCoordinator, ReplayWorker
 from contextlens.experiments.search import (
@@ -55,6 +63,12 @@ from contextlens.experiments.search import (
     SearchNode,
     SearchReport,
 )
+from contextlens.experiments.setup import (
+    CommandWorkspacePreparer,
+    WorkspacePreparer,
+    WorkspaceSetupCommand,
+    WorkspaceSetupResult,
+)
 from contextlens.experiments.verification import (
     CommandWorkspaceVerifier,
     WorkspaceVerification,
@@ -66,16 +80,21 @@ __all__ = [
     "AgentAdapter",
     "AgentOutcome",
     "AgentSettings",
+    "AgentTrial",
     "AblationGroup",
     "AdaptiveAblationPlanner",
     "AdaptiveSearchRun",
     "AdaptiveSearchRunner",
     "ContextVariant",
+    "ContextExperimentRunner",
+    "ExperimentContext",
+    "ExperimentEvent",
     "ContextMutation",
     "CodexCliAgentAdapter",
     "CodexCliExecutionError",
     "CodexCliTimeoutError",
     "CommandWorkspaceVerifier",
+    "CommandWorkspacePreparer",
     "DeterministicExperimentCoordinator",
     "DirectorySnapshot",
     "Evaluation",
@@ -91,6 +110,9 @@ __all__ = [
     "MutationOperation",
     "PairedAdaptiveSearchRun",
     "PairedAdaptiveSearchRunner",
+    "PairedAgentExperiment",
+    "PairedAgentExperimentRun",
+    "PairedAgentTrial",
     "PairedInvocation",
     "PairedRunError",
     "PlannedExperiment",
@@ -108,10 +130,14 @@ __all__ = [
     "SearchNode",
     "SearchReport",
     "SubprocessAgentAdapter",
+    "TrialClassification",
     "Summarizer",
     "SummaryResult",
     "WorkspaceVerification",
     "WorkspaceVerifier",
+    "WorkspacePreparer",
+    "WorkspaceSetupCommand",
+    "WorkspaceSetupResult",
     "apply_mutations",
     "render_codex_prompt",
 ]

@@ -1,0 +1,816 @@
+{
+  "agent": {
+    "model": "gpt-5.6-terra",
+    "provider": "openai"
+  },
+  "base": {
+    "behavior": {
+      "commands": null,
+      "exploration_breadth": null,
+      "files_read": null,
+      "retries": null,
+      "searches": null,
+      "tool_calls": null,
+      "turns": null
+    },
+    "economics": {
+      "cache_write_input_tokens": null,
+      "cached_input_tokens": null,
+      "estimated_cost_usd": null,
+      "initial_context_tokens": null,
+      "output_tokens": null,
+      "provider_input_tokens": null,
+      "reasoning_tokens": null,
+      "uncached_input_tokens": null
+    },
+    "performance": {
+      "latency_seconds": null,
+      "model_latency_seconds": null,
+      "tool_latency_seconds": null
+    },
+    "quality": {
+      "completed": 0,
+      "infrastructure_errors": 1,
+      "mean_score": 0.0,
+      "runs": 0,
+      "success_rate": 0.0,
+      "successes": 0
+    }
+  },
+  "base_ref": "fb4a4f12bf2d5788d7bcb3e3f9c6515adb5fe691",
+  "candidate": {
+    "behavior": {
+      "commands": null,
+      "exploration_breadth": null,
+      "files_read": null,
+      "retries": null,
+      "searches": null,
+      "tool_calls": null,
+      "turns": null
+    },
+    "economics": {
+      "cache_write_input_tokens": null,
+      "cached_input_tokens": null,
+      "estimated_cost_usd": null,
+      "initial_context_tokens": null,
+      "output_tokens": null,
+      "provider_input_tokens": null,
+      "reasoning_tokens": null,
+      "uncached_input_tokens": null
+    },
+    "performance": {
+      "latency_seconds": null,
+      "model_latency_seconds": null,
+      "tool_latency_seconds": null
+    },
+    "quality": {
+      "completed": 0,
+      "infrastructure_errors": 1,
+      "mean_score": 0.0,
+      "runs": 0,
+      "success_rate": 0.0,
+      "successes": 0
+    }
+  },
+  "case_study": {
+    "candidate": {
+      "candidate_hash": "28a7e8adef89c5fd63424895cc6d7f5c93c3897ce11020f829921bfce6b0e826",
+      "edits": [
+        {
+          "after_estimated_tokens": 1666,
+          "after_sha256": "9d51b8464ef56de63159f3eec4f2e177f4301000ce73efe487139702ad4b1d7b",
+          "before_estimated_tokens": 2185,
+          "before_sha256": "0a1afca69ccca35f281bdb6f1bfebf58e650f42d24b163521a46efec21e5aedc",
+          "operation": "contextlens_conservative",
+          "patch": "--- a/.agents/AGENTS.md\n+++ b/.agents/AGENTS.md\n@@ -8,22 +8,12 @@\n - Read the minimal local context required for the task.\n - Keep changes scoped and avoid unrelated refactors.\n - For bug fixes, first write the smallest failing test that proves the reported\n-  behavior and confirm it fails against the buggy behavior before changing\n-  production code. Add another test only when it exercises a distinct adapter,\n-  contract, or execution path. Extend the closest existing test suite; do not\n-  create a standalone constant test when an existing feature suite owns the\n-  behavior. If the bug depends on a data shape, pause and ask: can\n-  `pnpm run seed` prefill that shape locally? If not, consider extending a\n-  seeder scenario so the bug stays cheaply reproducible\n-  (`packages/shared/scripts/seeder/AGENTS.md`), or note why a seed cannot\n-  express it.\n+\n - Prefill local test data with the seed CLI (`pnpm run seed -- list` shows\n   scenarios; runs print UI deep links) — never with ad-hoc scripts or raw\n   ClickHouse inserts.\n - Every PR auto-builds (via GitHub Actions) a disposable, full-stack preview at\n-  `pr-<N>.preview.langfuse.com` — nothing to spin up. Use the `langfuse-previews`\n-  skill to use or debug one, e.g. read a preview's web/worker error logs with\n-  `kubectl`.\n+\n - For documentation screenshots in Markdown, avoid fixed `height` on `<img>`\n   tags; prefer Markdown images or width-only HTML so previews preserve aspect\n   ratio.\n@@ -33,10 +23,7 @@\n   commands, to avoid zsh glob expansion issues with dynamic Next.js routes.\n - Never invoke Node-installed binaries through `./node_modules/.bin/*`. Always run them through `pnpm`.\n - Never put internal ticket ids (`LFE-1234`, `LFINT-1234`, `CLI-Q226-12`) or\n-  Linear URLs into anything this repo publishes: code comments, docs prose,\n-  commit messages, PR titles and descriptions, or changelog entries. They mean\n-  nothing to OSS readers. Describe the problem on its own terms; a\n-  ticket-prefixed branch name is the one place the identifier belongs.\n+\n - Never commit secrets or credentials. Keep `.env*.example` files in\n   sync with required env vars.\n \n@@ -107,8 +94,7 @@\n   continue to use the seed CLI to create frontend test state rather than\n   ad-hoc inserts.\n - Dev Docker Compose exposes these clients on `${HOST_IP:-127.0.0.1}`:\n-  - Postgres: `PGPASSWORD=\"${POSTGRES_PASSWORD:-postgres}\" psql -h \"${HOST_IP:-127.0.0.1}\" -p \"${POSTGRES_HOST_PORT:-5432}\" -U \"${POSTGRES_USER:-postgres}\" -d \"${POSTGRES_DB:-postgres}\"`\n-  - ClickHouse: `clickhouse client --host \"${HOST_IP:-127.0.0.1}\" --port \"${CLICKHOUSE_NATIVE_PORT:-9000}\" --user \"${CLICKHOUSE_USER:-clickhouse}\" --password \"${CLICKHOUSE_PASSWORD:-clickhouse}\" --database default`\n+\n   - Redis: `REDISCLI_AUTH=\"${REDIS_AUTH:-myredissecret}\" redis-cli -h \"${HOST_IP:-127.0.0.1}\" -p \"${REDIS_HOST_PORT:-6379}\"`\n - If any connection fails, check `docker-compose.dev.yml` for local override\n   variables and confirm the services are running.\n@@ -128,16 +114,6 @@\n - Cross-package refactors: `pnpm run lint`, `pnpm run typecheck`, and targeted\n   tests for impacted packages.\n - Client-bundle soundness: CI scans every prod web build\n-  (`pnpm run scan:client-bundle`) for minifier-dropped bindings and Node-only\n-  globals leaking into browser chunks — the SWC dropped-binding class ships\n-  runtime-only `ReferenceError`s that dev builds and type checks cannot see\n-  (LFE-10645). On failure, `scripts/scan-client-bundle.mjs`'s header explains\n-  the canonical fix.\n-\n-End your turn with evidence, not claims: quote each check's summary line —\n-e.g. `Tasks: 8 successful, 8 total` (turbo lint/typecheck) or\n-`Tests  12 passed (12)` (vitest) — say which checks you skipped and why,\n-never report unverified work as done, and never end with work pending.\n \n ## Generated Files\n \n",
+          "path": ".agents/AGENTS.md"
+        },
+        {
+          "after_estimated_tokens": 2063,
+          "after_sha256": "bc642cfa342f1335dd66df113c76a2008dbabd681f5f914632e55e480ea03227",
+          "before_estimated_tokens": 2128,
+          "before_sha256": "2d292a5e26bbd7653b764b86893a598f066e95cc6c70f973f59ded384d69b084",
+          "operation": "contextlens_conservative",
+          "patch": "--- a/packages/shared/AGENTS.md\n+++ b/packages/shared/AGENTS.md\n@@ -79,9 +79,7 @@\n - For the cross-package system view, read the architecture handbook:\n   [langfuse.com/handbook/product-engineering/architecture](https://langfuse.com/handbook/product-engineering/architecture).\n - Source markdown lives in\n-  `../langfuse-docs/content/handbook/product-engineering/architecture.mdx`\n-  (GitHub mirror:\n-  [architecture.mdx](https://github.com/langfuse/langfuse-docs/blob/4188c1ba453240c90a763a8067ef442d68839323/content/handbook/product-engineering/architecture.mdx#L4)).\n+\n - Consult it when changing shared contracts that affect the web container,\n   worker container, ingestion flow, or storage-layer boundaries.\n \n",
+          "path": "packages/shared/AGENTS.md"
+        }
+      ],
+      "fixed_commit": "0757b12cecd11321132309f5eb319fcab25a01b9",
+      "generated_at": "2026-08-19T01:56:30.402062+00:00",
+      "hidden_grader_sha256": "6d4fbb368adb408f682f776e8a7740f64a06980e74299078836906d1ed513cb6",
+      "no_candidate": false,
+      "patch_path": "langfuse\\candidates\\langfuse-shared-flattened-otel-parameters.diff",
+      "pre_fix_commit": "fb4a4f12bf2d5788d7bcb3e3f9c6515adb5fe691",
+      "repository": "langfuse/langfuse",
+      "strategy": "contextlens_conservative",
+      "study_id": "langfuse",
+      "task_id": "langfuse-shared-flattened-otel-parameters"
+    },
+    "codex_command": null,
+    "fixed_commit": "0757b12cecd11321132309f5eb319fcab25a01b9",
+    "model": "gpt-5.6-terra",
+    "platform": "win32",
+    "pre_fix_commit": "fb4a4f12bf2d5788d7bcb3e3f9c6515adb5fe691",
+    "python": "3.14.5 (tags/v3.14.5:5607950, May 10 2026, 10:43:50) [MSC v.1944 64 bit (AMD64)]",
+    "reasoning_effort": "low",
+    "repository": "langfuse/langfuse",
+    "study_id": "langfuse",
+    "task_id": "langfuse-shared-flattened-otel-parameters"
+  },
+  "catastrophic_regressions": 0,
+  "delta": {
+    "cache_write_input_tokens": {
+      "absolute": null,
+      "fraction": null
+    },
+    "cached_input_tokens": {
+      "absolute": null,
+      "fraction": null
+    },
+    "commands": {
+      "absolute": null,
+      "fraction": null
+    },
+    "estimated_cost_usd": {
+      "absolute": null,
+      "fraction": null
+    },
+    "exploration_breadth": {
+      "absolute": null,
+      "fraction": null
+    },
+    "files_read": {
+      "absolute": null,
+      "fraction": null
+    },
+    "initial_context_tokens": {
+      "absolute": null,
+      "fraction": null
+    },
+    "latency_seconds": {
+      "absolute": null,
+      "fraction": null
+    },
+    "mean_score": {
+      "absolute": 0.0,
+      "fraction": null
+    },
+    "model_latency_seconds": {
+      "absolute": null,
+      "fraction": null
+    },
+    "output_tokens": {
+      "absolute": null,
+      "fraction": null
+    },
+    "provider_input_tokens": {
+      "absolute": null,
+      "fraction": null
+    },
+    "reasoning_tokens": {
+      "absolute": null,
+      "fraction": null
+    },
+    "retries": {
+      "absolute": null,
+      "fraction": null
+    },
+    "searches": {
+      "absolute": null,
+      "fraction": null
+    },
+    "success_rate": {
+      "absolute": 0.0,
+      "fraction": null
+    },
+    "tool_calls": {
+      "absolute": null,
+      "fraction": null
+    },
+    "tool_latency_seconds": {
+      "absolute": null,
+      "fraction": null
+    },
+    "turns": {
+      "absolute": null,
+      "fraction": null
+    },
+    "uncached_input_tokens": {
+      "absolute": null,
+      "fraction": null
+    }
+  },
+  "evidence": "verified/target_model",
+  "experiments": [
+    {
+      "aggregate": {
+        "base": {
+          "causal_runs": 0,
+          "infrastructure_errors": 1,
+          "median_effective_context_tokens": null,
+          "median_latency_seconds": null,
+          "median_output_tokens": null,
+          "median_provider_input_tokens": null,
+          "planned_runs": 1,
+          "successes": 0,
+          "task_failures": 0
+        },
+        "candidate": {
+          "causal_runs": 0,
+          "infrastructure_errors": 1,
+          "median_effective_context_tokens": null,
+          "median_latency_seconds": null,
+          "median_output_tokens": null,
+          "median_provider_input_tokens": null,
+          "planned_runs": 1,
+          "successes": 0,
+          "task_failures": 0
+        }
+      },
+      "execution_status": "infrastructure_invalid",
+      "infrastructure_errors": 2,
+      "manifest": {
+        "agent": {
+          "adapter": "codex-cli-jsonl-v1",
+          "cli_version": "0.146.0",
+          "model": "gpt-5.6-terra",
+          "provider": "openai",
+          "reasoning_effort": null,
+          "tools": [
+            "shell"
+          ]
+        },
+        "base_context": {
+          "content_hash": "1628811f12d4694feceadde15a7ef13d074879e40d5063e8aeb642c007d5e128",
+          "content_hashes": {
+            "repository:a54ff182c7e8acf5": "084dd7e54713f721b8bb3e320e1db7fca98d719776db3e79a4427db7c18819ae",
+            "repository:f6bc48ee10f2a7de": "6009ecf7f55d11fb039f129216f85f49cc10b1241480214d0a6028be5e2a7541"
+          },
+          "effective_tokens": 4313,
+          "provider": "codex",
+          "scope_resolution": [
+            {
+              "path": "AGENTS.md",
+              "scope_accuracy": "approximated",
+              "scope_reason": "AGENTS.md chain assuming the target parent is the run directory",
+              "source_id": "repository:a54ff182c7e8acf5",
+              "targets": [
+                "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+              ]
+            },
+            {
+              "path": "packages/shared/AGENTS.md",
+              "scope_accuracy": "approximated",
+              "scope_reason": "AGENTS.md chain assuming the target parent is the run directory",
+              "source_id": "repository:f6bc48ee10f2a7de",
+              "targets": [
+                "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+              ]
+            }
+          ],
+          "source_ids": [
+            "repository:a54ff182c7e8acf5",
+            "repository:f6bc48ee10f2a7de"
+          ],
+          "sources": [
+            "AGENTS.md",
+            "packages/shared/AGENTS.md"
+          ],
+          "target_paths": [
+            "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+          ],
+          "warnings": [
+            "Codex discovers project AGENTS.md from the run working directory; --target approximates that directory with the target's parent.",
+            "Skills, MCP configuration, and tool schemas remain repository inventory because providers differ on whether and when they enter model-visible context."
+          ]
+        },
+        "candidate_context": {
+          "content_hash": "93f61e7ed9d50587cb234629a47245a9d2bb85eaa5b3741c30488627df976cba",
+          "content_hashes": {
+            "repository:a54ff182c7e8acf5": "60476971696b3ef50fd7fda0e4818da00d70f28b2838e9a4f8ff9e2415c4ec7a",
+            "repository:f6bc48ee10f2a7de": "85b387099f47c2230d381bf61095824b80b6ab5021fe8f4bd941c8f203c56391"
+          },
+          "effective_tokens": 3729,
+          "provider": "codex",
+          "scope_resolution": [
+            {
+              "path": "AGENTS.md",
+              "scope_accuracy": "approximated",
+              "scope_reason": "AGENTS.md chain assuming the target parent is the run directory",
+              "source_id": "repository:a54ff182c7e8acf5",
+              "targets": [
+                "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+              ]
+            },
+            {
+              "path": "packages/shared/AGENTS.md",
+              "scope_accuracy": "approximated",
+              "scope_reason": "AGENTS.md chain assuming the target parent is the run directory",
+              "source_id": "repository:f6bc48ee10f2a7de",
+              "targets": [
+                "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+              ]
+            }
+          ],
+          "source_ids": [
+            "repository:a54ff182c7e8acf5",
+            "repository:f6bc48ee10f2a7de"
+          ],
+          "sources": [
+            "AGENTS.md",
+            "packages/shared/AGENTS.md"
+          ],
+          "target_paths": [
+            "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+          ],
+          "warnings": [
+            "Codex discovers project AGENTS.md from the run working directory; --target approximates that directory with the target's parent.",
+            "Skills, MCP configuration, and tool schemas remain repository inventory because providers differ on whether and when they enter model-visible context."
+          ]
+        },
+        "commit": "fb4a4f12bf2d5788d7bcb3e3f9c6515adb5fe691",
+        "experiment_id": "langfuse/langfuse:langfuse-shared-flattened-otel-parameters",
+        "fixed_dimensions_hash": "50852eb6d1aa3d869be4faede7d56c5274a0108d02075c6792a1241e2ca3a81b",
+        "grader": {
+          "definition": {
+            "checks": [
+              [
+                "C:\\Users\\egruh\\OneDrive\\Desktop\\contextlens\\.venv\\Scripts\\python.exe",
+                "C:\\Users\\egruh\\OneDrive\\Desktop\\contextlens\\case-studies\\grade.py",
+                "--fixture",
+                "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-case-studies\\graders\\langfuse-shared-flattened-otel-parameters\\OtelIngestionProcessor.modelParameters.test.ts",
+                "--destination",
+                "packages/shared/src/server/otel/OtelIngestionProcessor.contextlens.test.ts",
+                "--working-directory",
+                ".",
+                "--",
+                "pnpm",
+                "--filter",
+                "@langfuse/shared",
+                "run",
+                "test",
+                "OtelIngestionProcessor.contextlens.test.ts"
+              ]
+            ],
+            "expected_output": null
+          },
+          "definition_hash": "daf89f558d816a5d05c79c01602878a07b12159fc586a032cabd9881f28ccdf1"
+        },
+        "policy": {
+          "order": [
+            [
+              "base",
+              "candidate"
+            ]
+          ],
+          "order_seed": null,
+          "timeout_seconds": 900.0,
+          "trials": 1
+        },
+        "pricing_snapshot": null,
+        "repository": "langfuse/langfuse",
+        "repository_snapshot": {
+          "digest": "f915999110efe28a5f43957a214ee29192744585d739e9d1fb60219a4946066b",
+          "excluded_paths": [
+            ".agents/AGENTS.md",
+            ".agents/skills/add-model-price/SKILL.md",
+            ".agents/skills/agent-setup-maintenance/SKILL.md",
+            ".agents/skills/analyze-cloud-costs/SKILL.md",
+            ".agents/skills/backend-dev-guidelines/SKILL.md",
+            ".agents/skills/changelog-writing/SKILL.md",
+            ".agents/skills/clickhouse-best-practices/SKILL.md",
+            ".agents/skills/code-review/SKILL.md",
+            ".agents/skills/create-repo-agent/SKILL.md",
+            ".agents/skills/datadog-query-recipes/SKILL.md",
+            ".agents/skills/debug-issue-with-datadog/SKILL.md",
+            ".agents/skills/frontend-browser-review/SKILL.md",
+            ".agents/skills/frontend-large-feature-architecture/SKILL.md",
+            ".agents/skills/git-workflow/SKILL.md",
+            ".agents/skills/housekeeping/SKILL.md",
+            ".agents/skills/incident-alert-tickets/SKILL.md",
+            ".agents/skills/infra-scaling/SKILL.md",
+            ".agents/skills/langfuse-codebase-navigator/SKILL.md",
+            ".agents/skills/langfuse-previews/SKILL.md",
+            ".agents/skills/linear-bug-triage/SKILL.md",
+            ".agents/skills/pnpm-upgrade-package/SKILL.md",
+            ".agents/skills/posthog-instrumentation/SKILL.md",
+            ".agents/skills/react-component-cleaner/SKILL.md",
+            ".agents/skills/react-component-guidelines/SKILL.md",
+            ".agents/skills/refactor-react-effects/SKILL.md",
+            ".agents/skills/security-review/SKILL.md",
+            ".agents/skills/seed-test-data/SKILL.md",
+            ".agents/skills/sentry-instrumentation/SKILL.md",
+            ".agents/skills/skill-creator/SKILL.md",
+            ".agents/skills/storybook/SKILL.md",
+            ".agents/skills/turborepo/SKILL.md",
+            ".agents/skills/weekly-production-review/SKILL.md",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "ee/AGENTS.md",
+            "ee/CLAUDE.md",
+            "packages/shared/AGENTS.md",
+            "packages/shared/CLAUDE.md",
+            "packages/shared/scripts/seeder/AGENTS.md",
+            "packages/shared/scripts/seeder/CLAUDE.md",
+            "web/.agents/skills/vercel-composition-patterns/AGENTS.md",
+            "web/.agents/skills/vercel-composition-patterns/SKILL.md",
+            "web/.agents/skills/vercel-react-best-practices/AGENTS.md",
+            "web/.agents/skills/vercel-react-best-practices/SKILL.md",
+            "web/AGENTS.md",
+            "web/CLAUDE.md",
+            "worker/AGENTS.md",
+            "worker/CLAUDE.md"
+          ],
+          "pinned_identity": "fb4a4f12bf2d5788d7bcb3e3f9c6515adb5fe691:454ca60dfd9ca0930cc5f0ecba2b9ad7b05187554c9574f485163ebda4c8f64d"
+        },
+        "schema_version": "1.0",
+        "task_definition_hash": "40e93f7ee38b3878acf37e92e44d1212562a2915f5bdf4d907908f78dc001113",
+        "task_id": "langfuse-shared-flattened-otel-parameters",
+        "workspace_setup": {
+          "definition": [
+            {
+              "command": [
+                "pnpm",
+                "install",
+                "--frozen-lockfile",
+                "--ignore-scripts"
+              ],
+              "working_directory": "."
+            },
+            {
+              "command": [
+                "pnpm",
+                "--filter",
+                "@langfuse/shared",
+                "run",
+                "db:generate"
+              ],
+              "working_directory": "."
+            }
+          ],
+          "preparer": "command-workspace-preparer-v1"
+        }
+      },
+      "pairs": [
+        {
+          "base_run_id": "c1eab518-233d-4e21-a4c8-f11f671b9080",
+          "candidate_run_id": "bc040f64-67f9-4032-abae-ddbf4a36b5cd",
+          "delta": {
+            "cost_usd": null,
+            "effective_context_tokens": -584,
+            "latency_seconds": 5.729985423386097e-05,
+            "output_tokens": null,
+            "provider_input_tokens": null,
+            "quality": null,
+            "success": 0,
+            "tool_calls": null,
+            "uncached_input_tokens": null
+          },
+          "infrastructure_valid": false,
+          "order": [
+            "base",
+            "candidate"
+          ],
+          "trial": 1
+        }
+      ],
+      "raw_trials": [
+        {
+          "agent_instance_id": "102d1811-c179-4278-812b-1c75f77a610e",
+          "classification": "infrastructure_error",
+          "context_hash": "1628811f12d4694feceadde15a7ef13d074879e40d5063e8aeb642c007d5e128",
+          "error": "workspace setup could not start: [WinError 2] The system cannot find the file specified",
+          "error_stage": "setup",
+          "evaluation": null,
+          "fixed_dimensions_hash": "50852eb6d1aa3d869be4faede7d56c5274a0108d02075c6792a1241e2ca3a81b",
+          "infrastructure_valid": false,
+          "order_position": 1,
+          "replay": {
+            "attempt": 1,
+            "changed_files": [],
+            "context_source_ids": [
+              "repository:a54ff182c7e8acf5",
+              "repository:f6bc48ee10f2a7de"
+            ],
+            "context_tokens": 4313,
+            "duration_seconds": 0.0033891000784933567,
+            "ended_at": "2026-08-19T02:03:41.322060+00:00",
+            "error": "workspace setup could not start: [WinError 2] The system cannot find the file specified",
+            "metadata": {
+              "failure_stage": "setup",
+              "setup": {
+                "commands": [
+                  {
+                    "command": [
+                      "pnpm",
+                      "install",
+                      "--frozen-lockfile",
+                      "--ignore-scripts"
+                    ],
+                    "exit_code": null,
+                    "stderr": "FileNotFoundError: [WinError 2] The system cannot find the file specified",
+                    "stdout": "",
+                    "timed_out": false,
+                    "working_directory": "."
+                  }
+                ],
+                "duration_seconds": 0.0033891000784933567,
+                "error": "workspace setup could not start: [WinError 2] The system cannot find the file specified",
+                "passed": false
+              },
+              "workspace_discarded": true
+            },
+            "outcome": null,
+            "run_id": "c1eab518-233d-4e21-a4c8-f11f671b9080",
+            "started_at": "2026-08-19T02:02:02.639983+00:00",
+            "status": "failed",
+            "task_id": "langfuse-shared-flattened-otel-parameters",
+            "variant_id": "base",
+            "workspace_id": "contextlens-mlu_4a_l",
+            "workspace_path": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-mlu_4a_l\\workspace"
+          },
+          "success": false,
+          "trial": 1,
+          "variant": "base"
+        },
+        {
+          "agent_instance_id": "fa0e5c66-468a-4c17-ac95-799b2ba7e54d",
+          "classification": "infrastructure_error",
+          "context_hash": "93f61e7ed9d50587cb234629a47245a9d2bb85eaa5b3741c30488627df976cba",
+          "error": "workspace setup could not start: [WinError 2] The system cannot find the file specified",
+          "error_stage": "setup",
+          "evaluation": null,
+          "fixed_dimensions_hash": "50852eb6d1aa3d869be4faede7d56c5274a0108d02075c6792a1241e2ca3a81b",
+          "infrastructure_valid": false,
+          "order_position": 2,
+          "replay": {
+            "attempt": 1,
+            "changed_files": [],
+            "context_source_ids": [
+              "repository:a54ff182c7e8acf5",
+              "repository:f6bc48ee10f2a7de"
+            ],
+            "context_tokens": 3729,
+            "duration_seconds": 0.0034463999327272177,
+            "ended_at": "2026-08-19T02:05:46.885604+00:00",
+            "error": "workspace setup could not start: [WinError 2] The system cannot find the file specified",
+            "metadata": {
+              "failure_stage": "setup",
+              "setup": {
+                "commands": [
+                  {
+                    "command": [
+                      "pnpm",
+                      "install",
+                      "--frozen-lockfile",
+                      "--ignore-scripts"
+                    ],
+                    "exit_code": null,
+                    "stderr": "FileNotFoundError: [WinError 2] The system cannot find the file specified",
+                    "stdout": "",
+                    "timed_out": false,
+                    "working_directory": "."
+                  }
+                ],
+                "duration_seconds": 0.0034463999327272177,
+                "error": "workspace setup could not start: [WinError 2] The system cannot find the file specified",
+                "passed": false
+              },
+              "workspace_discarded": true
+            },
+            "outcome": null,
+            "run_id": "bc040f64-67f9-4032-abae-ddbf4a36b5cd",
+            "started_at": "2026-08-19T02:03:41.328703+00:00",
+            "status": "failed",
+            "task_id": "langfuse-shared-flattened-otel-parameters",
+            "variant_id": "candidate",
+            "workspace_id": "contextlens-8ijaglca",
+            "workspace_path": "C:\\Users\\egruh\\AppData\\Local\\Temp\\contextlens-8ijaglca\\workspace"
+          },
+          "success": false,
+          "trial": 1,
+          "variant": "candidate"
+        }
+      ]
+    }
+  ],
+  "infrastructure_invalid_runs": 2,
+  "paired_runs": 0,
+  "policy": {
+    "economics_tolerance": 0.02,
+    "quality_tolerance": 0.0,
+    "require_provider_usage": true,
+    "trials": 1
+  },
+  "rationale": "The planned paired experiment did not complete without infrastructure errors.",
+  "report_type": "context_regression_verification",
+  "schema_version": "1.0",
+  "trials": [
+    {
+      "behavior": {
+        "commands": 0,
+        "exploration_breadth": null,
+        "files_read": null,
+        "retries": 0,
+        "searches": null,
+        "tool_calls": 0,
+        "turns": null
+      },
+      "changed_files": [],
+      "classification": "infrastructure_error",
+      "context": {
+        "content_hash": "1628811f12d4694feceadde15a7ef13d074879e40d5063e8aeb642c007d5e128",
+        "content_hashes": {
+          "repository:a54ff182c7e8acf5": "084dd7e54713f721b8bb3e320e1db7fca98d719776db3e79a4427db7c18819ae",
+          "repository:f6bc48ee10f2a7de": "6009ecf7f55d11fb039f129216f85f49cc10b1241480214d0a6028be5e2a7541"
+        },
+        "effective_initial_tokens": 4313,
+        "provider": "codex",
+        "resolution": [
+          {
+            "path": "AGENTS.md",
+            "scope_accuracy": "approximated",
+            "scope_reason": "AGENTS.md chain assuming the target parent is the run directory",
+            "source_id": "repository:a54ff182c7e8acf5",
+            "targets": [
+              "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+            ]
+          },
+          {
+            "path": "packages/shared/AGENTS.md",
+            "scope_accuracy": "approximated",
+            "scope_reason": "AGENTS.md chain assuming the target parent is the run directory",
+            "source_id": "repository:f6bc48ee10f2a7de",
+            "targets": [
+              "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+            ]
+          }
+        ],
+        "source_paths": [
+          "AGENTS.md",
+          "packages/shared/AGENTS.md"
+        ],
+        "target_paths": [
+          "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+        ],
+        "warnings": [
+          "Codex discovers project AGENTS.md from the run working directory; --target approximates that directory with the target's parent.",
+          "Skills, MCP configuration, and tool schemas remain repository inventory because providers differ on whether and when they enter model-visible context."
+        ]
+      },
+      "economics": {
+        "cache_write_input_tokens": null,
+        "cached_input_tokens": null,
+        "estimated_cost_usd": null,
+        "initial_context_tokens": 4313,
+        "input_tokens": null,
+        "output_tokens": null,
+        "reasoning_tokens": null,
+        "source": "missing_outcome",
+        "uncached_input_tokens": null,
+        "warnings": []
+      },
+      "error": "workspace setup could not start: [WinError 2] The system cannot find the file specified",
+      "identity": {
+        "agent_instance_id": "102d1811-c179-4278-812b-1c75f77a610e",
+        "context_hash": "1628811f12d4694feceadde15a7ef13d074879e40d5063e8aeb642c007d5e128",
+        "fixed_dimensions_hash": "50852eb6d1aa3d869be4faede7d56c5274a0108d02075c6792a1241e2ca3a81b",
+        "run_id": "c1eab518-233d-4e21-a4c8-f11f671b9080",
+        "workspace_id": "contextlens-mlu_4a_l"
+      },
+      "infrastructure_valid": false,
+      "pairing": {
+        "order_position": 1,
+        "trial": 1
+      },
+      "performance": {
+        "latency_seconds": 0.0033891000784933567,
+        "model_latency_seconds": null,
+        "tool_latency_seconds": null
+      },
+      "quality": {
+        "score": 0.0,
+        "success": false
+      },
+      "score": 0.0,
+      "status": "failed",
+      "success": false,
+      "task_dimensions": {
+        "category": "historical_bug_fix",
+        "language": "unspecified",
+        "repository_scope": "langfuse/langfuse",
+        "target_paths": [
+          "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+        ]
+      },
+      "task_id": "langfuse-shared-flattened-otel-parameters",
+      "trial": 1,
+      "variant": "base"
+    },
+    {
+      "behavior": {
+        "commands": 0,
+        "exploration_breadth": null,
+        "files_read": null,
+        "retries": 0,
+        "searches": null,
+        "tool_calls": 0,
+        "turns": null
+      },
+      "changed_files": [],
+      "classification": "infrastructure_error",
+      "context": {
+        "content_hash": "93f61e7ed9d50587cb234629a47245a9d2bb85eaa5b3741c30488627df976cba",
+        "content_hashes": {
+          "repository:a54ff182c7e8acf5": "60476971696b3ef50fd7fda0e4818da00d70f28b2838e9a4f8ff9e2415c4ec7a",
+          "repository:f6bc48ee10f2a7de": "85b387099f47c2230d381bf61095824b80b6ab5021fe8f4bd941c8f203c56391"
+        },
+        "effective_initial_tokens": 3729,
+        "provider": "codex",
+        "resolution": [
+          {
+            "path": "AGENTS.md",
+            "scope_accuracy": "approximated",
+            "scope_reason": "AGENTS.md chain assuming the target parent is the run directory",
+            "source_id": "repository:a54ff182c7e8acf5",
+            "targets": [
+              "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+            ]
+          },
+          {
+            "path": "packages/shared/AGENTS.md",
+            "scope_accuracy": "approximated",
+            "scope_reason": "AGENTS.md chain assuming the target parent is the run directory",
+            "source_id": "repository:f6bc48ee10f2a7de",
+            "targets": [
+              "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+            ]
+          }
+        ],
+        "source_paths": [
+          "AGENTS.md",
+          "packages/shared/AGENTS.md"
+        ],
+        "target_paths": [
+          "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+        ],
+        "warnings": [
+          "Codex discovers project AGENTS.md from the run working directory; --target approximates that directory with the target's parent.",
+          "Skills, MCP configuration, and tool schemas remain repository inventory because providers differ on whether and when they enter model-visible context."
+        ]
+      },
+      "economics": {
+        "cache_write_input_tokens": null,
+        "cached_input_tokens": null,
+        "estimated_cost_usd": null,
+        "initial_context_tokens": 3729,
+        "input_tokens": null,
+        "output_tokens": null,
+        "reasoning_tokens": null,
+        "source": "missing_outcome",
+        "uncached_input_tokens": null,
+        "warnings": []
+      },
+      "error": "workspace setup could not start: [WinError 2] The system cannot find the file specified",
+      "identity": {
+        "agent_instance_id": "fa0e5c66-468a-4c17-ac95-799b2ba7e54d",
+        "context_hash": "93f61e7ed9d50587cb234629a47245a9d2bb85eaa5b3741c30488627df976cba",
+        "fixed_dimensions_hash": "50852eb6d1aa3d869be4faede7d56c5274a0108d02075c6792a1241e2ca3a81b",
+        "run_id": "bc040f64-67f9-4032-abae-ddbf4a36b5cd",
+        "workspace_id": "contextlens-8ijaglca"
+      },
+      "infrastructure_valid": false,
+      "pairing": {
+        "order_position": 2,
+        "trial": 1
+      },
+      "performance": {
+        "latency_seconds": 0.0034463999327272177,
+        "model_latency_seconds": null,
+        "tool_latency_seconds": null
+      },
+      "quality": {
+        "score": 0.0,
+        "success": false
+      },
+      "score": 0.0,
+      "status": "failed",
+      "success": false,
+      "task_dimensions": {
+        "category": "historical_bug_fix",
+        "language": "unspecified",
+        "repository_scope": "langfuse/langfuse",
+        "target_paths": [
+          "packages/shared/src/server/otel/OtelIngestionProcessor.ts"
+        ]
+      },
+      "task_id": "langfuse-shared-flattened-otel-parameters",
+      "trial": 1,
+      "variant": "candidate"
+    }
+  ],
+  "verdict": "INCONCLUSIVE",
+  "warnings": [
+    "2 infrastructure-invalid agent run(s) were retained but excluded from causal aggregates"
+  ]
+}

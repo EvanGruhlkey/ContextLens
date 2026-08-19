@@ -19,8 +19,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from contextlens.experiments import ExperimentEvent
 from contextlens.minimize import build_minimization_candidate
-from contextlens.regression import verify_repository
+from contextlens.regression import (
+    render_verification_markdown,
+    verify_repository,
+)
 from contextlens.repository import scan_repository
 
 HERE = Path(__file__).resolve().parent
@@ -264,6 +268,7 @@ def prepare_task(
     task: Mapping[str, Any],
     *,
     cache: Path,
+    use_locked_candidate: bool = False,
 ) -> dict[str, Any]:
     mirror = ensure_mirror(study, cache)
     fetch_task_commits(mirror, task)
@@ -274,28 +279,64 @@ def prepare_task(
         f"run-{study['id']}",
     )
     grader = extract_hidden_grader(mirror, task, cache)
-    candidate = prepare_candidate(workspace, study, task)
     output_directory = HERE / str(study["id"]) / "candidates"
     output_directory.mkdir(parents=True, exist_ok=True)
     patch_path = output_directory / f"{task['id']}.diff"
     metadata_path = output_directory / f"{task['id']}.json"
-    patch_path.write_text(str(candidate["patch"]), encoding="utf-8", newline="\n")
-    metadata = {key: value for key, value in candidate.items() if key != "patch"}
-    metadata.update(
-        {
-            "repository": study["repository"],
-            "pre_fix_commit": task["pre_fix_commit"],
-            "fixed_commit": task["fixed_commit"],
-            "hidden_grader_sha256": _sha256(grader),
-            "patch_path": str(patch_path.relative_to(HERE)),
-        }
-    )
-    _write_json(metadata_path, metadata)
+    if use_locked_candidate:
+        metadata = _apply_locked_candidate(
+            workspace,
+            patch_path=patch_path,
+            metadata_path=metadata_path,
+        )
+    else:
+        candidate = prepare_candidate(workspace, study, task)
+        patch_path.write_text(
+            str(candidate["patch"]),
+            encoding="utf-8",
+            newline="\n",
+        )
+        metadata = {key: value for key, value in candidate.items() if key != "patch"}
+        metadata.update(
+            {
+                "repository": study["repository"],
+                "pre_fix_commit": task["pre_fix_commit"],
+                "fixed_commit": task["fixed_commit"],
+                "hidden_grader_sha256": _sha256(grader),
+                "patch_path": str(patch_path.relative_to(HERE)),
+            }
+        )
+        _write_json(metadata_path, metadata)
     return {
         "workspace": str(workspace),
         "grader": str(grader),
         "candidate": metadata,
     }
+
+
+def _apply_locked_candidate(
+    workspace: Path,
+    *,
+    patch_path: Path,
+    metadata_path: Path,
+) -> dict[str, Any]:
+    if not patch_path.is_file() or not metadata_path.is_file():
+        raise FileNotFoundError(
+            "locked candidate artifacts are missing; run the prepare command first"
+        )
+    patch = patch_path.read_text(encoding="utf-8")
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if not isinstance(metadata, dict):
+        raise ValueError("locked candidate metadata must be a JSON object")
+    digest = hashlib.sha256(patch.encode("utf-8")).hexdigest()
+    if metadata.get("candidate_hash") != digest:
+        raise ValueError("locked candidate patch hash does not match metadata")
+    _run(
+        ("git", "apply", "--check", "--whitespace=nowarn", str(patch_path)),
+        cwd=workspace,
+    )
+    _run(("git", "apply", "--whitespace=nowarn", str(patch_path)), cwd=workspace)
+    return metadata
 
 
 def validate_task(
@@ -386,22 +427,37 @@ def run_agent_trials(
     cache: Path,
     trials: int,
     model: str,
-    codex_command: str,
+    codex_command: str | None,
     install: bool,
 ) -> dict[str, Any]:
     if trials not in {1, 3}:
         raise ValueError(
             "external studies permit only one smoke trial or three full trials"
         )
-    prepared = prepare_task(study, task, cache=cache)
+    _require_validated_task(study, task)
+    try:
+        prepared = prepare_task(
+            study,
+            task,
+            cache=cache,
+            use_locked_candidate=True,
+        )
+    except Exception as exception:
+        return _persist_pre_agent_failure(
+            study,
+            task,
+            trials=trials,
+            stage="repository_preparation",
+            exception=exception,
+        )
     workspace = Path(str(prepared["workspace"]))
     grader = Path(str(prepared["grader"]))
-    if install:
-        _prepare_case_environment(str(study["id"]), workspace)
-        setup = _setup_commands(str(study["id"]), str(task["id"]))
-        setup_result = _run_setup(setup, workspace)
-        if setup_result["exit_code"] != 0:
-            raise RuntimeError(f"dependency setup failed: {setup_result['stderr']}")
+    environment_metadata = (
+        _prepare_case_environment(str(study["id"]), workspace) if install else None
+    )
+    setup_commands = (
+        _setup_commands(str(study["id"]), str(task["id"])) if install else ()
+    )
     grader_value = _object(task.get("hidden_grader"), "hidden_grader")
     grade_command = [
         sys.executable,
@@ -419,6 +475,16 @@ def run_agent_trials(
             for item in _sequence(grader_value.get("command"), "grader command")
         ),
     ]
+    agent_config: dict[str, Any] = {
+        "type": "codex",
+        "provider": "openai",
+        "model": model,
+        "reasoning_effort": "low",
+        "sandbox": "workspace-write",
+        "tools": ["shell"],
+    }
+    if codex_command is not None:
+        agent_config["command"] = [codex_command]
     config = {
         "trials": trials,
         "max_runs": trials * 2,
@@ -426,36 +492,43 @@ def run_agent_trials(
         "quality_tolerance": 0,
         "economics_tolerance": 0.02,
         "require_provider_usage": True,
-        "agent": {
-            "type": "codex",
-            "command": [codex_command],
-            "provider": "openai",
-            "model": model,
-            "reasoning_effort": "low",
-            "sandbox": "workspace-write",
-            "tools": ["shell"],
-        },
+        "agent": agent_config,
         "tasks": [
             {
                 "id": task["id"],
                 "instruction": task["task_prompt"],
                 "workspace": ".",
                 "checks": [grade_command],
+                "setup": [
+                    {
+                        "command": list(command),
+                        "working_directory": relative.as_posix(),
+                    }
+                    for command, relative in setup_commands
+                ],
                 "target_paths": task["target_paths"],
                 "context_provider": study["context_provider"],
                 "timeout_seconds": 900,
                 "category": "historical_bug_fix",
-                "repository_scope": study["id"],
+                "repository_scope": study["repository"],
+                "snapshot_identity": (
+                    f"{task['pre_fix_commit']}:{environment_metadata['sha256']}"
+                    if environment_metadata is not None
+                    else str(task["pre_fix_commit"])
+                ),
             }
         ],
     }
-    config_path = workspace / ".contextlens-case-study.json"
-    _write_json(config_path, config)
-    report = verify_repository(
-        config_path,
-        root=workspace,
-        base_ref=str(task["pre_fix_commit"]),
-    ).to_dict()
+    with tempfile.TemporaryDirectory(prefix="contextlens-study-config-") as directory:
+        config_path = Path(directory) / "evals.json"
+        _write_json(config_path, config)
+        verification = verify_repository(
+            config_path,
+            root=workspace,
+            base_ref=str(task["pre_fix_commit"]),
+            progress=_print_experiment_event,
+        )
+    report = verification.to_dict()
     report["case_study"] = {
         "study_id": study["id"],
         "task_id": task["id"],
@@ -469,14 +542,114 @@ def run_agent_trials(
         "platform": sys.platform,
         "python": sys.version,
     }
-    output = (
+    output = _case_result_path(study, task, trials)
+    _write_json(output, report)
+    output.with_suffix(".md").write_text(
+        render_verification_markdown(verification),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return report
+
+
+def _case_result_path(
+    study: Mapping[str, Any],
+    task: Mapping[str, Any],
+    trials: int,
+) -> Path:
+    return (
         HERE
         / str(study["id"])
         / "results"
         / (f"{task['id']}-{'smoke' if trials == 1 else 'full'}.json")
     )
+
+
+def _persist_pre_agent_failure(
+    study: Mapping[str, Any],
+    task: Mapping[str, Any],
+    *,
+    trials: int,
+    stage: str,
+    exception: Exception,
+) -> dict[str, Any]:
+    report = {
+        "schema_version": "1.0",
+        "report_type": "context_regression_verification",
+        "verdict": "INCONCLUSIVE",
+        "rationale": f"Infrastructure failed during {stage} before agent execution.",
+        "agent_executions": 0,
+        "infrastructure_errors": [
+            {
+                "stage": stage,
+                "classification": "infrastructure_error",
+                "error": f"{type(exception).__name__}: {exception}",
+            }
+        ],
+        "case_study": {
+            "study_id": study["id"],
+            "task_id": task["id"],
+            "repository": study["repository"],
+            "pre_fix_commit": task["pre_fix_commit"],
+            "fixed_commit": task["fixed_commit"],
+        },
+    }
+    output = _case_result_path(study, task, trials)
     _write_json(output, report)
+    output.with_suffix(".md").write_text(
+        (
+            f"# {study['id']} — {task['id']}\n\n"
+            f"Infrastructure failed during `{stage}` before agent execution.\n"
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
     return report
+
+
+def _require_validated_task(
+    study: Mapping[str, Any],
+    task: Mapping[str, Any],
+) -> None:
+    path = HERE / str(study["id"]) / "results" / f"{task['id']}-validation.json"
+    if not path.is_file():
+        raise RuntimeError(
+            "benchmark grader has not been validated; run "
+            f"python case-studies/run.py validate {study['id']} {task['id']} "
+            "--install"
+        )
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict) or value.get("valid") is not True:
+        status = (
+            value.get("status", "invalid") if isinstance(value, dict) else "invalid"
+        )
+        raise RuntimeError(
+            f"benchmark grader is not valid ({status}); refusing agent execution"
+        )
+
+
+def _print_experiment_event(event: ExperimentEvent) -> None:
+    label = event.variant.upper()
+    if event.phase == "starting":
+        if event.order_position == 1:
+            print(f"\nTrial {event.trial}")
+        print(f"  {label:<10} starting...", flush=True)
+        return
+    result = event.result
+    assert result is not None
+    outcome = result.outcome
+    input_tokens = outcome.input_tokens if outcome is not None else None
+    usage = (
+        f"{input_tokens:,} input tokens"
+        if input_tokens is not None
+        else "input unavailable"
+    )
+    classification = event.classification.value if event.classification else "unknown"
+    print(
+        f"  {label:<10} {classification.upper():<20} "
+        f"{result.duration_seconds:.1f}s  {usage}",
+        flush=True,
+    )
 
 
 def _run_hidden_grader(
@@ -603,7 +776,17 @@ def _run(
     *,
     cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(command, cwd=cwd, check=True, text=True)
+    environment = os.environ.copy()
+    if command and command[0] == "git":
+        environment["GIT_TERMINAL_PROMPT"] = "0"
+    return subprocess.run(
+        command,
+        cwd=cwd,
+        env=environment,
+        check=True,
+        text=True,
+        timeout=600,
+    )
 
 
 def _cleanup_worktree(mirror: Path, workspace: Path) -> str | None:
@@ -749,7 +932,13 @@ def main() -> int:
         if name == "run":
             command.add_argument("--trials", type=int, choices=(1, 3), default=1)
             command.add_argument("--model", default="gpt-5.6-terra")
-            command.add_argument("--codex-command", default="codex")
+            command.add_argument(
+                "--codex-command",
+                help=(
+                    "Codex executable path; omit to use the pinned npx-based "
+                    "adapter command"
+                ),
+            )
     args = parser.parse_args()
     if args.command == "list":
         for study in load_agent_studies():
