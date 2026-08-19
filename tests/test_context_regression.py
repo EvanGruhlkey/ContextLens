@@ -90,14 +90,15 @@ class _MissingUsageAdapter:
 
 class _NondeterministicCandidateAdapter:
     adapter_id = "nondeterministic-candidate-fixture"
+    constructions = 0
 
     def __init__(self) -> None:
-        self.calls = 0
+        type(self).constructions += 1
+        self.instance_number = type(self).constructions
 
     def run(self, request: ReplayRequest) -> AgentOutcome:
-        self.calls += 1
         is_candidate = "candidate" in {item.source_id for item in request.context}
-        output = "wrong" if is_candidate and self.calls == 2 else "ok"
+        output = "wrong" if is_candidate and self.instance_number == 3 else "ok"
         return AgentOutcome(output_text=output, input_tokens=100, output_tokens=5)
 
 
@@ -283,6 +284,7 @@ def test_required_missing_provider_usage_is_inconclusive(tmp_path: Path) -> None
 
 
 def test_nondeterministic_candidate_failure_is_never_dropped(tmp_path: Path) -> None:
+    _NondeterministicCandidateAdapter.constructions = 0
     report = run_context_verification(
         base_context=(_source("base", 100),),
         candidate_context=(_source("candidate", 50),),

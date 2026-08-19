@@ -181,6 +181,19 @@ def prepare_candidate(
 
 def ensure_mirror(study: Mapping[str, Any], cache: Path) -> Path:
     mirror = cache / "mirrors" / f"{study['id']}.git"
+    if mirror.exists():
+        probe = subprocess.run(
+            ("git", "--git-dir", str(mirror), "rev-parse", "--is-bare-repository"),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if probe.returncode != 0 or probe.stdout.strip() != "true":
+            quarantined = mirror.with_name(
+                f"{mirror.name}.invalid-{uuid.uuid4().hex[:8]}"
+            )
+            mirror.replace(quarantined)
     if not mirror.exists():
         mirror.parent.mkdir(parents=True, exist_ok=True)
         _run(
@@ -480,7 +493,10 @@ def run_agent_trials(
         "provider": "openai",
         "model": model,
         "reasoning_effort": "low",
-        "sandbox": "workspace-write",
+        # The Windows elevated workspace sandbox creates deny-ACL cache entries
+        # that the host cannot remove after a run. The repository is already a
+        # disposable isolated copy, so avoid that redundant layer on Windows.
+        "sandbox": "danger-full-access" if os.name == "nt" else "workspace-write",
         "tools": ["shell"],
     }
     if codex_command is not None:
