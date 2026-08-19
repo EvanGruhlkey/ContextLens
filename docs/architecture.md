@@ -47,9 +47,17 @@ provider resolvers label scope semantics as documented or approximated.
 available adapters for `contextlens init`. It never executes project code while
 detecting configuration and emits explicit TODOs when evidence is insufficient.
 
-`regression.py` wraps the replay engine around two first-class context versions.
-It alternates trial order, keeps complete per-run evidence, aggregates matched
-runs, and applies fail-closed quality/economics verdicts.
+`experiments/paired_runner.py` owns the shared `PairedAgentExperiment` and
+`ContextExperimentRunner` execution primitive. It creates fresh isolated
+workers, alternates trial order, preserves explicit pairing, classifies task
+failures separately from infrastructure errors, and emits a reproducible
+manifest plus raw evidence.
+
+`regression.py` resolves task-effective base and candidate context, invokes the
+shared paired runner, normalizes the raw trials, excludes infrastructure-invalid
+runs from causal aggregates, and applies fail-closed quality/economics verdicts.
+Verified minimization and the historical case-study harness reach agents
+through this same path.
 
 `telemetry.py` normalizes common OpenAI-style, Anthropic-style, and generic
 usage objects. Cached, uncached, cache-write, visible output, and reasoning
@@ -159,6 +167,12 @@ commands, and model output.
 - Reports exclude raw context by default.
 - Subprocess environment variables use an allowlist plus explicit secrets.
 - Directory-copy workers isolate filesystem mutations only.
+- Experimental snapshots omit discovered native context files; the selected
+  effective context is supplied directly by the runner.
+- Codex workers are new ephemeral processes with user config and native rule
+  loading disabled.
+- Hidden study graders and their configuration remain outside the agent-visible
+  snapshot and are injected only after the coding agent exits.
 - Strong OS/network/credential isolation requires a container or equivalent
   adapter supplied by the deployment environment.
 

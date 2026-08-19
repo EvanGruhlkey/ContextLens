@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import statistics
 import subprocess
 import time
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol
@@ -16,17 +17,23 @@ from contextlens.evaluators import CodingTaskEvaluator, ExactMatchEvaluator
 from contextlens.experiments import (
     AgentSettings,
     CodexCliAgentAdapter,
+    CommandWorkspacePreparer,
     CommandWorkspaceVerifier,
-    ContextVariant,
+    ContextExperimentRunner,
     DirectorySnapshot,
     Evaluation,
+    ExperimentContext,
+    ExperimentEvent,
+    PairedAgentExperiment,
+    PairedAgentExperimentRun,
     ReplayResult,
     ReplayStatus,
     ReplayTask,
-    ReplayWorker,
     SubprocessAgentAdapter,
+    WorkspaceSetupCommand,
     WorkspaceVerification,
 )
+from contextlens.experiments.paired_runner import TrialClassification
 from contextlens.repository import (
     CONTEXT_PROVIDERS,
     EffectiveContext,
@@ -67,11 +74,13 @@ class VerificationTask:
     instruction: str
     workspace: Path
     checks: tuple[tuple[str, ...], ...] = ()
+    setup: tuple[WorkspaceSetupCommand, ...] = ()
     expected_output: str | None = None
     allowed_files: tuple[str, ...] = ()
     category: str = "unspecified"
     language: str = "unspecified"
     repository_scope: str = "."
+    snapshot_identity: str | None = None
     target_paths: tuple[str, ...] = ()
     context_provider: str = "portable"
     timeout_seconds: float = 300.0
@@ -181,6 +190,15 @@ class TrialMetrics:
     context_source_paths: tuple[str, ...] = ()
     context_resolution: tuple[ContextSourceResolution, ...] = ()
     context_warnings: tuple[str, ...] = ()
+    context_content_hashes: tuple[tuple[str, str], ...] = ()
+    run_id: str | None = None
+    workspace_id: str | None = None
+    agent_instance_id: str | None = None
+    fixed_dimensions_hash: str | None = None
+    context_hash: str | None = None
+    order_position: int | None = None
+    classification: str = TrialClassification.SUCCESS.value
+    infrastructure_valid: bool = True
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -194,7 +212,20 @@ class TrialMetrics:
             },
             "trial": self.trial,
             "variant": self.variant,
+            "pairing": {
+                "trial": self.trial,
+                "order_position": self.order_position,
+            },
+            "identity": {
+                "run_id": self.run_id,
+                "workspace_id": self.workspace_id,
+                "agent_instance_id": self.agent_instance_id,
+                "fixed_dimensions_hash": self.fixed_dimensions_hash,
+                "context_hash": self.context_hash,
+            },
             "status": self.status,
+            "classification": self.classification,
+            "infrastructure_valid": self.infrastructure_valid,
             "score": self.score,
             "success": self.success,
             "quality": {
@@ -211,6 +242,8 @@ class TrialMetrics:
                 "provider": self.context_provider,
                 "source_paths": list(self.context_source_paths),
                 "effective_initial_tokens": self.initial_context_tokens,
+                "content_hash": self.context_hash,
+                "content_hashes": dict(self.context_content_hashes),
                 "resolution": [item.to_dict() for item in self.context_resolution],
                 "warnings": list(self.context_warnings),
             },
@@ -260,6 +293,7 @@ class AggregateMetrics:
     commands: float | None
     exploration_breadth: float | None
     retries: float | None
+    infrastructure_errors: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -269,6 +303,7 @@ class AggregateMetrics:
                 "successes": self.successes,
                 "success_rate": self.success_rate,
                 "mean_score": self.mean_score,
+                "infrastructure_errors": self.infrastructure_errors,
             },
             "economics": {
                 "initial_context_tokens": self.initial_context_tokens,
@@ -313,6 +348,8 @@ class VerificationReport:
     warnings: tuple[str, ...]
     catastrophic_regressions: int
     paired_runs: int
+    infrastructure_invalid_runs: int = 0
+    experiments: tuple[PairedAgentExperimentRun, ...] = ()
 
     @property
     def exit_code(self) -> int:
@@ -343,10 +380,12 @@ class VerificationReport:
             "rationale": self.rationale,
             "catastrophic_regressions": self.catastrophic_regressions,
             "paired_runs": self.paired_runs,
+            "infrastructure_invalid_runs": self.infrastructure_invalid_runs,
             "base": self.base.to_dict(),
             "candidate": self.candidate.to_dict(),
             "delta": _aggregate_delta(self.base, self.candidate),
             "trials": [trial.to_dict() for trial in self.trials],
+            "experiments": [experiment.to_dict() for experiment in self.experiments],
             "warnings": list(self.warnings),
         }
 
@@ -432,6 +471,7 @@ def verify_repository(
     *,
     root: Path = Path("."),
     base_ref: str | None = None,
+    progress: Callable[[ExperimentEvent], None] | None = None,
 ) -> VerificationReport:
     """Load a small checked-in task suite and compare Git base to worktree."""
 
@@ -485,6 +525,15 @@ def verify_repository(
         base_scan=context_diff.base,
         candidate_scan=context_diff.candidate,
     )
+    native_context_paths = tuple(
+        sorted(
+            {
+                source.path
+                for scan in (context_diff.base, context_diff.candidate)
+                for source in scan.sources
+            }
+        )
+    )
     return run_context_verification(
         base_context=context_diff.base.to_context_sources(),
         candidate_context=context_diff.candidate.to_context_sources(),
@@ -495,6 +544,17 @@ def verify_repository(
         policy=policy,
         base_ref=context_diff.base_ref,
         pricing=pricing,
+        hidden_workspace_paths={
+            task.task_id: _workspace_hidden_paths(
+                root=resolved_root,
+                workspace=task.workspace,
+                repository_paths=native_context_paths,
+                extra_paths=(resolved_config,),
+            )
+            for task in tasks
+        },
+        native_context_paths=native_context_paths,
+        progress=progress,
     )
 
 
@@ -552,6 +612,20 @@ def verify_context_candidate(
         if base_scan is not None and candidate_scan is not None
         else None
     )
+    native_context_paths = tuple(
+        sorted(
+            {
+                source.path
+                for scan in (base_scan, candidate_scan)
+                if scan is not None
+                for source in scan.sources
+            }
+            or {
+                _context_source_path(source)
+                for source in (*base_context, *candidate_context)
+            }
+        )
+    )
     return run_context_verification(
         base_context=base_context,
         candidate_context=candidate_context,
@@ -562,6 +636,16 @@ def verify_context_candidate(
         policy=policy,
         base_ref=base_label,
         pricing=pricing,
+        hidden_workspace_paths={
+            task.task_id: _workspace_hidden_paths(
+                root=resolved_root,
+                workspace=task.workspace,
+                repository_paths=native_context_paths,
+                extra_paths=(config_path.resolve(),),
+            )
+            for task in tasks
+        },
+        native_context_paths=native_context_paths,
     )
 
 
@@ -576,6 +660,9 @@ def run_context_verification(
     policy: VerificationPolicy | None = None,
     base_ref: str = "base",
     pricing: PricingSnapshot | None = None,
+    native_context_paths: tuple[str, ...] = (),
+    hidden_workspace_paths: Mapping[str, tuple[str, ...]] | None = None,
+    progress: Callable[[ExperimentEvent], None] | None = None,
 ) -> VerificationReport:
     """Run fresh matched trials while changing only supplied context."""
 
@@ -583,6 +670,7 @@ def run_context_verification(
         raise ValueError("verification requires at least one task")
     selected_policy = policy or VerificationPolicy()
     trial_metrics: list[TrialMetrics] = []
+    experiment_runs: list[PairedAgentExperimentRun] = []
     for task in tasks:
         pair = (
             task_contexts[task.task_id]
@@ -602,57 +690,74 @@ def run_context_verification(
                 "repository_scope": task.repository_scope,
                 "target_paths": list(task.target_paths),
                 "context_provider": task.context_provider,
+                "setup": [item.to_dict() for item in task.setup],
             },
         )
         verifier = _verifier(task)
-        workers = {
-            "base": ReplayWorker(
-                adapter=agent_factory(),
-                snapshot=DirectorySnapshot(task.workspace),
-                task=replay_task,
-                context=pair.base.sources,
-                settings=settings,
-                timeout_seconds=task.timeout_seconds,
-                verifier=verifier,
-            ),
-            "candidate": ReplayWorker(
-                adapter=agent_factory(),
-                snapshot=DirectorySnapshot(task.workspace),
-                task=replay_task,
-                context=pair.candidate.sources,
-                settings=settings,
-                timeout_seconds=task.timeout_seconds,
-                verifier=verifier,
-            ),
-        }
+        preparer = _preparer(task)
         evaluator = (
             ExactMatchEvaluator({task.task_id: task.expected_output})
             if task.expected_output is not None
             else CodingTaskEvaluator(objective="quality")
         )
-        for trial in range(1, selected_policy.trials + 1):
-            order = ("base", "candidate") if trial % 2 else ("candidate", "base")
-            for variant in order:
-                result = workers[variant].run(
-                    ContextVariant(
-                        variant,
-                        description=f"{variant} repository context",
-                    )
+        experiment = PairedAgentExperiment(
+            experiment_id=f"{task.repository_scope}:{task.task_id}",
+            repository=task.repository_scope,
+            commit=base_ref,
+            snapshot=DirectorySnapshot(
+                task.workspace,
+                excluded_paths=(
+                    hidden_workspace_paths.get(task.task_id, native_context_paths)
+                    if hidden_workspace_paths is not None
+                    else native_context_paths
+                ),
+                identity=task.snapshot_identity,
+            ),
+            task=replay_task,
+            base_context=_experiment_context(pair.base),
+            candidate_context=_experiment_context(pair.candidate),
+            agent_factory=agent_factory,
+            settings=settings,
+            evaluator=evaluator,
+            trials=selected_policy.trials,
+            timeout_seconds=task.timeout_seconds,
+            verifier=verifier,
+            preparer=preparer,
+            grader_definition={
+                "checks": [list(command) for command in task.checks],
+                "expected_output": task.expected_output,
+            },
+            pricing_snapshot=asdict(pricing) if pricing is not None else None,
+        )
+        experiment_run = ContextExperimentRunner(
+            experiment,
+            on_event=progress,
+        ).run()
+        experiment_runs.append(experiment_run)
+        for invocation in experiment_run.invocations:
+            resolved_context = (
+                pair.base if invocation.variant == "base" else pair.candidate
+            )
+            trial_metrics.append(
+                _trial_metrics(
+                    invocation.result,
+                    invocation.evaluation,
+                    trial=invocation.trial,
+                    variant=invocation.variant,
+                    pricing=pricing,
+                    task=task,
+                    resolved_context=resolved_context,
+                    classification=invocation.classification,
+                    order_position=invocation.order_position,
+                    agent_instance_id=invocation.agent_instance_id,
+                    fixed_dimensions_hash=invocation.fixed_dimensions_hash,
+                    context_hash=invocation.context_hash,
+                    error=invocation.error,
                 )
-                evaluation = evaluator.evaluate(replay_task, result)
-                trial_metrics.append(
-                    _trial_metrics(
-                        result,
-                        evaluation,
-                        trial=trial,
-                        variant=variant,
-                        pricing=pricing,
-                        task=task,
-                        resolved_context=(
-                            pair.base if variant == "base" else pair.candidate
-                        ),
-                    )
-                )
+            )
+    infrastructure_invalid_runs = sum(
+        not item.infrastructure_valid for item in trial_metrics
+    )
     base = _aggregate(tuple(item for item in trial_metrics if item.variant == "base"))
     candidate = _aggregate(
         tuple(item for item in trial_metrics if item.variant == "candidate")
@@ -668,6 +773,7 @@ def run_context_verification(
         paired_runs=len(paired),
         catastrophic_regressions=catastrophic,
         policy=selected_policy,
+        infrastructure_invalid_runs=infrastructure_invalid_runs,
     )
     return VerificationReport(
         base_ref=base_ref,
@@ -682,6 +788,8 @@ def run_context_verification(
         warnings=warnings,
         catastrophic_regressions=catastrophic,
         paired_runs=len(paired),
+        infrastructure_invalid_runs=infrastructure_invalid_runs,
+        experiments=tuple(experiment_runs),
     )
 
 
@@ -888,13 +996,19 @@ def render_verification_markdown(report: VerificationReport) -> str:
 
 def _trial_metrics(
     result: ReplayResult,
-    evaluation: Evaluation,
+    evaluation: Evaluation | None,
     *,
     trial: int,
     variant: str,
     pricing: PricingSnapshot | None,
     task: VerificationTask,
     resolved_context: ResolvedTaskContext,
+    classification: TrialClassification = TrialClassification.SUCCESS,
+    order_position: int | None = None,
+    agent_instance_id: str | None = None,
+    fixed_dimensions_hash: str | None = None,
+    context_hash: str | None = None,
+    error: str | None = None,
 ) -> TrialMetrics:
     outcome = result.outcome
     usage = usage_from_outcome(outcome)
@@ -907,12 +1021,21 @@ def _trial_metrics(
         else None
     )
     metadata = dict(outcome.metadata) if outcome is not None else {}
-    success = bool(evaluation.scores.get("success", evaluation.success or False))
-    score = float(
-        evaluation.scores.get(
-            "quality",
-            evaluation.scores.get("exact_match", evaluation.scores.get("success", 0.0)),
+    success = bool(
+        evaluation is not None
+        and evaluation.scores.get("success", evaluation.success or False)
+    )
+    score = (
+        float(
+            evaluation.scores.get(
+                "quality",
+                evaluation.scores.get(
+                    "exact_match", evaluation.scores.get("success", 0.0)
+                ),
+            )
         )
+        if evaluation is not None
+        else 0.0
     )
     files_read = _count(metadata.get("files_read"))
     searches = _count(metadata.get("searches", metadata.get("search_queries")))
@@ -957,50 +1080,69 @@ def _trial_metrics(
         context_source_paths=tuple(item.path for item in supplied_resolution),
         context_resolution=supplied_resolution,
         context_warnings=resolved_context.warnings,
-        error=result.error,
+        context_content_hashes=tuple(
+            (source.source_id, _context_content_hash(source))
+            for source in resolved_context.sources
+            if source.source_id in supplied_source_ids
+        ),
+        run_id=result.run_id,
+        workspace_id=result.workspace_id,
+        agent_instance_id=agent_instance_id,
+        fixed_dimensions_hash=fixed_dimensions_hash,
+        context_hash=context_hash,
+        order_position=order_position,
+        classification=classification.value,
+        infrastructure_valid=(
+            classification is not TrialClassification.INFRASTRUCTURE_ERROR
+        ),
+        error=error or result.error,
     )
 
 
 def _aggregate(items: tuple[TrialMetrics, ...]) -> AggregateMetrics:
     if not items:
         raise ValueError("cannot aggregate an empty set of verification trials")
+    valid = tuple(item for item in items if item.infrastructure_valid)
     return AggregateMetrics(
-        runs=len(items),
+        runs=len(valid),
         completed=sum(
             item.status in {ReplayStatus.COMPLETED.value, ReplayStatus.CACHED.value}
-            for item in items
+            for item in valid
         ),
-        successes=sum(item.success for item in items),
-        success_rate=statistics.fmean(item.success for item in items),
-        mean_score=statistics.fmean(item.score for item in items),
-        initial_context_tokens=_median(item.initial_context_tokens for item in items),
+        successes=sum(item.success for item in valid),
+        success_rate=(
+            statistics.fmean(item.success for item in valid) if valid else 0.0
+        ),
+        mean_score=(statistics.fmean(item.score for item in valid) if valid else 0.0),
+        initial_context_tokens=_median(item.initial_context_tokens for item in valid),
         provider_input_tokens=_median(
-            item.provider_usage.input_tokens for item in items
+            item.provider_usage.input_tokens for item in valid
         ),
         cached_input_tokens=_median(
-            item.provider_usage.cached_input_tokens for item in items
+            item.provider_usage.cached_input_tokens for item in valid
         ),
         uncached_input_tokens=_median(
-            item.provider_usage.uncached_input_tokens for item in items
+            item.provider_usage.uncached_input_tokens for item in valid
         ),
         cache_write_input_tokens=_median(
-            item.provider_usage.cache_write_input_tokens for item in items
+            item.provider_usage.cache_write_input_tokens for item in valid
         ),
-        output_tokens=_median(item.provider_usage.output_tokens for item in items),
+        output_tokens=_median(item.provider_usage.output_tokens for item in valid),
         reasoning_tokens=_median(
-            item.provider_usage.reasoning_tokens for item in items
+            item.provider_usage.reasoning_tokens for item in valid
         ),
-        estimated_cost_usd=_median(item.estimated_cost_usd for item in items),
-        latency_seconds=_median(item.latency_seconds for item in items),
-        model_latency_seconds=_median(item.model_latency_seconds for item in items),
-        tool_latency_seconds=_median(item.tool_latency_seconds for item in items),
-        turns=_median(item.turns for item in items),
-        tool_calls=_median(item.tool_calls for item in items),
-        files_read=_median(item.files_read for item in items),
-        searches=_median(item.searches for item in items),
-        commands=_median(item.commands for item in items),
-        exploration_breadth=_median(item.exploration_breadth for item in items),
-        retries=_median(item.retries for item in items),
+        estimated_cost_usd=_median(item.estimated_cost_usd for item in valid),
+        latency_seconds=_median(item.latency_seconds for item in valid),
+        model_latency_seconds=_median(item.model_latency_seconds for item in valid),
+        tool_latency_seconds=_median(item.tool_latency_seconds for item in valid),
+        turns=_median(item.turns for item in valid),
+        tool_calls=_median(item.tool_calls for item in valid),
+        files_read=_median(item.files_read for item in valid),
+        searches=_median(item.searches for item in valid),
+        commands=_median(item.commands for item in valid),
+        exploration_breadth=_median(item.exploration_breadth for item in valid),
+        retries=_median(item.retries for item in valid),
+        infrastructure_errors=len(items) - len(valid),
     )
 
 
@@ -1008,12 +1150,14 @@ def _paired(
     items: Sequence[TrialMetrics],
 ) -> tuple[tuple[TrialMetrics, TrialMetrics], ...]:
     base = {
-        (item.task_id, item.trial): item for item in items if item.variant == "base"
+        (item.task_id, item.trial): item
+        for item in items
+        if item.variant == "base" and item.infrastructure_valid
     }
     candidate = {
         (item.task_id, item.trial): item
         for item in items
-        if item.variant == "candidate"
+        if item.variant == "candidate" and item.infrastructure_valid
     }
     return tuple(
         (base[key], candidate[key]) for key in sorted(base.keys() & candidate.keys())
@@ -1027,8 +1171,22 @@ def _verdict(
     paired_runs: int,
     catastrophic_regressions: int,
     policy: VerificationPolicy,
+    infrastructure_invalid_runs: int = 0,
 ) -> tuple[RegressionVerdict, str, tuple[str, ...]]:
     warnings: list[str] = []
+    if infrastructure_invalid_runs:
+        warnings.append(
+            f"{infrastructure_invalid_runs} infrastructure-invalid agent run(s) "
+            "were retained but excluded from causal aggregates"
+        )
+        return (
+            RegressionVerdict.INCONCLUSIVE,
+            (
+                "The planned paired experiment did not complete without "
+                "infrastructure errors."
+            ),
+            tuple(warnings),
+        )
     if paired_runs == 0:
         return (
             RegressionVerdict.INCONCLUSIVE,
@@ -1278,6 +1436,19 @@ def _context_from_effective(effective: EffectiveContext) -> ResolvedTaskContext:
     )
 
 
+def _experiment_context(context: ResolvedTaskContext) -> ExperimentContext:
+    """Translate scope-resolution evidence into the shared runner contract."""
+
+    return ExperimentContext(
+        sources=context.sources,
+        provider=context.provider,
+        target_paths=context.target_paths,
+        source_paths=tuple(item.path for item in context.resolutions),
+        resolution=tuple(item.to_dict() for item in context.resolutions),
+        warnings=context.warnings,
+    )
+
+
 def _context_from_sources(
     task: VerificationTask,
     sources: tuple[ContextSource, ...],
@@ -1309,6 +1480,37 @@ def _context_source_path(source: ContextSource) -> str:
     if isinstance(repository_path, str) and repository_path:
         return repository_path
     return source.source_uri or source.name
+
+
+def _context_content_hash(source: ContextSource) -> str:
+    encoded = json.dumps(
+        source.to_dict(),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _workspace_hidden_paths(
+    *,
+    root: Path,
+    workspace: Path,
+    repository_paths: tuple[str, ...],
+    extra_paths: tuple[Path, ...] = (),
+) -> tuple[str, ...]:
+    """Translate repository paths into paths relative to one task workspace."""
+
+    candidates = tuple(root / Path(path) for path in repository_paths) + extra_paths
+    hidden: set[str] = set()
+    for candidate in candidates:
+        try:
+            relative = candidate.resolve().relative_to(workspace.resolve())
+        except ValueError:
+            continue
+        if relative.parts:
+            hidden.add(relative.as_posix())
+    return tuple(sorted(hidden))
 
 
 def _default_context_provider(
@@ -1354,6 +1556,20 @@ def _tasks_from_config(
             tuple(str(part) for part in _sequence(command))
             for command in _sequence(raw_checks)
         )
+        setup = tuple(
+            WorkspaceSetupCommand(
+                command=tuple(
+                    str(part)
+                    for part in _sequence(
+                        _mapping(item, "workspace setup").get("command", ())
+                    )
+                ),
+                working_directory=str(
+                    _mapping(item, "workspace setup").get("working_directory", ".")
+                ),
+            )
+            for item in _sequence(task.get("setup", ()))
+        )
         target_paths = tuple(
             str(item) for item in _sequence(task.get("target_paths", ()))
         )
@@ -1374,6 +1590,7 @@ def _tasks_from_config(
                 instruction=_required_string(task, "instruction"),
                 workspace=resolved_workspace,
                 checks=checks,
+                setup=setup,
                 expected_output=(
                     str(task["expected_output"])
                     if task.get("expected_output") is not None
@@ -1385,6 +1602,11 @@ def _tasks_from_config(
                 category=str(task.get("category", "unspecified")),
                 language=str(task.get("language", "unspecified")),
                 repository_scope=str(task.get("repository_scope", ".")),
+                snapshot_identity=(
+                    str(task["snapshot_identity"])
+                    if task.get("snapshot_identity") is not None
+                    else None
+                ),
                 target_paths=target_paths,
                 context_provider=context_provider or "portable",
                 timeout_seconds=float(task.get("timeout_seconds", 300)),
@@ -1428,6 +1650,15 @@ def _verifier(task: VerificationTask) -> Any:
         )
     return MultiCommandWorkspaceVerifier(
         task.checks,
+        timeout_seconds=task.timeout_seconds,
+    )
+
+
+def _preparer(task: VerificationTask) -> Any:
+    if not task.setup:
+        return None
+    return CommandWorkspacePreparer(
+        task.setup,
         timeout_seconds=task.timeout_seconds,
     )
 

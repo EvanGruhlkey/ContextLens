@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "report_type": "context_regression_verification",
+  "verdict": "INCONCLUSIVE",
+  "rationale": "Repository preparation stalled before agent execution.",
+  "agent_executions": 0,
+  "infrastructure_errors": [
+    {
+      "stage": "repository_preparation",
+      "classification": "infrastructure_error",
+      "error": "Filtered Git fetch produced an empty temporary pack and was stopped after the bounded wait."
+    }
+  ],
+  "case_study": {
+    "study_id": "infisical",
+    "task_id": "infisical-backend-ldap-cn-case",
+    "repository": "Infisical/infisical",
+    "pre_fix_commit": "13cc7b6f882aa716f28542e6e0771d6b8dce093f",
+    "fixed_commit": "ca0dcce09c1e0c6d9558db9ee8a58f9b59444786"
+  }
+}

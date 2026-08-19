@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 import threading
 import unittest
 from pathlib import Path
@@ -9,10 +10,14 @@ from contextlens.experiments import (
     AdaptiveAblationPlanner,
     AgentOutcome,
     AgentSettings,
+    CommandWorkspacePreparer,
+    ContextExperimentRunner,
     DirectorySnapshot,
     Evaluation,
+    ExperimentContext,
     GroupDecision,
     MemoryReplayCache,
+    PairedAgentExperiment,
     ReplayCoordinator,
     ReplayRequest,
     ReplayResult,
@@ -20,6 +25,9 @@ from contextlens.experiments import (
     ReplayWorker,
     ResourceLimits,
     SearchConfig,
+    TrialClassification,
+    WorkspaceSetupCommand,
+    WorkspaceVerification,
 )
 from contextlens.experiments.paired_runner import PairedAdaptiveSearchRunner
 from contextlens.trace import ContextSource, SourceKind
@@ -68,9 +76,7 @@ class FloatEvaluator:
     def evaluate(self, task: ReplayTask, result: ReplayResult) -> Evaluation:
         assert result.outcome is not None
         score = float(result.outcome.output_text)
-        return Evaluation(
-            scores={"quality": score, "success": float(score >= 0.5)}
-        )
+        return Evaluation(scores={"quality": score, "success": float(score >= 0.5)})
 
 
 def _coordinator(
@@ -134,9 +140,7 @@ class PairedAdaptiveSearchRunnerTests(unittest.TestCase):
         self.assertEqual(len({result.run_id for result in run.replay_results}), 10)
         self.assertEqual(len(set(adapter.workspaces)), 10)
         self.assertFalse(any(Path(path).exists() for path in adapter.workspaces))
-        decisions = {
-            node.group.group_id: node.decision for node in run.report.nodes
-        }
+        decisions = {node.group.group_id: node.decision for node in run.report.nodes}
         self.assertEqual(decisions["critical"], GroupDecision.KEEP)
         self.assertEqual(decisions["fluff"], GroupDecision.REMOVE)
         self.assertEqual(run.report.recommended_removals, ("fluff",))
@@ -185,6 +189,287 @@ class PairedAdaptiveSearchRunnerTests(unittest.TestCase):
                     FloatEvaluator(),
                     score_name="quality",
                 )
+
+
+class _HiddenAfterAgentVerifier:
+    verifier_id = "hidden-after-agent-v1"
+
+    def verify(
+        self,
+        workspace: Path,
+        task: ReplayTask,
+        outcome: AgentOutcome,
+    ) -> WorkspaceVerification:
+        del task, outcome
+        hidden = workspace / "hidden_test.py"
+        assert not hidden.exists()
+        hidden.write_text("hidden", encoding="utf-8")
+        return WorkspaceVerification(
+            command=("hidden-grader",),
+            exit_code=0,
+            stdout="pass",
+            stderr="",
+            duration_seconds=0.01,
+        )
+
+
+class _IsolatedAgentAdapter:
+    adapter_id = "isolated-agent-v1"
+
+    def __init__(self, requests: list[ReplayRequest]) -> None:
+        self.requests = requests
+
+    def run(self, request: ReplayRequest) -> AgentOutcome:
+        workspace = Path(request.workspace)
+        assert not (workspace / "AGENTS.md").exists()
+        assert not (workspace / "hidden_test.py").exists()
+        self.requests.append(request)
+        (workspace / "agent-change.txt").write_text(
+            request.variant.variant_id,
+            encoding="utf-8",
+        )
+        tokens = 100 if request.variant.variant_id == "base" else 60
+        return AgentOutcome(
+            output_text="1.0",
+            input_tokens=tokens,
+            cached_input_tokens=10,
+            output_tokens=5,
+            tool_calls=2,
+            metadata={"turns": 1, "files_read": 1, "searches": 0},
+        )
+
+
+class ContextExperimentRunnerTests(unittest.TestCase):
+    def test_isolates_pairs_persists_manifest_and_hides_native_context(self) -> None:
+        requests: list[ReplayRequest] = []
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "code.py").write_text("value = 1\n", encoding="utf-8")
+            (root / "AGENTS.md").write_text("native rules", encoding="utf-8")
+            run = ContextExperimentRunner(
+                PairedAgentExperiment(
+                    experiment_id="repo:task",
+                    repository="owner/repo",
+                    commit="abc123",
+                    snapshot=DirectorySnapshot(
+                        root,
+                        excluded_paths=("AGENTS.md",),
+                    ),
+                    task=ReplayTask("task", "Complete the task."),
+                    base_context=ExperimentContext(
+                        (_source("base", 100),),
+                        provider="codex",
+                        target_paths=("code.py",),
+                        source_paths=("AGENTS.md",),
+                    ),
+                    candidate_context=ExperimentContext(
+                        (_source("candidate", 60),),
+                        provider="codex",
+                        target_paths=("code.py",),
+                        source_paths=("AGENTS.md",),
+                    ),
+                    agent_factory=lambda: _IsolatedAgentAdapter(requests),
+                    settings=AgentSettings(
+                        "openai",
+                        "fixture-model",
+                        parameters={"reasoning_effort": "low"},
+                    ),
+                    evaluator=FloatEvaluator(),
+                    verifier=_HiddenAfterAgentVerifier(),
+                    grader_definition={"fixture": "hidden_test.py"},
+                    trials=3,
+                    timeout_seconds=5,
+                )
+            ).run()
+
+        self.assertEqual(
+            [pair.order for pair in run.pairs],
+            [
+                ("base", "candidate"),
+                ("candidate", "base"),
+                ("base", "candidate"),
+            ],
+        )
+        self.assertEqual(len(requests), 6)
+        self.assertEqual(len({request.workspace for request in requests}), 6)
+        self.assertTrue(
+            all(not Path(request.workspace).exists() for request in requests)
+        )
+        self.assertEqual(len({item.agent_instance_id for item in run.invocations}), 6)
+        self.assertEqual(
+            len({item.fixed_dimensions_hash for item in run.invocations}), 1
+        )
+        self.assertEqual(
+            len({item.context_hash for item in run.invocations}),
+            2,
+        )
+        self.assertTrue(all(pair.infrastructure_valid for pair in run.pairs))
+        raw = run.to_dict()
+        self.assertEqual(raw["execution_status"], "completed")
+        self.assertEqual(raw["manifest"]["task_id"], "task")
+        self.assertEqual(
+            raw["manifest"]["policy"]["order"][1],
+            ["candidate", "base"],
+        )
+        self.assertEqual(
+            raw["pairs"][0]["delta"]["provider_input_tokens"],
+            -40,
+        )
+        self.assertEqual(len(raw["raw_trials"]), 6)
+
+    def test_infrastructure_failures_are_retained_but_not_aggregated(self) -> None:
+        class FailingAdapter:
+            adapter_id = "failing-v1"
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def run(self, request: ReplayRequest) -> AgentOutcome:
+                self.calls += 1
+                if request.variant.variant_id == "candidate" and self.calls == 2:
+                    raise RuntimeError("provider unavailable")
+                return AgentOutcome(output_text="1.0", input_tokens=10)
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "code.py").write_text("value = 1\n", encoding="utf-8")
+            run = ContextExperimentRunner(
+                PairedAgentExperiment(
+                    experiment_id="repo:failure",
+                    repository="owner/repo",
+                    commit="abc123",
+                    snapshot=DirectorySnapshot(root),
+                    task=ReplayTask("task", "Complete the task."),
+                    base_context=ExperimentContext(
+                        (_source("base"),), provider="codex"
+                    ),
+                    candidate_context=ExperimentContext(
+                        (_source("candidate"),), provider="codex"
+                    ),
+                    agent_factory=FailingAdapter,
+                    settings=AgentSettings("openai", "fixture-model"),
+                    evaluator=FloatEvaluator(),
+                    trials=2,
+                    timeout_seconds=5,
+                )
+            ).run()
+
+        failed = [
+            item
+            for item in run.invocations
+            if item.classification is TrialClassification.INFRASTRUCTURE_ERROR
+        ]
+        self.assertEqual(len(failed), 1)
+        self.assertEqual(failed[0].error_stage, "agent_execution")
+        raw = run.to_dict()
+        self.assertEqual(raw["execution_status"], "infrastructure_invalid")
+        self.assertEqual(raw["aggregate"]["candidate"]["planned_runs"], 2)
+        self.assertEqual(raw["aggregate"]["candidate"]["causal_runs"], 1)
+
+    def test_workspace_setup_runs_before_agent_and_is_not_an_agent_change(self) -> None:
+        requests: list[ReplayRequest] = []
+
+        class SetupAwareAdapter:
+            adapter_id = "setup-aware-v1"
+
+            def run(self, request: ReplayRequest) -> AgentOutcome:
+                assert (Path(request.workspace) / ".setup-marker").is_file()
+                requests.append(request)
+                return AgentOutcome(output_text="1.0", input_tokens=10)
+
+        setup = CommandWorkspacePreparer(
+            (
+                WorkspaceSetupCommand(
+                    (
+                        sys.executable,
+                        "-c",
+                        (
+                            "from pathlib import Path; "
+                            "Path('.setup-marker').write_text('ok')"
+                        ),
+                    )
+                ),
+            ),
+            timeout_seconds=5,
+        )
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "code.py").write_text("value = 1\n", encoding="utf-8")
+            run = ContextExperimentRunner(
+                PairedAgentExperiment(
+                    experiment_id="repo:setup",
+                    repository="owner/repo",
+                    commit="abc123",
+                    snapshot=DirectorySnapshot(root),
+                    task=ReplayTask("task", "Complete the task."),
+                    base_context=ExperimentContext(
+                        (_source("base"),), provider="codex"
+                    ),
+                    candidate_context=ExperimentContext(
+                        (_source("candidate"),), provider="codex"
+                    ),
+                    agent_factory=SetupAwareAdapter,
+                    settings=AgentSettings("openai", "fixture-model"),
+                    evaluator=FloatEvaluator(),
+                    preparer=setup,
+                    trials=1,
+                    timeout_seconds=5,
+                )
+            ).run()
+
+        self.assertEqual(len(requests), 2)
+        self.assertTrue(all(not item.result.file_changes for item in run.invocations))
+        self.assertIsNotNone(run.to_dict()["manifest"]["workspace_setup"])
+
+    def test_setup_failure_is_retained_without_launching_agent(self) -> None:
+        calls = 0
+
+        class MustNotRunAdapter:
+            adapter_id = "must-not-run-v1"
+
+            def run(self, request: ReplayRequest) -> AgentOutcome:
+                del request
+                nonlocal calls
+                calls += 1
+                return AgentOutcome(output_text="1.0")
+
+        setup = CommandWorkspacePreparer(
+            (WorkspaceSetupCommand((sys.executable, "-c", "raise SystemExit(2)")),),
+            timeout_seconds=5,
+        )
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "code.py").write_text("value = 1\n", encoding="utf-8")
+            run = ContextExperimentRunner(
+                PairedAgentExperiment(
+                    experiment_id="repo:setup-failure",
+                    repository="owner/repo",
+                    commit="abc123",
+                    snapshot=DirectorySnapshot(root),
+                    task=ReplayTask("task", "Complete the task."),
+                    base_context=ExperimentContext(
+                        (_source("base"),), provider="codex"
+                    ),
+                    candidate_context=ExperimentContext(
+                        (_source("candidate"),), provider="codex"
+                    ),
+                    agent_factory=MustNotRunAdapter,
+                    settings=AgentSettings("openai", "fixture-model"),
+                    evaluator=FloatEvaluator(),
+                    preparer=setup,
+                    trials=1,
+                    timeout_seconds=5,
+                )
+            ).run()
+
+        self.assertEqual(calls, 0)
+        self.assertTrue(
+            all(
+                item.classification is TrialClassification.INFRASTRUCTURE_ERROR
+                and item.error_stage == "setup"
+                for item in run.invocations
+            )
+        )
 
 
 if __name__ == "__main__":

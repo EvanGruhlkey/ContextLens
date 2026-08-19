@@ -303,6 +303,12 @@ def test_minimization_verification_uses_task_effective_context(
 
     assert report.recommended
     assert report.verification is not None
+    assert report.verification.experiments
+    assert all(
+        experiment.verification is not None and experiment.verification.experiments
+        for experiment in report.experiments
+        if experiment.accepted
+    )
     for trial in report.verification.trials:
         assert "frontend/AGENTS.md" not in trial.context_source_paths
         assert trial.context_provider == "codex"

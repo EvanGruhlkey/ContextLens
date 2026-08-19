@@ -21,7 +21,7 @@
     }
   ],
   "fixed_commit": "0757b12cecd11321132309f5eb319fcab25a01b9",
-  "generated_at": "2026-08-18T20:13:58.091307+00:00",
+  "generated_at": "2026-08-19T01:56:30.402062+00:00",
   "hidden_grader_sha256": "6d4fbb368adb408f682f776e8a7740f64a06980e74299078836906d1ed513cb6",
   "no_candidate": false,
   "patch_path": "langfuse\\candidates\\langfuse-shared-flattened-otel-parameters.diff",

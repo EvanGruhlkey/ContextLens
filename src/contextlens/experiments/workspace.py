@@ -6,16 +6,29 @@ import difflib
 import hashlib
 import os
 import shutil
+import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import mkdtemp
 
 from contextlens.experiments.model import FileChange
 
 _IGNORED_NAMES = frozenset(
-    {".git", ".mypy_cache", ".pytest_cache", ".ruff_cache", "__pycache__"}
+    {
+        ".git",
+        ".cache",
+        ".mypy_cache",
+        ".npm",
+        ".pnpm-store",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".uv-cache",
+        ".venv",
+        "__pycache__",
+        "node_modules",
+    }
 )
 
 
@@ -40,17 +53,35 @@ class DirectorySnapshot:
     """A source directory copied fresh for every replay worker."""
 
     source: Path
+    excluded_paths: tuple[str, ...] = ()
+    identity: str | None = None
 
     def __post_init__(self) -> None:
         source = self.source.resolve()
         if not source.is_dir():
             raise ValueError(f"workspace source is not a directory: {source}")
         object.__setattr__(self, "source", source)
+        normalized = tuple(
+            sorted({_normalize_relative_path(path) for path in self.excluded_paths})
+        )
+        object.__setattr__(self, "excluded_paths", normalized)
+        if self.identity is not None and not self.identity.strip():
+            raise ValueError("snapshot identity cannot be empty")
 
     @property
     def digest(self) -> str:
         hasher = hashlib.sha256()
+        if self.identity is not None:
+            hasher.update(b"pinned-identity\0")
+            hasher.update(self.identity.encode("utf-8"))
+            hasher.update(b"\0")
+            for path in self.excluded_paths:
+                hasher.update(path.encode("utf-8"))
+                hasher.update(b"\0")
+            return hasher.hexdigest()
         for path, content in _files(self.source).items():
+            if path in self.excluded_paths:
+                continue
             hasher.update(path.encode("utf-8"))
             hasher.update(b"\0")
             hasher.update(content)
@@ -59,16 +90,39 @@ class DirectorySnapshot:
 
     @contextmanager
     def isolated(self) -> Iterator[tuple[Path, dict[str, bytes]]]:
-        with TemporaryDirectory(prefix="contextlens-") as directory:
-            workspace = Path(directory) / "workspace"
-            shutil.copytree(
-                self.source,
-                workspace,
-                ignore=shutil.ignore_patterns(*_IGNORED_NAMES),
-            )
+        directory = Path(mkdtemp(prefix="contextlens-"))
+        try:
+            workspace = directory / "workspace"
+            _copy_workspace(self.source, workspace)
+            for relative_path in self.excluded_paths:
+                hidden = workspace / Path(relative_path)
+                if hidden.is_dir():
+                    shutil.rmtree(hidden)
+                else:
+                    hidden.unlink(missing_ok=True)
             _prepare_windows_python_cache_directories(workspace)
             before = _files(workspace)
             yield workspace, before
+        finally:
+            _cleanup_isolated_directory(directory)
+
+    def capture(self, workspace: Path) -> dict[str, bytes]:
+        """Capture a post-setup baseline for later agent-change comparison."""
+
+        resolved = workspace.resolve()
+        if not resolved.is_dir():
+            raise ValueError(f"workspace is not a directory: {resolved}")
+        return _files(resolved)
+
+
+def _normalize_relative_path(value: str) -> str:
+    path = Path(value.replace("\\", "/"))
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError(f"excluded path must stay within the snapshot: {value!r}")
+    normalized = path.as_posix().removeprefix("./")
+    if not normalized:
+        raise ValueError("excluded path cannot be empty")
+    return normalized
 
 
 def _prepare_windows_python_cache_directories(workspace: Path) -> None:
@@ -84,8 +138,93 @@ def _prepare_windows_python_cache_directories(workspace: Path) -> None:
     parents = {path.parent for path in workspace.rglob("*.py")}
     for parent in parents:
         (parent / "__pycache__").mkdir(exist_ok=True)
-    for name in (".pytest_cache", ".mypy_cache", ".ruff_cache"):
+    for name in (
+        ".cache",
+        ".mypy_cache",
+        ".npm",
+        ".pnpm-store",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".uv-cache",
+    ):
         (workspace / name).mkdir(exist_ok=True)
+
+
+def _copy_workspace(source: Path, destination: Path) -> None:
+    """Materialize an independent copy, using Windows' parallel copier."""
+
+    if os.name != "nt":
+        shutil.copytree(
+            source,
+            destination,
+            ignore=shutil.ignore_patterns(*_IGNORED_NAMES),
+        )
+        return
+    destination.mkdir(parents=True)
+    completed = subprocess.run(
+        (
+            "robocopy",
+            str(source),
+            str(destination),
+            "/E",
+            "/COPY:DAT",
+            "/DCOPY:DAT",
+            "/R:1",
+            "/W:1",
+            "/MT:16",
+            "/XJ",
+            "/NFL",
+            "/NDL",
+            "/NJH",
+            "/NJS",
+            "/NP",
+            "/XD",
+            *sorted(_IGNORED_NAMES),
+            "/XF",
+            ".git",
+        ),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if completed.returncode > 7:
+        raise RuntimeError(
+            "robocopy could not materialize the isolated workspace: "
+            f"{completed.stderr or completed.stdout}"
+        )
+
+
+def _cleanup_isolated_directory(directory: Path) -> None:
+    """Best-effort cleanup, including ACLs created by the Windows sandbox."""
+
+    shutil.rmtree(directory, ignore_errors=True)
+    if os.name != "nt" or not directory.exists():
+        return
+    subprocess.run(
+        ("icacls", str(directory), "/reset", "/T", "/C", "/Q"),
+        capture_output=True,
+        check=False,
+    )
+    username = os.environ.get("USERNAME")
+    domain = os.environ.get("USERDOMAIN")
+    if username:
+        identity = f"{domain}\\{username}" if domain else username
+        subprocess.run(
+            (
+                "icacls",
+                str(directory),
+                "/grant:r",
+                f"{identity}:(OI)(CI)F",
+                "/T",
+                "/C",
+                "/Q",
+            ),
+            capture_output=True,
+            check=False,
+        )
+    shutil.rmtree(directory, ignore_errors=True)
 
 
 def compare_workspace(
