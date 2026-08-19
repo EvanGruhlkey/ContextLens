@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 import contextlens.minimize as minimize_module
+import contextlens.regression as regression_module
 from contextlens.ci import StaticCiPolicy, build_ci_arguments, evaluate_static_ci
+from contextlens.experiments import AgentOutcome, ReplayRequest
 from contextlens.minimize import (
     build_minimization_candidate,
     generate_minimization_edits,
@@ -19,6 +22,18 @@ from contextlens.repository import (
     diff_effective_context,
     scan_repository_files,
 )
+
+
+class _PassingUsageAdapter:
+    adapter_id = "passing-usage-fixture"
+
+    def run(self, request: ReplayRequest) -> AgentOutcome:
+        tokens = sum(source.token_count or 0 for source in request.context)
+        return AgentOutcome(
+            output_text="ok",
+            input_tokens=100 + tokens,
+            output_tokens=5,
+        )
 
 
 def test_static_ci_has_stable_failure_exit_code(tmp_path: Path) -> None:
@@ -237,6 +252,63 @@ def test_combined_candidate_regression_rejects_individually_safe_edits(
     assert all(experiment.accepted for experiment in report.experiments)
     assert not report.recommended
     assert report.patch is None
+
+
+def test_minimization_verification_uses_task_effective_context(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repeated = "Always run focused tests before changing shared code."
+    (tmp_path / "backend").mkdir()
+    (tmp_path / "frontend").mkdir()
+    (tmp_path / "backend" / "api.py").write_text("pass\n", encoding="utf-8")
+    (tmp_path / "frontend" / "app.ts").write_text("export {};\n", encoding="utf-8")
+    (tmp_path / "AGENTS.md").write_text(f"- {repeated}\n", encoding="utf-8")
+    (tmp_path / "backend" / "AGENTS.md").write_text(f"- {repeated}\n", encoding="utf-8")
+    (tmp_path / "frontend" / "AGENTS.md").write_text(
+        "Frontend-only rules that must not enter a backend task.\n",
+        encoding="utf-8",
+    )
+    config = tmp_path / "evals.json"
+    config.write_text(
+        json.dumps(
+            {
+                "trials": 2,
+                "context_provider": "codex",
+                "agent": {
+                    "type": "subprocess",
+                    "command": ["fixture"],
+                    "provider": "fixture",
+                    "model": "deterministic",
+                },
+                "tasks": [
+                    {
+                        "id": "backend-task",
+                        "instruction": "Return ok.",
+                        "expected_output": "ok",
+                        "target_paths": ["backend/api.py"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        regression_module,
+        "_agent_factory",
+        lambda value: _PassingUsageAdapter,
+    )
+
+    report = minimize_repository(tmp_path, config_path=config)
+
+    assert report.recommended
+    assert report.verification is not None
+    for trial in report.verification.trials:
+        assert "frontend/AGENTS.md" not in trial.context_source_paths
+        assert trial.context_provider == "codex"
+    assert report.verification.candidate.initial_context_tokens < (
+        report.verification.base.initial_context_tokens
+    )
 
 
 def test_ci_argument_generation_is_shell_and_platform_independent() -> None:

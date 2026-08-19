@@ -1,0 +1,24 @@
+{
+  "candidate_hash": "a399ca470e995cde20c3cc95159c7215d0ac581188d096e46458ce9e656afd48",
+  "edits": [
+    {
+      "after_estimated_tokens": 1400,
+      "after_sha256": "3736d41873b9600a6250c89e3628092c8f4dfb43807186a7762b24c7c8bf34a3",
+      "before_estimated_tokens": 1728,
+      "before_sha256": "26b4c88739f057b6a6d1203daf999cab753a32f4525d096926ff3f549b7aaa61",
+      "operation": "remove_markdown_sections",
+      "patch": "--- a/CLAUDE.md\n+++ b/CLAUDE.md\n@@ -42,14 +42,6 @@\n \n Enterprise features live in `backend/src/ee/` (services and routes), registered before community routes so they can override/extend them.\n \n-### Self-Hosted Deployment\n-\n-Infisical supports self-hosted deployment via Docker. Key considerations:\n-- **`Dockerfile.standalone-infisical`** — single-container image with both frontend and backend; used for simple deployments.\n-- **`Dockerfile.fips.standalone-infisical`** — FIPS 140-2 compliant variant for regulated environments. Be strict about not introducing dependencies that break FIPS compliance.\n-- **`docker-compose.prod.yml`** — production compose with backend, PostgreSQL, and Redis.\n-- New backend dependencies should be evaluated carefully — they affect container size, FIPS compliance, and the encryption boundary. Check `docs/` for self-hosted deployment documentation when in doubt.\n-\n ### Dependency Policy\n \n Both `backend/` and `frontend/` enforce a minimum release age of 7 days for npm packages (configured via `.npmrc` in each directory). This means `npm install` will only resolve package versions published at least 7 days ago, as a supply-chain security measure.\n@@ -64,16 +56,6 @@\n \n Auth modes (JWT, IDENTITY_ACCESS_TOKEN, SCIM_TOKEN, MCP_JWT) are extracted in `backend/src/server/plugins/auth/`. Authorization uses CASL (`@casl/ability`) with project-level and org-level permission checks — see `backend/CLAUDE.md` for backend details and `frontend/CLAUDE.md` for frontend permission hooks/HOCs. Note: `API_KEY` and `SERVICE_TOKEN` auth modes are deprecated — do not use them in new code.\n \n-### Service Factory + Manual DI (Backend)\n-\n-No IoC container in either backend. Every service is a factory function with explicit dependencies.\n-- **Node.js**: Wired in `backend/src/server/routes/index.ts` — see `backend/CLAUDE.md`.\n-- **Go**: Wired in `backend-go/internal/server/api/api.go` via `NewRegistry()` — see `backend-go/CLAUDE.md`.\n-\n-### Interface Pattern (Go)\n-\n-Both handlers and services define narrow interfaces for their dependencies (consumer-defined interfaces). Only expose methods or fields that are needed — keep everything else private. This enables testability and loose coupling.\n-\n ### API Layer (Frontend)\n \n React Query + Axios with query key factories per domain. Each API domain in `frontend/src/hooks/api/` has `queries.tsx`, `mutations.tsx`, and `types.tsx` — see `frontend/CLAUDE.md` for conventions.\n",
+      "path": "CLAUDE.md"
+    }
+  ],
+  "fixed_commit": "c1f4fc904a5b5df6121ec77f97b59b248840d432",
+  "generated_at": "2026-08-18T21:51:40.878849+00:00",
+  "hidden_grader_sha256": "c758df15e2f6c0f59da960c5dfeaadd7d145f33214689dd5730681dfecc11c4c",
+  "no_candidate": false,
+  "patch_path": "infisical\\candidates\\infisical-frontend-null-connection-message.diff",
+  "pre_fix_commit": "40abbafa1903ec4c02fcb260009f96517ffad280",
+  "repository": "Infisical/infisical",
+  "strategy": "remove_markdown_sections",
+  "study_id": "infisical",
+  "task_id": "infisical-frontend-null-connection-message"
+}

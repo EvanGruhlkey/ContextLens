@@ -28,7 +28,11 @@ from contextlens.experiments import (
     WorkspaceVerification,
 )
 from contextlens.repository import (
+    CONTEXT_PROVIDERS,
+    EffectiveContext,
+    RepositoryScan,
     diff_repository,
+    resolve_effective_context,
 )
 from contextlens.telemetry import (
     NormalizedUsage,
@@ -69,6 +73,7 @@ class VerificationTask:
     language: str = "unspecified"
     repository_scope: str = "."
     target_paths: tuple[str, ...] = ()
+    context_provider: str = "portable"
     timeout_seconds: float = 300.0
 
     def __post_init__(self) -> None:
@@ -82,6 +87,50 @@ class VerificationTask:
             )
         if self.timeout_seconds <= 0:
             raise ValueError("task timeout must be positive")
+        if self.context_provider not in CONTEXT_PROVIDERS:
+            raise ValueError(
+                f"unknown context provider {self.context_provider!r}; choose one of "
+                f"{', '.join(sorted(CONTEXT_PROVIDERS))}"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class ContextSourceResolution:
+    """Auditable scope decision for one source supplied to a task."""
+
+    source_id: str
+    path: str
+    scope_accuracy: str
+    scope_reason: str
+    targets: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_id": self.source_id,
+            "path": self.path,
+            "scope_accuracy": self.scope_accuracy,
+            "scope_reason": self.scope_reason,
+            "targets": list(self.targets),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedTaskContext:
+    """Exact context and resolution evidence for one task variant."""
+
+    provider: str
+    target_paths: tuple[str, ...]
+    sources: tuple[ContextSource, ...]
+    resolutions: tuple[ContextSourceResolution, ...]
+    warnings: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class TaskContextPair:
+    """Independently resolved base and candidate context for one task."""
+
+    base: ResolvedTaskContext
+    candidate: ResolvedTaskContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +177,10 @@ class TrialMetrics:
     language: str = "unspecified"
     repository_scope: str = "."
     target_paths: tuple[str, ...] = ()
+    context_provider: str = "portable"
+    context_source_paths: tuple[str, ...] = ()
+    context_resolution: tuple[ContextSourceResolution, ...] = ()
+    context_warnings: tuple[str, ...] = ()
     error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -152,6 +205,14 @@ class TrialMetrics:
                 "initial_context_tokens": self.initial_context_tokens,
                 **self.provider_usage.to_dict(),
                 "estimated_cost_usd": self.estimated_cost_usd,
+            },
+            "context": {
+                "target_paths": list(self.target_paths),
+                "provider": self.context_provider,
+                "source_paths": list(self.context_source_paths),
+                "effective_initial_tokens": self.initial_context_tokens,
+                "resolution": [item.to_dict() for item in self.context_resolution],
+                "warnings": list(self.context_warnings),
             },
             "behavior": {
                 "turns": self.turns,
@@ -382,8 +443,13 @@ def verify_repository(
     context_diff = diff_repository(
         resolved_root, base_ref=base_ref or _string(value.get("base_ref"))
     )
-    tasks = _tasks_from_config(value, resolved_root)
     agent_value = _mapping(value.get("agent"), "agent")
+    default_context_provider = _default_context_provider(value, agent_value)
+    tasks = _tasks_from_config(
+        value,
+        resolved_root,
+        default_context_provider=default_context_provider,
+    )
     provider = _required_string(agent_value, "provider")
     model = _required_string(agent_value, "model")
     settings = AgentSettings(
@@ -414,9 +480,15 @@ def verify_repository(
         else None
     )
     factory = _agent_factory(agent_value)
+    task_contexts = _resolve_task_context_pairs(
+        tasks,
+        base_scan=context_diff.base,
+        candidate_scan=context_diff.candidate,
+    )
     return run_context_verification(
         base_context=context_diff.base.to_context_sources(),
         candidate_context=context_diff.candidate.to_context_sources(),
+        task_contexts=task_contexts,
         tasks=tasks,
         agent_factory=factory,
         settings=settings,
@@ -431,6 +503,8 @@ def verify_context_candidate(
     *,
     base_context: tuple[ContextSource, ...],
     candidate_context: tuple[ContextSource, ...],
+    base_scan: RepositoryScan | None = None,
+    candidate_scan: RepositoryScan | None = None,
     root: Path = Path("."),
     base_label: str = "current",
 ) -> VerificationReport:
@@ -440,8 +514,13 @@ def verify_context_candidate(
     if not isinstance(value, dict):
         raise ValueError("verification config must contain a JSON object")
     resolved_root = root.resolve()
-    tasks = _tasks_from_config(value, resolved_root)
     agent_value = _mapping(value.get("agent"), "agent")
+    default_context_provider = _default_context_provider(value, agent_value)
+    tasks = _tasks_from_config(
+        value,
+        resolved_root,
+        default_context_provider=default_context_provider,
+    )
     settings = AgentSettings(
         provider=_required_string(agent_value, "provider"),
         model=_required_string(agent_value, "model"),
@@ -462,9 +541,21 @@ def verify_context_candidate(
         if pricing_value is not None
         else None
     )
+    if (base_scan is None) != (candidate_scan is None):
+        raise ValueError("base_scan and candidate_scan must be provided together")
+    task_contexts = (
+        _resolve_task_context_pairs(
+            tasks,
+            base_scan=base_scan,
+            candidate_scan=candidate_scan,
+        )
+        if base_scan is not None and candidate_scan is not None
+        else None
+    )
     return run_context_verification(
         base_context=base_context,
         candidate_context=candidate_context,
+        task_contexts=task_contexts,
         tasks=tasks,
         agent_factory=_agent_factory(agent_value),
         settings=settings,
@@ -478,6 +569,7 @@ def run_context_verification(
     *,
     base_context: tuple[ContextSource, ...],
     candidate_context: tuple[ContextSource, ...],
+    task_contexts: Mapping[str, TaskContextPair] | None = None,
     tasks: tuple[VerificationTask, ...],
     agent_factory: AgentFactory,
     settings: AgentSettings,
@@ -492,6 +584,14 @@ def run_context_verification(
     selected_policy = policy or VerificationPolicy()
     trial_metrics: list[TrialMetrics] = []
     for task in tasks:
+        pair = (
+            task_contexts[task.task_id]
+            if task_contexts is not None
+            else TaskContextPair(
+                base=_context_from_sources(task, base_context),
+                candidate=_context_from_sources(task, candidate_context),
+            )
+        )
         replay_task = ReplayTask(
             task.task_id,
             task.instruction,
@@ -501,6 +601,7 @@ def run_context_verification(
                 "language": task.language,
                 "repository_scope": task.repository_scope,
                 "target_paths": list(task.target_paths),
+                "context_provider": task.context_provider,
             },
         )
         verifier = _verifier(task)
@@ -509,7 +610,7 @@ def run_context_verification(
                 adapter=agent_factory(),
                 snapshot=DirectorySnapshot(task.workspace),
                 task=replay_task,
-                context=base_context,
+                context=pair.base.sources,
                 settings=settings,
                 timeout_seconds=task.timeout_seconds,
                 verifier=verifier,
@@ -518,7 +619,7 @@ def run_context_verification(
                 adapter=agent_factory(),
                 snapshot=DirectorySnapshot(task.workspace),
                 task=replay_task,
-                context=candidate_context,
+                context=pair.candidate.sources,
                 settings=settings,
                 timeout_seconds=task.timeout_seconds,
                 verifier=verifier,
@@ -547,6 +648,9 @@ def run_context_verification(
                         variant=variant,
                         pricing=pricing,
                         task=task,
+                        resolved_context=(
+                            pair.base if variant == "base" else pair.candidate
+                        ),
                     )
                 )
     base = _aggregate(tuple(item for item in trial_metrics if item.variant == "base"))
@@ -790,6 +894,7 @@ def _trial_metrics(
     variant: str,
     pricing: PricingSnapshot | None,
     task: VerificationTask,
+    resolved_context: ResolvedTaskContext,
 ) -> TrialMetrics:
     outcome = result.outcome
     usage = usage_from_outcome(outcome)
@@ -815,6 +920,12 @@ def _trial_metrics(
     exploration = _optional_int(metadata.get("exploration_breadth"))
     if exploration is None and files_read is not None:
         exploration = files_read
+    supplied_source_ids = set(result.context_source_ids)
+    supplied_resolution = tuple(
+        item
+        for item in resolved_context.resolutions
+        if item.source_id in supplied_source_ids
+    )
     return TrialMetrics(
         task_id=result.task_id,
         trial=trial,
@@ -842,6 +953,10 @@ def _trial_metrics(
         language=task.language,
         repository_scope=task.repository_scope,
         target_paths=task.target_paths,
+        context_provider=resolved_context.provider,
+        context_source_paths=tuple(item.path for item in supplied_resolution),
+        context_resolution=supplied_resolution,
+        context_warnings=resolved_context.warnings,
         error=result.error,
     )
 
@@ -1093,8 +1208,136 @@ def _aggregate_delta(
     }
 
 
+def _resolve_task_context_pairs(
+    tasks: tuple[VerificationTask, ...],
+    *,
+    base_scan: RepositoryScan,
+    candidate_scan: RepositoryScan,
+) -> dict[str, TaskContextPair]:
+    """Resolve each immutable tree independently for every configured task."""
+
+    return {
+        task.task_id: TaskContextPair(
+            base=_context_from_scan(task, base_scan),
+            candidate=_context_from_scan(task, candidate_scan),
+        )
+        for task in tasks
+    }
+
+
+def _context_from_scan(
+    task: VerificationTask,
+    scan: RepositoryScan,
+) -> ResolvedTaskContext:
+    if not task.target_paths:
+        sources = scan.to_context_sources()
+        return ResolvedTaskContext(
+            provider=task.context_provider,
+            target_paths=(),
+            sources=sources,
+            resolutions=tuple(
+                ContextSourceResolution(
+                    source_id=source.source_id,
+                    path=_context_source_path(source),
+                    scope_accuracy="repository_inventory",
+                    scope_reason=(
+                        "No target_paths configured; repository-wide context was "
+                        "preserved for backwards compatibility."
+                    ),
+                )
+                for source in sources
+            ),
+            warnings=(
+                "No target_paths configured; repository-wide context was supplied.",
+            ),
+        )
+    effective = resolve_effective_context(
+        scan,
+        task.target_paths,
+        provider=task.context_provider,
+    )
+    return _context_from_effective(effective)
+
+
+def _context_from_effective(effective: EffectiveContext) -> ResolvedTaskContext:
+    return ResolvedTaskContext(
+        provider=effective.provider,
+        target_paths=effective.targets,
+        sources=effective.to_context_sources(),
+        resolutions=tuple(
+            ContextSourceResolution(
+                source_id=item.source.source_id,
+                path=item.source.path,
+                scope_accuracy=item.scope_accuracy,
+                scope_reason=item.reason,
+                targets=item.targets,
+            )
+            for item in effective.sources
+        ),
+        warnings=effective.warnings,
+    )
+
+
+def _context_from_sources(
+    task: VerificationTask,
+    sources: tuple[ContextSource, ...],
+) -> ResolvedTaskContext:
+    return ResolvedTaskContext(
+        provider=task.context_provider,
+        target_paths=task.target_paths,
+        sources=sources,
+        resolutions=tuple(
+            ContextSourceResolution(
+                source_id=source.source_id,
+                path=_context_source_path(source),
+                scope_accuracy="caller_supplied",
+                scope_reason=(
+                    "Context was supplied directly to run_context_verification."
+                ),
+                targets=task.target_paths,
+            )
+            for source in sources
+        ),
+        warnings=(
+            "Context was supplied directly; repository scope resolution was not run.",
+        ),
+    )
+
+
+def _context_source_path(source: ContextSource) -> str:
+    repository_path = source.provenance.get("repository_path")
+    if isinstance(repository_path, str) and repository_path:
+        return repository_path
+    return source.source_uri or source.name
+
+
+def _default_context_provider(
+    value: Mapping[str, Any],
+    agent_value: Mapping[str, Any],
+) -> str | None:
+    configured = value.get("context_provider")
+    if configured is not None:
+        return _validate_context_provider(str(configured))
+    if str(agent_value.get("type", "subprocess")) == "codex":
+        return "codex"
+    return None
+
+
+def _validate_context_provider(provider: str) -> str:
+    normalized = provider.casefold()
+    if normalized not in CONTEXT_PROVIDERS:
+        raise ValueError(
+            f"unknown context provider {provider!r}; choose one of "
+            f"{', '.join(sorted(CONTEXT_PROVIDERS))}"
+        )
+    return normalized
+
+
 def _tasks_from_config(
-    value: Mapping[str, Any], root: Path
+    value: Mapping[str, Any],
+    root: Path,
+    *,
+    default_context_provider: str | None = None,
 ) -> tuple[VerificationTask, ...]:
     raw_tasks = value.get("tasks")
     if not isinstance(raw_tasks, list) or not raw_tasks:
@@ -1111,6 +1354,20 @@ def _tasks_from_config(
             tuple(str(part) for part in _sequence(command))
             for command in _sequence(raw_checks)
         )
+        target_paths = tuple(
+            str(item) for item in _sequence(task.get("target_paths", ()))
+        )
+        configured_provider = task.get("context_provider")
+        context_provider = (
+            _validate_context_provider(str(configured_provider))
+            if configured_provider is not None
+            else default_context_provider
+        )
+        if target_paths and context_provider is None:
+            raise ValueError(
+                f"task {_required_string(task, 'id')!r} has target_paths but no "
+                "context_provider; configure one explicitly for non-Codex adapters"
+            )
         tasks.append(
             VerificationTask(
                 task_id=_required_string(task, "id"),
@@ -1128,9 +1385,8 @@ def _tasks_from_config(
                 category=str(task.get("category", "unspecified")),
                 language=str(task.get("language", "unspecified")),
                 repository_scope=str(task.get("repository_scope", ".")),
-                target_paths=tuple(
-                    str(item) for item in _sequence(task.get("target_paths", ()))
-                ),
+                target_paths=target_paths,
+                context_provider=context_provider or "portable",
                 timeout_seconds=float(task.get("timeout_seconds", 300)),
             )
         )

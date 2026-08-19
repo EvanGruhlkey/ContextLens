@@ -7,6 +7,7 @@ from contextlens.repository import (
     STATIC_EVIDENCE,
     diff_repository,
     resolve_effective_context,
+    scan_git_ref,
     scan_repository,
 )
 
@@ -220,6 +221,34 @@ def test_effective_context_handles_multiple_missing_and_root_targets(
         "frontend/moved.py",
     )
     assert [item.source.path for item in root.sources] == ["AGENTS.md"]
+
+
+def test_context_symlinks_resolve_in_worktree_and_immutable_git_tree(
+    tmp_path: Path,
+) -> None:
+    _git(tmp_path, "init", "--quiet")
+    _git(tmp_path, "config", "user.email", "contextlens@example.com")
+    _git(tmp_path, "config", "user.name", "ContextLens")
+    (tmp_path / ".agents").mkdir()
+    canonical = "Canonical root guidance.\nAlways run focused tests.\n"
+    (tmp_path / ".agents" / "AGENTS.md").write_text(canonical, encoding="utf-8")
+    (tmp_path / "AGENTS.md").write_text(".agents/AGENTS.md", encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    link_blob = _git(tmp_path, "hash-object", "AGENTS.md").stdout.strip()
+    _git(tmp_path, "update-index", "--cacheinfo", f"120000,{link_blob},AGENTS.md")
+    _git(tmp_path, "commit", "--quiet", "-m", "symlinked context")
+
+    worktree = scan_repository(tmp_path)
+    immutable = scan_git_ref(tmp_path, "HEAD")
+
+    assert (
+        next(item for item in worktree.sources if item.path == "AGENTS.md").content
+        == canonical
+    )
+    assert (
+        next(item for item in immutable.sources if item.path == "AGENTS.md").content
+        == canonical
+    )
 
 
 def _git(cwd: Path, *arguments: str) -> subprocess.CompletedProcess[str]:

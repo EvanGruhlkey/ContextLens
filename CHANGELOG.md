@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Made verified evaluation task-effective: each task now resolves base and
+  candidate context independently from `target_paths` and `context_provider`,
+  and persists exact sources, effective tokens, resolution mode, and warnings.
+- Added a reproducible six-task historical bug-fix study across Browser Use,
+  Infisical, and Langfuse with pinned commits, deterministic candidates,
+  host-staged hidden graders, raw validation reports, and honest blocked/zero-run
+  status when agent infrastructure is unavailable.
+- Added Git-symlink-aware context scanning for both worktrees and immutable refs.
 - Fixed clean editable installs so the development-only `evals` harness is
   importable without shipping it in the production wheel or mutating `sys.path`.
 - Added `contextlens init` with conservative ecosystem, check, context, and

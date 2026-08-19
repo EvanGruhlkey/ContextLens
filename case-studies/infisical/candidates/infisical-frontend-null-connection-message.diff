@@ -1,0 +1,34 @@
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -42,14 +42,6 @@
+ 
+ Enterprise features live in `backend/src/ee/` (services and routes), registered before community routes so they can override/extend them.
+ 
+-### Self-Hosted Deployment
+-
+-Infisical supports self-hosted deployment via Docker. Key considerations:
+-- **`Dockerfile.standalone-infisical`** — single-container image with both frontend and backend; used for simple deployments.
+-- **`Dockerfile.fips.standalone-infisical`** — FIPS 140-2 compliant variant for regulated environments. Be strict about not introducing dependencies that break FIPS compliance.
+-- **`docker-compose.prod.yml`** — production compose with backend, PostgreSQL, and Redis.
+-- New backend dependencies should be evaluated carefully — they affect container size, FIPS compliance, and the encryption boundary. Check `docs/` for self-hosted deployment documentation when in doubt.
+-
+ ### Dependency Policy
+ 
+ Both `backend/` and `frontend/` enforce a minimum release age of 7 days for npm packages (configured via `.npmrc` in each directory). This means `npm install` will only resolve package versions published at least 7 days ago, as a supply-chain security measure.
+@@ -64,16 +56,6 @@
+ 
+ Auth modes (JWT, IDENTITY_ACCESS_TOKEN, SCIM_TOKEN, MCP_JWT) are extracted in `backend/src/server/plugins/auth/`. Authorization uses CASL (`@casl/ability`) with project-level and org-level permission checks — see `backend/CLAUDE.md` for backend details and `frontend/CLAUDE.md` for frontend permission hooks/HOCs. Note: `API_KEY` and `SERVICE_TOKEN` auth modes are deprecated — do not use them in new code.
+ 
+-### Service Factory + Manual DI (Backend)
+-
+-No IoC container in either backend. Every service is a factory function with explicit dependencies.
+-- **Node.js**: Wired in `backend/src/server/routes/index.ts` — see `backend/CLAUDE.md`.
+-- **Go**: Wired in `backend-go/internal/server/api/api.go` via `NewRegistry()` — see `backend-go/CLAUDE.md`.
+-
+-### Interface Pattern (Go)
+-
+-Both handlers and services define narrow interfaces for their dependencies (consumer-defined interfaces). Only expose methods or fields that are needed — keep everything else private. This enables testability and loose coupling.
+-
+ ### API Layer (Frontend)
+ 
+ React Query + Axios with query key factories per domain. Each API domain in `frontend/src/hooks/api/` has `queries.tsx`, `mutations.tsx`, and `types.tsx` — see `frontend/CLAUDE.md` for conventions.

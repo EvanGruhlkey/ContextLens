@@ -1,0 +1,33 @@
+{
+  "candidate_hash": "28a7e8adef89c5fd63424895cc6d7f5c93c3897ce11020f829921bfce6b0e826",
+  "edits": [
+    {
+      "after_estimated_tokens": 1666,
+      "after_sha256": "9d51b8464ef56de63159f3eec4f2e177f4301000ce73efe487139702ad4b1d7b",
+      "before_estimated_tokens": 2185,
+      "before_sha256": "0a1afca69ccca35f281bdb6f1bfebf58e650f42d24b163521a46efec21e5aedc",
+      "operation": "contextlens_conservative",
+      "patch": "--- a/.agents/AGENTS.md\n+++ b/.agents/AGENTS.md\n@@ -8,22 +8,12 @@\n - Read the minimal local context required for the task.\n - Keep changes scoped and avoid unrelated refactors.\n - For bug fixes, first write the smallest failing test that proves the reported\n-  behavior and confirm it fails against the buggy behavior before changing\n-  production code. Add another test only when it exercises a distinct adapter,\n-  contract, or execution path. Extend the closest existing test suite; do not\n-  create a standalone constant test when an existing feature suite owns the\n-  behavior. If the bug depends on a data shape, pause and ask: can\n-  `pnpm run seed` prefill that shape locally? If not, consider extending a\n-  seeder scenario so the bug stays cheaply reproducible\n-  (`packages/shared/scripts/seeder/AGENTS.md`), or note why a seed cannot\n-  express it.\n+\n - Prefill local test data with the seed CLI (`pnpm run seed -- list` shows\n   scenarios; runs print UI deep links) — never with ad-hoc scripts or raw\n   ClickHouse inserts.\n - Every PR auto-builds (via GitHub Actions) a disposable, full-stack preview at\n-  `pr-<N>.preview.langfuse.com` — nothing to spin up. Use the `langfuse-previews`\n-  skill to use or debug one, e.g. read a preview's web/worker error logs with\n-  `kubectl`.\n+\n - For documentation screenshots in Markdown, avoid fixed `height` on `<img>`\n   tags; prefer Markdown images or width-only HTML so previews preserve aspect\n   ratio.\n@@ -33,10 +23,7 @@\n   commands, to avoid zsh glob expansion issues with dynamic Next.js routes.\n - Never invoke Node-installed binaries through `./node_modules/.bin/*`. Always run them through `pnpm`.\n - Never put internal ticket ids (`LFE-1234`, `LFINT-1234`, `CLI-Q226-12`) or\n-  Linear URLs into anything this repo publishes: code comments, docs prose,\n-  commit messages, PR titles and descriptions, or changelog entries. They mean\n-  nothing to OSS readers. Describe the problem on its own terms; a\n-  ticket-prefixed branch name is the one place the identifier belongs.\n+\n - Never commit secrets or credentials. Keep `.env*.example` files in\n   sync with required env vars.\n \n@@ -107,8 +94,7 @@\n   continue to use the seed CLI to create frontend test state rather than\n   ad-hoc inserts.\n - Dev Docker Compose exposes these clients on `${HOST_IP:-127.0.0.1}`:\n-  - Postgres: `PGPASSWORD=\"${POSTGRES_PASSWORD:-postgres}\" psql -h \"${HOST_IP:-127.0.0.1}\" -p \"${POSTGRES_HOST_PORT:-5432}\" -U \"${POSTGRES_USER:-postgres}\" -d \"${POSTGRES_DB:-postgres}\"`\n-  - ClickHouse: `clickhouse client --host \"${HOST_IP:-127.0.0.1}\" --port \"${CLICKHOUSE_NATIVE_PORT:-9000}\" --user \"${CLICKHOUSE_USER:-clickhouse}\" --password \"${CLICKHOUSE_PASSWORD:-clickhouse}\" --database default`\n+\n   - Redis: `REDISCLI_AUTH=\"${REDIS_AUTH:-myredissecret}\" redis-cli -h \"${HOST_IP:-127.0.0.1}\" -p \"${REDIS_HOST_PORT:-6379}\"`\n - If any connection fails, check `docker-compose.dev.yml` for local override\n   variables and confirm the services are running.\n@@ -128,16 +114,6 @@\n - Cross-package refactors: `pnpm run lint`, `pnpm run typecheck`, and targeted\n   tests for impacted packages.\n - Client-bundle soundness: CI scans every prod web build\n-  (`pnpm run scan:client-bundle`) for minifier-dropped bindings and Node-only\n-  globals leaking into browser chunks — the SWC dropped-binding class ships\n-  runtime-only `ReferenceError`s that dev builds and type checks cannot see\n-  (LFE-10645). On failure, `scripts/scan-client-bundle.mjs`'s header explains\n-  the canonical fix.\n-\n-End your turn with evidence, not claims: quote each check's summary line —\n-e.g. `Tasks: 8 successful, 8 total` (turbo lint/typecheck) or\n-`Tests  12 passed (12)` (vitest) — say which checks you skipped and why,\n-never report unverified work as done, and never end with work pending.\n \n ## Generated Files\n \n",
+      "path": ".agents/AGENTS.md"
+    },
+    {
+      "after_estimated_tokens": 2063,
+      "after_sha256": "bc642cfa342f1335dd66df113c76a2008dbabd681f5f914632e55e480ea03227",
+      "before_estimated_tokens": 2128,
+      "before_sha256": "2d292a5e26bbd7653b764b86893a598f066e95cc6c70f973f59ded384d69b084",
+      "operation": "contextlens_conservative",
+      "patch": "--- a/packages/shared/AGENTS.md\n+++ b/packages/shared/AGENTS.md\n@@ -79,9 +79,7 @@\n - For the cross-package system view, read the architecture handbook:\n   [langfuse.com/handbook/product-engineering/architecture](https://langfuse.com/handbook/product-engineering/architecture).\n - Source markdown lives in\n-  `../langfuse-docs/content/handbook/product-engineering/architecture.mdx`\n-  (GitHub mirror:\n-  [architecture.mdx](https://github.com/langfuse/langfuse-docs/blob/4188c1ba453240c90a763a8067ef442d68839323/content/handbook/product-engineering/architecture.mdx#L4)).\n+\n - Consult it when changing shared contracts that affect the web container,\n   worker container, ingestion flow, or storage-layer boundaries.\n \n",
+      "path": "packages/shared/AGENTS.md"
+    }
+  ],
+  "fixed_commit": "0757b12cecd11321132309f5eb319fcab25a01b9",
+  "generated_at": "2026-08-18T20:13:58.091307+00:00",
+  "hidden_grader_sha256": "6d4fbb368adb408f682f776e8a7740f64a06980e74299078836906d1ed513cb6",
+  "no_candidate": false,
+  "patch_path": "langfuse\\candidates\\langfuse-shared-flattened-otel-parameters.diff",
+  "pre_fix_commit": "fb4a4f12bf2d5788d7bcb3e3f9c6515adb5fe691",
+  "repository": "langfuse/langfuse",
+  "strategy": "contextlens_conservative",
+  "study_id": "langfuse",
+  "task_id": "langfuse-shared-flattened-otel-parameters"
+}

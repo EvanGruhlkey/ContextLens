@@ -101,5 +101,157 @@
       ],
       "study_status": "static_ready"
     }
+  ],
+  "agent_study_protocol": {
+    "selection_policy": "Tasks were pinned from merged upstream bug-fix PRs before any context-candidate agent outcome was observed.",
+    "smoke_trials_per_variant": 1,
+    "full_trials_per_variant": 3,
+    "maximum_agent_runs": 36,
+    "paired_order": [
+      "base,candidate",
+      "candidate,base",
+      "base,candidate"
+    ],
+    "reasoning_effort": "low",
+    "thread_reuse": false,
+    "workspace_reuse": false
+  },
+  "agent_studies": [
+    {
+      "id": "browser-use",
+      "company_reference": "https://www.ycombinator.com/companies/browser-use",
+      "repository": "browser-use/browser-use",
+      "clone_url": "https://github.com/browser-use/browser-use.git",
+      "context_reference": "https://github.com/browser-use/browser-use/blob/898f23f0b672ef44b4a01835ff4b3368e91812fd/AGENTS.md",
+      "context_provider": "codex",
+      "hypothesis": "The development rules are useful, while the bounded browser_use_docs reference block may be deferrable for coding tasks that do not require product documentation.",
+      "candidate_strategy": "Remove only the complete <browser_use_docs>...</browser_use_docs> block; preserve all surrounding development guidance byte-for-byte.",
+      "tasks": [
+        {
+          "id": "browser-use-redaction-cascade",
+          "pull_request": 5211,
+          "pull_request_url": "https://github.com/browser-use/browser-use/pull/5211",
+          "pre_fix_commit": "af2d7a593980b20ade90ad13a128d9dd904ad26f",
+          "fixed_commit": "2e85f567dac6cb102cf79c184f7283f651746982",
+          "task_prompt": "Fix redact_sensitive_string so overlapping sensitive values cannot corrupt placeholders produced for earlier matches. Preserve normal redaction behavior and add focused regression coverage.",
+          "target_paths": ["browser_use/utils.py"],
+          "hidden_grader": {
+            "source": "upstream_fixed_commit",
+            "source_path": "tests/ci/test_redact_cascade.py",
+            "destination_path": "tests/ci/test_contextlens_redact_cascade.py",
+            "command": ["uv", "run", "pytest", "tests/ci/test_contextlens_redact_cascade.py", "-q"]
+          },
+          "status": "ready_for_agent_run"
+        },
+        {
+          "id": "browser-use-zero-compaction-threshold",
+          "pull_request": 5401,
+          "pull_request_url": "https://github.com/browser-use/browser-use/pull/5401",
+          "pre_fix_commit": "a3e3cc5dd11dd219884532fd37d67775cd66c74d",
+          "fixed_commit": "32601887cfbc9f4f1e3cad3e2b678e56aeaeaae4",
+          "task_prompt": "Honor an explicit zero message-compaction character threshold so step cadence alone can trigger compaction. Preserve the default used when the setting is omitted and add focused regression coverage.",
+          "target_paths": ["browser_use/agent/message_manager/service.py"],
+          "hidden_grader": {
+            "source": "upstream_fixed_commit",
+            "source_path": "tests/ci/test_message_compaction.py",
+            "destination_path": "tests/ci/test_contextlens_message_compaction.py",
+            "command": ["uv", "run", "pytest", "tests/ci/test_contextlens_message_compaction.py", "-q"]
+          },
+          "status": "ready_for_agent_run"
+        }
+      ]
+    },
+    {
+      "id": "infisical",
+      "company_reference": "https://www.ycombinator.com/companies/infisical",
+      "repository": "Infisical/infisical",
+      "clone_url": "https://github.com/Infisical/infisical.git",
+      "context_reference": "https://github.com/Infisical/infisical/blob/588195af075964418c3e99f4d10775280af5ee63/CLAUDE.md",
+      "context_provider": "claude",
+      "hypothesis": "Task-effective root plus subsystem guidance should exclude unrelated monorepo guidance while retaining cross-cutting security and quality rules.",
+      "candidate_strategy": "Conservatively remove root sections that describe unrelated subsystems; keep the complete applicable backend/CLAUDE.md or frontend/CLAUDE.md and cross-cutting requirements.",
+      "tasks": [
+        {
+          "id": "infisical-backend-ldap-cn-case",
+          "pull_request": 7269,
+          "pull_request_url": "https://github.com/Infisical/infisical/pull/7269",
+          "pre_fix_commit": "13cc7b6f882aa716f28542e6e0771d6b8dce093f",
+          "fixed_commit": "ca0dcce09c1e0c6d9558db9ee8a58f9b59444786",
+          "task_prompt": "Make LDAP group CN matching case-insensitive in accordance with LDAP semantics while storing the directory's canonical CN. Keep group sync behavior intact and add focused unit coverage.",
+          "target_paths": ["backend/src/ee/services/ldap-config/ldap-fns.ts"],
+          "hidden_grader": {
+            "source": "upstream_fixed_commit",
+            "source_path": "backend/src/ee/services/ldap-config/ldap-fns.test.ts",
+            "destination_path": "backend/src/ee/services/ldap-config/ldap-fns.contextlens.test.ts",
+            "working_directory": "backend",
+            "command": ["npm", "run", "test:unit", "--", "ldap-fns.contextlens"]
+          },
+          "status": "ready_for_agent_run"
+        },
+        {
+          "id": "infisical-frontend-null-connection-message",
+          "pull_request": 6496,
+          "pull_request_url": "https://github.com/Infisical/infisical/pull/6496",
+          "pre_fix_commit": "40abbafa1903ec4c02fcb260009f96517ffad280",
+          "fixed_commit": "c1f4fc904a5b5df6121ec77f97b59b248840d432",
+          "task_prompt": "When a user cancels creation of a new secret-sync connection, validate the resulting null connection with the user-facing message 'Connection Required' instead of Zod's generic object error. Preserve valid-connection behavior.",
+          "target_paths": ["frontend/src/components/secret-syncs/forms/schemas/base-secret-sync-schema.ts"],
+          "hidden_grader": {
+            "source": "case_study_owned_behavioral_test",
+            "source_path": "case-studies/infisical/graders/base-secret-sync-schema.contextlens.ts",
+            "destination_path": "frontend/src/components/secret-syncs/forms/schemas/base-secret-sync-schema.contextlens.ts",
+            "working_directory": "frontend",
+            "command": ["npx", "tsx", "--tsconfig", "tsconfig.app.json", "src/components/secret-syncs/forms/schemas/base-secret-sync-schema.contextlens.ts"]
+          },
+          "status": "ready_for_agent_run"
+        }
+      ]
+    },
+    {
+      "id": "langfuse",
+      "company_reference": "https://www.ycombinator.com/companies/langfuse",
+      "repository": "langfuse/langfuse",
+      "clone_url": "https://github.com/langfuse/langfuse.git",
+      "context_reference": "https://github.com/langfuse/langfuse/blob/e68e201a66ac67eaeb2a6dd8f1d36295c092913f/.agents/AGENTS.md",
+      "context_provider": "codex",
+      "hypothesis": "Langfuse's deliberately scoped context should leave little conservative context to remove; a rejected or empty candidate is an expected control outcome.",
+      "candidate_strategy": "Use only ContextLens-generated exact dedupe, stale-reference removal, or scope candidates. Do not manually rewrite the guidance.",
+      "tasks": [
+        {
+          "id": "langfuse-web-project-role-entitlement",
+          "pull_request": 16171,
+          "pull_request_url": "https://github.com/langfuse/langfuse/pull/16171",
+          "pre_fix_commit": "8c60f234c7b04f45218d92f5fce4bad37678a3bd",
+          "fixed_commit": "d15cf1f9ab1587fd28286fda1a907a8fd56eff09",
+          "task_prompt": "Gate project-role assignment on the rbac-project-roles entitlement while still allowing downgraded organizations to clear an existing role. Add plan-specific server regression coverage.",
+          "target_paths": ["web/src/features/rbac/server/membersRouter.ts"],
+          "hidden_grader": {
+            "source": "upstream_fixed_commit",
+            "source_path": "web/src/__tests__/server/members-trpc.servertest.ts",
+            "destination_path": "web/src/__tests__/server/members-trpc.servertest.ts",
+            "replace_existing": true,
+            "working_directory": "web",
+            "command": ["pnpm", "exec", "vitest", "run", "--project", "server", "src/__tests__/server/members-trpc.servertest.ts"]
+          },
+          "status": "infrastructure_blocked_windows_vitest_filter"
+        },
+        {
+          "id": "langfuse-shared-flattened-otel-parameters",
+          "pull_request": 16249,
+          "pull_request_url": "https://github.com/langfuse/langfuse/pull/16249",
+          "pre_fix_commit": "fb4a4f12bf2d5788d7bcb3e3f9c6515adb5fe691",
+          "fixed_commit": "0757b12cecd11321132309f5eb319fcab25a01b9",
+          "task_prompt": "Map flattened llm.invocation_parameters.* OTLP attributes into modelParameters without changing the precedence of explicit Langfuse parameters, canonical invocation JSON, or model_config. Add focused shared-package coverage.",
+          "target_paths": ["packages/shared/src/server/otel/OtelIngestionProcessor.ts"],
+          "hidden_grader": {
+            "source": "upstream_fixed_commit",
+            "source_path": "packages/shared/src/server/otel/OtelIngestionProcessor.modelParameters.test.ts",
+            "destination_path": "packages/shared/src/server/otel/OtelIngestionProcessor.contextlens.test.ts",
+            "command": ["pnpm", "--filter", "@langfuse/shared", "run", "test", "OtelIngestionProcessor.contextlens.test.ts"]
+          },
+          "status": "ready_for_agent_run"
+        }
+      ]
+    }
   ]
 }

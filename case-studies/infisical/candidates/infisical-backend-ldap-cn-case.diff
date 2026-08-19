@@ -1,0 +1,28 @@
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -56,10 +56,6 @@
+ 
+ ## Cross-Cutting Patterns
+ 
+-### Design System & Voice
+-
+-The v3 visual system (colors, typography, components, layout) and product voice/content tone are documented in [`DESIGN.md`](DESIGN.md). Read it before producing new UI or user-visible copy.
+-
+ ### Auth & Permissions
+ 
+ Auth modes (JWT, IDENTITY_ACCESS_TOKEN, SCIM_TOKEN, MCP_JWT) are extracted in `backend/src/server/plugins/auth/`. Authorization uses CASL (`@casl/ability`) with project-level and org-level permission checks — see `backend/CLAUDE.md` for backend details and `frontend/CLAUDE.md` for frontend permission hooks/HOCs. Note: `API_KEY` and `SERVICE_TOKEN` auth modes are deprecated — do not use them in new code.
+@@ -69,14 +65,6 @@
+ No IoC container in either backend. Every service is a factory function with explicit dependencies.
+ - **Node.js**: Wired in `backend/src/server/routes/index.ts` — see `backend/CLAUDE.md`.
+ - **Go**: Wired in `backend-go/internal/server/api/api.go` via `NewRegistry()` — see `backend-go/CLAUDE.md`.
+-
+-### Interface Pattern (Go)
+-
+-Both handlers and services define narrow interfaces for their dependencies (consumer-defined interfaces). Only expose methods or fields that are needed — keep everything else private. This enables testability and loose coupling.
+-
+-### API Layer (Frontend)
+-
+-React Query + Axios with query key factories per domain. Each API domain in `frontend/src/hooks/api/` has `queries.tsx`, `mutations.tsx`, and `types.tsx` — see `frontend/CLAUDE.md` for conventions.
+ 
+ ## Keeping CLAUDE.md Up to Date
+ 

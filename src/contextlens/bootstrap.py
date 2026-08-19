@@ -110,6 +110,7 @@ def initialize_repository(
         "quality_tolerance": 0,
         "economics_tolerance": 0.02,
         "require_provider_usage": False,
+        "context_provider": "codex" if agent_config["type"] == "codex" else "portable",
         "agent": agent_config,
         "tasks": [
             {

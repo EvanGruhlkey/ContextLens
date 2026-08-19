@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import json
+import subprocess
 from pathlib import Path
 
+import pytest
+
+import contextlens.regression as regression_module
 from contextlens.experiments import AgentOutcome, AgentSettings, ReplayRequest
 from contextlens.regression import (
     RegressionVerdict,
     VerificationPolicy,
     VerificationTask,
     run_context_verification,
+    verify_repository,
 )
 from contextlens.trace import ContextSource, SourceKind
 
@@ -109,6 +115,18 @@ class _WorkspaceIsolationAdapter:
         )
 
 
+class _AlwaysOkAdapter:
+    adapter_id = "always-ok-fixture"
+
+    def run(self, request: ReplayRequest) -> AgentOutcome:
+        context_tokens = sum(source.token_count or 0 for source in request.context)
+        return AgentOutcome(
+            output_text="ok",
+            input_tokens=100 + context_tokens,
+            output_tokens=5,
+        )
+
+
 def _task(tmp_path: Path) -> VerificationTask:
     (tmp_path / "fixture.txt").write_text("fixed workspace\n", encoding="utf-8")
     return VerificationTask(
@@ -117,6 +135,62 @@ def _task(tmp_path: Path) -> VerificationTask:
         tmp_path,
         expected_output="ok",
     )
+
+
+def _git(root: Path, *arguments: str) -> None:
+    subprocess.run(
+        ("git", *arguments),
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _verification_config(
+    root: Path,
+    *,
+    target_paths: list[str] | None,
+    context_provider: str | None = "codex",
+) -> Path:
+    task: dict[str, object] = {
+        "id": "scoped-task",
+        "instruction": "Return ok.",
+        "workspace": ".",
+        "expected_output": "ok",
+    }
+    if target_paths is not None:
+        task["target_paths"] = target_paths
+    if context_provider is not None:
+        task["context_provider"] = context_provider
+    config = {
+        "trials": 1,
+        "agent": {
+            "type": "subprocess",
+            "command": ["fixture"],
+            "provider": "fixture",
+            "model": "deterministic",
+        },
+        "tasks": [task],
+    }
+    path = root / "evals.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    return path
+
+
+def _initialize_context_repository(root: Path) -> None:
+    (root / "backend").mkdir()
+    (root / "frontend").mkdir()
+    (root / "backend" / "api.py").write_text("pass\n", encoding="utf-8")
+    (root / "frontend" / "app.ts").write_text("export {};\n", encoding="utf-8")
+    (root / "AGENTS.md").write_text("Root rules.\n", encoding="utf-8")
+    (root / "backend" / "AGENTS.md").write_text("Backend rules.\n", encoding="utf-8")
+    (root / "frontend" / "AGENTS.md").write_text("Frontend rules.\n", encoding="utf-8")
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "contextlens@example.invalid")
+    _git(root, "config", "user.name", "ContextLens Tests")
+    _git(root, "add", ".")
+    _git(root, "commit", "-qm", "base")
 
 
 def test_paired_verification_passes_quality_and_provider_savings(
@@ -218,3 +292,109 @@ def test_base_and_candidate_runs_use_fresh_isolated_workspaces(
 
     assert report.base.successes == report.candidate.successes == 2
     assert not (tmp_path / ".contextlens-run-marker").exists()
+
+
+def test_verify_uses_backend_effective_context_and_persists_resolution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _initialize_context_repository(tmp_path)
+    config = _verification_config(tmp_path, target_paths=["backend/api.py"])
+    monkeypatch.setattr(
+        regression_module, "_agent_factory", lambda value: _AlwaysOkAdapter
+    )
+
+    report = verify_repository(config, root=tmp_path, base_ref="HEAD")
+
+    for trial in report.trials:
+        assert trial.context_provider == "codex"
+        assert trial.context_source_paths == ("AGENTS.md", "backend/AGENTS.md")
+        assert "frontend/AGENTS.md" not in trial.context_source_paths
+        assert trial.initial_context_tokens > 0
+        raw = trial.to_dict()["context"]
+        assert raw["source_paths"] == ["AGENTS.md", "backend/AGENTS.md"]
+        assert raw["effective_initial_tokens"] == trial.initial_context_tokens
+        assert all(item["scope_accuracy"] for item in raw["resolution"])
+
+
+def test_verify_unions_multiple_targets(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _initialize_context_repository(tmp_path)
+    config = _verification_config(
+        tmp_path,
+        target_paths=["backend/api.py", "frontend/app.ts"],
+    )
+    monkeypatch.setattr(
+        regression_module, "_agent_factory", lambda value: _AlwaysOkAdapter
+    )
+
+    report = verify_repository(config, root=tmp_path, base_ref="HEAD")
+
+    assert set(report.trials[0].context_source_paths) == {
+        "AGENTS.md",
+        "backend/AGENTS.md",
+        "frontend/AGENTS.md",
+    }
+
+
+def test_base_and_candidate_resolve_their_own_context_trees(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _initialize_context_repository(tmp_path)
+    config = _verification_config(tmp_path, target_paths=["backend/api.py"])
+    (tmp_path / "backend" / "service").mkdir()
+    (tmp_path / "backend" / "AGENTS.md").rename(
+        tmp_path / "backend" / "service" / "AGENTS.md"
+    )
+    monkeypatch.setattr(
+        regression_module, "_agent_factory", lambda value: _AlwaysOkAdapter
+    )
+
+    report = verify_repository(config, root=tmp_path, base_ref="HEAD")
+
+    base = next(item for item in report.trials if item.variant == "base")
+    candidate = next(item for item in report.trials if item.variant == "candidate")
+    assert base.context_source_paths == ("AGENTS.md", "backend/AGENTS.md")
+    assert candidate.context_source_paths == ("AGENTS.md",)
+    assert "backend/service/AGENTS.md" not in candidate.context_source_paths
+
+
+def test_no_targets_preserves_repository_wide_context(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _initialize_context_repository(tmp_path)
+    config = _verification_config(
+        tmp_path,
+        target_paths=None,
+        context_provider=None,
+    )
+    monkeypatch.setattr(
+        regression_module, "_agent_factory", lambda value: _AlwaysOkAdapter
+    )
+
+    report = verify_repository(config, root=tmp_path, base_ref="HEAD")
+
+    assert set(report.trials[0].context_source_paths) == {
+        "AGENTS.md",
+        "backend/AGENTS.md",
+        "frontend/AGENTS.md",
+    }
+    assert "repository-wide context" in report.trials[0].context_warnings[0]
+
+
+def test_target_paths_require_explicit_provider_for_non_codex_adapter(
+    tmp_path: Path,
+) -> None:
+    _initialize_context_repository(tmp_path)
+    config = _verification_config(
+        tmp_path,
+        target_paths=["backend/api.py"],
+        context_provider=None,
+    )
+
+    with pytest.raises(ValueError, match="no context_provider"):
+        verify_repository(config, root=tmp_path, base_ref="HEAD")
