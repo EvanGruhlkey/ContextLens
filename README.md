@@ -290,6 +290,16 @@ The hidden grader is injected only after the coding agent exits. A study task
 must already demonstrate that its buggy revision fails and its upstream fixed
 revision passes before ContextLens will spend an agent run on it.
 
+## Real-world experiments
+
+| Repository | Historical task | Trials | Quality | Median paired provider input | Verdict |
+| --- | --- | ---: | --- | ---: | --- |
+| Browser Use | Redaction cascade | 3 pairs | 3/3 → 3/3 | -55.7% | PASS |
+
+This is an initial six-execution case study, not a universal benchmark. See the
+[paired results and limitations](case-studies/RESULTS.md), including uncached
+input, latency, trial-level deltas, raw artifacts, and invalid attempts.
+
 ## `contextlens minimize`
 
 `minimize` is the advanced token-saving workflow. Static signals generate

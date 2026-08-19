@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "study_id": "browser-use",
+  "task_id": "browser-use-redaction-cascade",
+  "repository": "browser-use/browser-use",
+  "pre_fix_commit": "af2d7a593980b20ade90ad13a128d9dd904ad26f",
+  "fixed_commit": "2e85f567dac6cb102cf79c184f7283f651746982",
+  "contextlens_commit": "4c36bc45b4cc91ed87dd1fdc255a01a87a9b0a01",
+  "repository_snapshot_digest": "52bb2c26164f1c5eeb76fc52f09fceb69ad59e8e9e047f9989d79bd609f9a4d5",
+  "task_hash": "7f93cc79ccc0b7342e5ca913b292979de53362f9a887188407d4dc7aaf8ba49e",
+  "grader_fixture_hash": "efb0a451c6b72c56a0fe4f99098c3a4abffd7e632d851f8b764fd228eb08b451",
+  "grader_definition_hash": "633152391ac2f48241d76a7b68d7bdcbeaca370e8aeeff506878f15bd1c2bdb2",
+  "base_context_hash": "6c2dd67655da7ac02d3fe3faa99d1e30a9981c68f31d9089138400f098d8fc2c",
+  "candidate_context_hash": "6b7c0e1e3e7cdb4ce2f0ab8b8759db48e73303f4909c6ee9bf7ea3b0e5bf313b",
+  "fixed_dimensions_hash": "f96f428456694d1e5b13e31240efdd20f75c7d45da8667cd4284d3250dd548df",
+  "agent": {
+    "adapter": "codex-cli-jsonl-v1",
+    "cli_version": "0.146.0",
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "low",
+    "sandbox": "danger-full-access",
+    "tools": ["shell"]
+  },
+  "policy": {
+    "trials": 3,
+    "timeout_seconds": 900,
+    "order": [
+      ["base", "candidate"],
+      ["candidate", "base"],
+      ["base", "candidate"]
+    ]
+  },
+  "status": "preregistered"
+}
