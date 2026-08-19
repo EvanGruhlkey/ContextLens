@@ -242,6 +242,13 @@ class _IsolatedAgentAdapter:
 class ContextExperimentRunnerTests(unittest.TestCase):
     def test_isolates_pairs_persists_manifest_and_hides_native_context(self) -> None:
         requests: list[ReplayRequest] = []
+        adapter_constructions = 0
+
+        def agent_factory() -> _IsolatedAgentAdapter:
+            nonlocal adapter_constructions
+            adapter_constructions += 1
+            return _IsolatedAgentAdapter(requests)
+
         with TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "code.py").write_text("value = 1\n", encoding="utf-8")
@@ -268,7 +275,7 @@ class ContextExperimentRunnerTests(unittest.TestCase):
                         target_paths=("code.py",),
                         source_paths=("AGENTS.md",),
                     ),
-                    agent_factory=lambda: _IsolatedAgentAdapter(requests),
+                    agent_factory=agent_factory,
                     settings=AgentSettings(
                         "openai",
                         "fixture-model",
@@ -291,11 +298,13 @@ class ContextExperimentRunnerTests(unittest.TestCase):
             ],
         )
         self.assertEqual(len(requests), 6)
+        self.assertEqual(adapter_constructions, 6)
         self.assertEqual(len({request.workspace for request in requests}), 6)
         self.assertTrue(
             all(not Path(request.workspace).exists() for request in requests)
         )
         self.assertEqual(len({item.agent_instance_id for item in run.invocations}), 6)
+        self.assertEqual(len({item.result.run_id for item in run.invocations}), 6)
         self.assertEqual(
             len({item.fixed_dimensions_hash for item in run.invocations}), 1
         )
@@ -320,13 +329,14 @@ class ContextExperimentRunnerTests(unittest.TestCase):
     def test_infrastructure_failures_are_retained_but_not_aggregated(self) -> None:
         class FailingAdapter:
             adapter_id = "failing-v1"
+            constructions = 0
 
             def __init__(self) -> None:
-                self.calls = 0
+                type(self).constructions += 1
+                self.instance_number = type(self).constructions
 
             def run(self, request: ReplayRequest) -> AgentOutcome:
-                self.calls += 1
-                if request.variant.variant_id == "candidate" and self.calls == 2:
+                if self.instance_number == 3:
                     raise RuntimeError("provider unavailable")
                 return AgentOutcome(output_text="1.0", input_tokens=10)
 

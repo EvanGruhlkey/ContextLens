@@ -279,20 +279,8 @@ class ContextExperimentRunner:
         fixed_hash = _fixed_dimensions_hash(experiment)
         invocations: list[AgentTrial] = []
         pairs: list[PairedAgentTrial] = []
-        adapters = {
-            "base": experiment.agent_factory(),
-            "candidate": experiment.agent_factory(),
-        }
-        adapter_ids = {adapter.adapter_id for adapter in adapters.values()}
-        adapter_versions = {
-            version
-            for adapter in adapters.values()
-            if (version := _adapter_version(adapter)) is not None
-        }
-        if len(adapter_ids) != 1 or len(adapter_versions) > 1:
-            raise ValueError(
-                "agent factory changed adapter identity within a paired experiment"
-            )
+        adapter_ids: set[str] = set()
+        adapter_versions: set[str] = set()
         randomizer = (
             random.Random(experiment.order_seed)
             if experiment.order_seed is not None
@@ -321,7 +309,17 @@ class ContextExperimentRunner:
                         order_position=order_position,
                     )
                 )
-                adapter = adapters[variant]
+                # Freshness is guaranteed by the experiment engine, independent of
+                # whether a particular adapter happens to spawn a new subprocess.
+                adapter = experiment.agent_factory()
+                adapter_ids.add(adapter.adapter_id)
+                if (version := _adapter_version(adapter)) is not None:
+                    adapter_versions.add(version)
+                if len(adapter_ids) != 1 or len(adapter_versions) > 1:
+                    raise ValueError(
+                        "agent factory changed adapter identity within a paired "
+                        "experiment"
+                    )
                 worker = ReplayWorker(
                     adapter=adapter,
                     snapshot=experiment.snapshot,
