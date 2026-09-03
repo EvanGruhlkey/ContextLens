@@ -17,7 +17,9 @@ from contextlens.pruning.runtime import (
     PruningSession,
     TaskGoal,
     ToolObservation,
+    TrajectorySummary,
     classify_observation,
+    summarize_trajectory,
 )
 from contextlens.pruning.scoring import (
     HttpSemanticScorer,
@@ -41,7 +43,9 @@ __all__ = [
     "PruningSession",
     "TaskGoal",
     "ToolObservation",
+    "TrajectorySummary",
     "classify_observation",
+    "summarize_trajectory",
     "estimate_tokens",
     "render_python_skeleton",
     "HttpSemanticScorer",

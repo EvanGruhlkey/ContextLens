@@ -90,3 +90,42 @@ def test_explicit_kind_overrides_inference() -> None:
     )
 
     assert classify_observation(observation) == (ObservationKind.LOG, "python")
+
+
+def test_session_summarizes_the_complete_task(tmp_path: Path) -> None:
+    scorer = _RecordingScorer()
+    session = PruningSession(
+        ContextPruner(scorer, ReceiptStore(tmp_path)),
+        "Inspect output",
+        minimum_tokens=0,
+        context_radius=0,
+    )
+    session.observe(
+        ToolObservation(_source(), "read_file", {"path": "src/first.py"})
+    )
+    session.observe(ToolObservation("short output", "shell"))
+
+    summary = session.summary()
+    payload = summary.to_dict()
+
+    assert summary.observations == 2
+    assert summary.pruned_observations == 1
+    assert summary.saved_tokens > 0
+    assert summary.reduction_fraction > 0
+    assert summary.backend_counts == {"fixture-v1": 1, "passthrough": 1}
+    assert summary.bypass_counts == {"unsupported_kind": 1}
+    assert summary.reason_counts["semantic"] == 1
+    assert payload["bypassed_observations"] == 1
+
+
+def test_empty_session_has_zero_reduction(tmp_path: Path) -> None:
+    session = PruningSession(
+        ContextPruner(_RecordingScorer(), ReceiptStore(tmp_path)),
+        "Inspect output",
+    )
+
+    summary = session.summary()
+
+    assert summary.observations == 0
+    assert summary.saved_tokens == 0
+    assert summary.reduction_fraction == 0.0
