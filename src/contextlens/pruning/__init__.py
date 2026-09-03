@@ -14,6 +14,7 @@ from contextlens.pruning.scoring import (
     SemanticScorer,
     SemanticScores,
 )
+from contextlens.pruning.structure import StructuralResult, close_python_dependencies
 
 __all__ = [
     "LineDecision",
@@ -26,4 +27,6 @@ __all__ = [
     "HttpSemanticScorer",
     "SemanticScorer",
     "SemanticScores",
+    "StructuralResult",
+    "close_python_dependencies",
 ]

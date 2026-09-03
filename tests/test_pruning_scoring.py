@@ -71,9 +71,11 @@ def test_http_scorer_rejects_backend_failure() -> None:
     request = PruneRequest(task="Find parser", content="def parse(): pass")
     failure = urllib.error.URLError("offline")
 
-    with patch("urllib.request.urlopen", side_effect=failure):
-        with pytest.raises(RuntimeError, match="unavailable"):
-            scorer.score(request)
+    with (
+        patch("urllib.request.urlopen", side_effect=failure),
+        pytest.raises(RuntimeError, match="unavailable"),
+    ):
+        scorer.score(request)
 
 
 def test_http_scorer_rejects_invalid_payload() -> None:
@@ -82,6 +84,8 @@ def test_http_scorer_rejects_invalid_payload() -> None:
     response = io.BytesIO(b"not-json")
     response.__enter__ = lambda: response  # type: ignore[attr-defined]
 
-    with patch("urllib.request.urlopen", return_value=response):
-        with pytest.raises(RuntimeError, match="invalid JSON"):
-            scorer.score(request)
+    with (
+        patch("urllib.request.urlopen", return_value=response),
+        pytest.raises(RuntimeError, match="invalid JSON"),
+    ):
+        scorer.score(request)
