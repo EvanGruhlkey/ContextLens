@@ -9,6 +9,11 @@ from contextlens.pruning.model import (
     PruneResult,
     estimate_tokens,
 )
+from contextlens.pruning.scoring import (
+    HttpSemanticScorer,
+    SemanticScorer,
+    SemanticScores,
+)
 
 __all__ = [
     "LineDecision",
@@ -18,4 +23,7 @@ __all__ = [
     "PruneRequest",
     "PruneResult",
     "estimate_tokens",
+    "HttpSemanticScorer",
+    "SemanticScorer",
+    "SemanticScores",
 ]
