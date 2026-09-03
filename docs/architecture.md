@@ -2,178 +2,147 @@
 
 ## Product boundary
 
-ContextLens is CI and regression testing for repository-owned AI-agent context.
-Its central question is:
+ContextLens is task-conditioned observation pruning for coding agents. It
+intercepts source returned by read tools, creates a goal question, uses the
+released SWE-Pruner 0.6B model to select evidence, restores structural support,
+and returns a smaller observation.
 
-> What was the causal effect of changing the agent's context?
+It prunes environment observations, not conversation history. It is not a
+security filter or a replacement for tests.
 
-It is not a generic observability dashboard, prompt compressor, AGENTS.md
-linter, agent framework, or arbitrary eval platform. Static analysis is the
-zero-friction front door; controlled A/B agent execution is the differentiator.
+## Runtime loop
 
-## Data flow
-
-```text
-Repository worktree ── discovery ── static scan ── review candidates
-        │                    │
-Git base tree ───────────────┴───── context diff
-        │
-        ├── base context ─────┐
-        │                     ├─ isolated matched replays ─ mechanical evaluator
-        └── candidate context ┘                         │
-                                                        ▼
-                             quality + economics + behavior + performance
-                                                        │
-                                                        ▼
-                                   PASS / WARN / REGRESSION / INCONCLUSIVE
-                                                        │
-                                             verified minimization / CI gate
+```mermaid
+flowchart LR
+    A[Agent task] --> B[Read tool]
+    B --> C[Raw source]
+    C --> D[ContextLens]
+    D --> E[Focused source]
+    E --> A
 ```
 
-The base and candidate tasks use the same workspace snapshot, task, agent
-identity, model settings, tools, sandbox contract, evaluator, timeout, and
-trial policy. Only the context tuple changes.
+`PruningSession` holds the stable task across a trajectory. Its focus may
+change between reads without changing task identity. Tool name, file path, and
+observation type travel with each request.
 
-## Layers
+## Goal creation
 
-### Repository product layer
-
-`repository.py` discovers context by convention and performs conservative
-static analysis. It reads base content from Git objects without checking out a
-branch. Repository-wide footprint and target-effective context are distinct;
-provider resolvers label scope semantics as documented or approximated.
-
-`bootstrap.py` detects common repository ecosystems, mechanical commands, and
-available adapters for `contextlens init`. It never executes project code while
-detecting configuration and emits explicit TODOs when evidence is insufficient.
-
-`experiments/paired_runner.py` owns the shared `PairedAgentExperiment` and
-`ContextExperimentRunner` execution primitive. It creates fresh isolated
-workers, alternates trial order, preserves explicit pairing, classifies task
-failures separately from infrastructure errors, and emits a reproducible
-manifest plus raw evidence.
-
-`regression.py` resolves task-effective base and candidate context, invokes the
-shared paired runner, normalizes the raw trials, excludes infrastructure-invalid
-runs from causal aggregates, and applies fail-closed quality/economics verdicts.
-Verified minimization and the historical case-study harness reach agents
-through this same path.
-
-`telemetry.py` normalizes common OpenAI-style, Anthropic-style, and generic
-usage objects. Cached, uncached, cache-write, visible output, and reasoning
-tokens stay distinct. Pricing is explicit and dated.
-
-`minimize.py` uses explainable static signals only to generate and prioritize
-candidates. Each footprint-reducing edit is tested independently; passing edits
-receive a separate combined target-model verification to catch interactions.
-It recommends a patch only after final PASS and never edits source files.
-
-`ci.py` provides stable static/verified exit semantics and machine-readable
-results. `action.yml` exposes that contract as a composite GitHub Action.
-
-### Retained experimentation layer
-
-The product pivot preserves the technically difficult original system:
-
-- `trace/`: versioned JSONL context/run/step records, artifacts, redaction;
-- `profiler/`: deterministic one-run utilization and duplication signals;
-- `experiments/`: adapters, isolated workspaces, explicit mutations, repeated
-  paired runners, adaptive search, caching, retries, and resource limits;
-- `evaluators/`: exact, test-result, callable, recorded, and coding-task
-  mechanical evaluators;
-- `analysis/`: paired bootstrap effects, uncertainty, savings, and cost;
-- `optimization/`: candidate construction, screening, predictors, and combined
-  target-model verification;
-- `storage/`: normalized project-scoped SQLite persistence;
-- `reports/`: terminal, JSON, CSV, and self-contained HTML reports;
-- `policy.py` and `runtime.py`: validated policy export and fail-closed runtime
-  application.
-
-Legacy commands call these systems directly. New commands orchestrate them at
-the repository-context boundary.
-
-## Context source mapping
-
-Discovered repository files map to immutable `ContextSource` objects:
-
-| Repository source | Internal kind | Scope |
-| --- | --- | --- |
-| `AGENTS.md`, `CLAUDE.md`, Copilot/Cursor rules, skills | `repo_instruction` | containing directory or declared convention |
-| MCP config and static tool schemas | `tool_schema` | containing directory |
-
-The source ID is stable for a repository path. Content hashes detect drift.
-Static byte estimates are labeled; recorded provider token counts take
-precedence when available.
-
-## Evidence semantics
-
-- **Observed/static**: deterministic footprint or syntax/repository facts.
-- **Candidate/static**: a proposed mutation generated from static signals.
-- **Screening**: cheaper or substitute-model prioritization evidence.
-- **Verified/target model**: controlled task replay on the configured agent.
-- **Regression**: observed quality or economics breached policy.
-- **Inconclusive**: evidence was missing or insufficient.
-
-"Not observed being used" never means "safe to remove." Independent safe
-removals can interact, so combined candidates are reverified.
-
-## Economics objective
-
-Context footprint is not the economic objective. When available, ContextLens
-models:
+SWE-Pruner asks the coding agent for a complete, self-contained question that
+describes its current information need. ContextLens creates that question
+deterministically so every integration gets the same contract:
 
 ```text
-uncached input cost
-  + cached input cost
-  + cache-write input cost
-  + visible output cost
-  + reasoning cost
-  + optional latency policy
+task:  Fix the refresh timeout
+focus: Trace retry options
+path:  src/client.py
+
+goal:  For the coding task 'Fix the refresh timeout', what code in
+       src/client.py is needed to answer: Trace retry options?
 ```
 
-subject to quality remaining within tolerance and zero catastrophic
-regressions. If dollar pricing is incomplete, token categories are reported
-separately.
+Without a narrower focus, the task itself becomes the information need. The
+generated goal is sent to the model and recorded in the result.
 
-## Reproducibility contract
+## Learned evidence selection
 
-A trustworthy verification records:
+The default scorer lazy-loads `ayanami-kitasan/code-pruner`, the released
+SWE-Pruner checkpoint based on Qwen3-Reranker-0.6B.
 
-- Git base, candidate content hashes, ordered context manifest;
-- per-task target paths, context provider, exact effective source paths,
-  effective initial tokens, resolution mode, and scope warnings;
-- task, workspace digest, agent/provider/model identity, and settings;
-- evaluator/check commands, sampling policy, trial, and run IDs;
-- raw success/score evidence and failed attempts;
-- injected context, provider usage categories, behavior, and latency;
-- ContextLens/adapter versions and explicit pricing snapshot when used.
+```mermaid
+flowchart LR
+    A[Goal + source] --> B[0.6B encoder]
+    B --> C[Token keep scores]
+    C --> D[Mean score per line]
+    D --> E[Threshold]
+    E --> F[Evidence lines]
+```
 
-Remote models are not assumed deterministic. Repeated matched trials expose
-variance; they do not guarantee it disappears.
+The official model runtime owns its prompt format, multi-layer feature fusion,
+CRF pruning head, 8,192-token window, overlapping chunks, and overlap-score
+averaging. ContextLens consumes its document score, model token count, and
+retained line numbers.
 
-## Telemetry adapters
+The model loads on the first eligible observation. Small or unsupported
+observations do not allocate model memory. A lock serializes local inference so
+the HTTP service does not invoke one model concurrently.
 
-The internal trace remains supported but is not required. Provider usage
-objects normalize directly through `telemetry.py`. The adapter boundary is
-intended to accept generic JSON and OpenTelemetry GenAI spans without changing
-the regression model. See [adapters](adapters.md).
+An explicit `--backend http` mode calls the same SWE-Pruner `/prune`
+contract out of process.
 
-## Security and isolation
+## Structural support
 
-ContextLens is local-first. Traces and result JSON can contain prompts, code,
-commands, and model output.
+SWE-Pruner supplies the semantic evidence mask. Following LaMR's
+semantic/dependency split, ContextLens computes a separate dependency layer
+from the Python AST.
 
-- Built-in redaction runs before ContextLens persistence when configured.
-- Reports exclude raw context by default.
-- Subprocess environment variables use an allowlist plus explicit secrets.
-- Directory-copy workers isolate filesystem mutations only.
-- Experimental snapshots omit discovered native context files; the selected
-  effective context is supplied directly by the runner.
-- Codex workers are new ephemeral processes with user config and native rule
-  loading disabled.
-- Hidden study graders and their configuration remain outside the agent-visible
-  snapshot and are injected only after the coding agent exits.
-- Strong OS/network/credential isolation requires a container or equivalent
-  adapter supplied by the deployment environment.
+```mermaid
+flowchart TD
+    A[Evidence line] --> B[Complete statement]
+    A --> C[Enclosing scopes]
+    A --> D[Control-flow peers]
+    B --> E[Referenced definitions]
+    E --> F[Bounded dependency hops]
+```
 
-Static scan/diff perform no network access or model calls.
+The closure restores:
+
+- complete multi-line statements;
+- decorators and class/function headers;
+- enclosing branch, loop, exception, match, and context-manager headers;
+- sibling `else`, `except`, `finally`, and `case` headers;
+- referenced imports, assignments, functions, and classes;
+- transitive definitions up to the configured hop limit.
+
+This is the inference-time AST repair described by LaMR. ContextLens does not
+claim that the released SWE-Pruner checkpoint contains LaMR's unpublished
+semantic/dependency CRF heads. If a compatible backend returns independent
+rubric scores, the query-conditioned weight and each reason remain visible.
+
+## Rendering and fallback
+
+```mermaid
+flowchart LR
+    A[Evidence + support] --> B[Source skeleton]
+    B --> C{Python parses?}
+    C -- No --> D[Original]
+    C -- Yes --> E{Actually smaller?}
+    E -- No --> D
+    E -- Yes --> F[Pruned result]
+```
+
+Omitted runs become comments containing the receipt ID and original line
+range. `pass` is inserted when omission would leave an empty suite. The
+rendered skeleton must parse and use fewer estimated tokens or the original is
+returned.
+
+Scoring errors, invalid source, no selected lines, unsupported languages and
+observation kinds, and inputs below the minimum also fail open to the original.
+
+## Recovery and measurement
+
+The exact observation is saved before any model call under a
+content-addressed receipt. A caller can recover the whole observation or one
+line range.
+
+Each result reports:
+
+- generated goal and model backend;
+- retained lines with semantic, dependency, scope, control-flow, syntax, and
+  local-context reasons;
+- exact omitted ranges and receipt ID;
+- original, retained, and saved token estimates;
+- model/pipeline latency and bypass reason.
+
+`PruningSession.summary()` aggregates those measurements across the complete
+task trajectory.
+
+## Current limits
+
+The structural path supports Python source. Search output, logs, JSON, other
+languages, and plain text currently pass through. The released model requires
+Python 3.12+, PyTorch, and roughly 1.35 GB of checkpoint storage; accelerator
+requirements and performance follow the upstream SWE-Pruner runtime.
+
+The repository still contains earlier context-evaluation modules for
+compatibility and research, but the installed `contextlens` command exposes
+the pruning runtime described here.

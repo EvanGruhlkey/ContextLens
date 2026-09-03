@@ -1,8 +1,8 @@
 # ContextLens
 
-ContextLens trims coding-agent observations before the next model call. It
-keeps task-relevant Python plus the definitions and control flow needed to use
-it. Every original is stored for exact recovery.
+ContextLens turns the current coding task into a goal question, asks the
+released SWE-Pruner 0.6B model which source lines matter, then restores the
+Python structure needed to use them. Every original is recoverable.
 
 ## See it
 
@@ -41,62 +41,55 @@ class Client(BaseTransport):
 # [ContextLens cl_0123456789abcdef01234567 omitted original lines 11-13]
 ```
 
-Semantic scores find direct evidence. Dependency scores and Python AST repair
-restore imports, definitions, scopes, and branches. Those signals stay
-separate and inspectable.
+The JSON result records the generated goal and why each line survived.
 
 ## Architecture
 
-### 1. Prune inside the agent loop
+### 1. Create a goal for every read
 
 Following [SWE-Pruner](https://arxiv.org/abs/2601.16746), ContextLens sits
 between read tools and the agent.
 
 ```mermaid
 flowchart LR
-    A[Agent + current goal] --> B[Read tool]
-    B --> C[Raw source]
-    C --> D[ContextLens]
-    D --> E[Focused source]
-    E --> A
+    A[Current coding task] --> B[Goal question]
+    C[Current focus] --> B
+    D[File path] --> B
 ```
 
-### 2. Decide what to keep
+### 2. Let the 0.6B skimmer choose evidence
 
-[LaMR](https://arxiv.org/abs/2605.15315) separates direct evidence from code
-needed to support that evidence.
-
-```mermaid
-flowchart TD
-    A[Goal + source] --> B[Line scorer]
-    B --> C[Semantic evidence]
-    B --> D[Dependency support]
-    C --> E[Query-weighted gate]
-    D --> E
-    E --> F[Keep or omit]
-```
-
-Semantic lines tend to form relevant spans. Dependency lines can be sparse:
-imports, scope headers, definitions, and paired control flow.
-
-### 3. Repair and verify the result
-
-ContextLens adds deterministic Python repair and exact recovery around the
-paper-inspired scorer.
+Following [SWE-Pruner](https://arxiv.org/abs/2601.16746), the goal and source
+are encoded together. Token scores are averaged by line and thresholded.
 
 ```mermaid
 flowchart LR
-    A[Kept lines] --> B[AST closure]
-    B --> C[Source skeleton]
-    C --> D{Valid and smaller?}
-    D -- Yes --> E[Return skeleton]
-    D -- No --> F[Return original]
+    A[Goal + source] --> B[0.6B neural skimmer]
+    B --> C[Token scores]
+    C --> D[Line averages]
+    D --> E[Evidence lines]
 ```
+
+### 3. Restore structural support
+
+[LaMR](https://arxiv.org/abs/2605.15315) shows why semantic evidence needs
+dependency closure. ContextLens traces those dependencies with the Python AST.
 
 ```mermaid
 flowchart LR
-    A[Raw source] --> B[Receipt store]
-    B --> C[Exact file or range recovery]
+    A[Evidence lines] --> B[Imports + definitions]
+    A --> C[Scopes + control flow]
+    B --> D[Source skeleton]
+    C --> D
+```
+
+### 4. Validate or fall back
+
+```mermaid
+flowchart LR
+    A[Source skeleton] --> B{Parses and saves tokens?}
+    B -- Yes --> C[Send to agent]
+    B -- No --> D[Send original]
 ```
 
 Small, unsupported, invalid, and non-saving results pass through unchanged.
@@ -105,20 +98,28 @@ but bypassed.
 
 ## Install
 
-Requires Python 3.11+.
+Requires Python 3.12+. Installation includes the official SWE-Pruner runtime
+and PyTorch.
 
 ```bash
 python -m pip install -e ".[dev]"
 ```
 
-Run a line-scoring backend that implements the SWE-Pruner `/prune` contract:
+The default model is `ayanami-kitasan/code-pruner`. The first prune downloads
+its approximately 1.35 GB checkpoint from Hugging Face. Pin a local copy with:
 
 ```bash
-export CONTEXTLENS_BACKEND_URL=http://127.0.0.1:8000/prune
+hf download ayanami-kitasan/code-pruner --local-dir .contextlens/models/pruner
+contextlens prune --model .contextlens/models/pruner \
+  --task "Fix the refresh-token timeout" --input client.py
 ```
 
-```powershell
-$env:CONTEXTLENS_BACKEND_URL = "http://127.0.0.1:8000/prune"
+An existing SWE-Pruner server remains supported:
+
+```bash
+contextlens prune --backend http \
+  --backend-url http://127.0.0.1:8000/prune \
+  --task "Fix the refresh-token timeout" --input client.py
 ```
 
 Narrow the query as the agent's focus changes:
@@ -172,7 +173,8 @@ mypy
 ```
 
 Method references: [SWE-Pruner](https://arxiv.org/abs/2601.16746) and
-[LaMR](https://arxiv.org/abs/2605.15315). ContextLens implements the general
-method; it does not bundle paper checkpoints.
+[LaMR](https://arxiv.org/abs/2605.15315). ContextLens loads the released
+SWE-Pruner checkpoint; LaMR-style dependency support is deterministic until a
+compatible multi-rubric checkpoint is released.
 
 Released under the [MIT License](LICENSE).
