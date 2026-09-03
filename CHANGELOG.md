@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Made the released SWE-Pruner 0.6B checkpoint the default line scorer, added
+  self-contained per-observation goal generation, and retained an explicit HTTP
+  backend for remote model serving.
+- Added LaMR-style Python dependency closure after learned evidence selection,
+  with parse/size validation, exact receipts, and auditable retention reasons.
 - Added a first-class paired-agent experiment runner shared by `verify`,
   verified `minimize`, and historical case studies, with fresh isolated agent
   executions, alternating order, native-context suppression, explicit pairing,

@@ -21,7 +21,8 @@ classifiers = [
 ]
 dependencies = [
   "swe-pruner>=0.1.1",
-  "torch>=2.8.0",
+  "torch>=2.8.0,<3",
+  "transformers>=4.57.1,<5",
 ]
 keywords = [
   "agents-md",
