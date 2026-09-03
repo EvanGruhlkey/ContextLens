@@ -1,4 +1,4 @@
-# ContextLens
+# Archived repository-context design
 
 **Test your AI agent's context like you test your code.**
 
