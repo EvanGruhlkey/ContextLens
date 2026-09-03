@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "contextlens"
 version = "0.1.0"
-description = "CI and regression testing for AI-agent repository context"
+description = "Task-conditioned, structure-aware observation pruning"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -23,7 +23,6 @@ classifiers = [
 dependencies = []
 keywords = [
   "agents-md",
-  "ai-agents",
   "coding-agents",
   "context-engineering",
   "developer-tools",
@@ -46,7 +45,7 @@ Issues = "https://github.com/EvanGruhlkey/ContextLens/issues"
 Repository = "https://github.com/EvanGruhlkey/ContextLens.git"
 
 [project.scripts]
-contextlens = "contextlens.cli:main"
+contextlens = "contextlens.pruning_cli:main"
 
 [tool.hatch.build]
 # The repository evaluation harness is intentionally development-only. Expose
