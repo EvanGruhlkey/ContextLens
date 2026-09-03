@@ -98,6 +98,56 @@ def test_pipeline_combines_semantic_and_dependency_evidence(tmp_path: Path) -> N
     assert pruner.receipts.read(result.receipt_id) == request.content
 
 
+def test_pipeline_uses_query_gate_for_independent_dependency_scores(
+    tmp_path: Path,
+) -> None:
+    class LayeredScorer:
+        backend_id = "layered-v1"
+
+        def score(self, request: PruneRequest) -> SemanticScores:
+            return SemanticScores(
+                self.backend_id,
+                {9: 0.95, 15: 0.2},
+                dependency_scores={1: 0.98, 2: 0.96},
+                semantic_weight=0.45,
+            )
+
+    request = PruneRequest(
+        task="Fix refresh timeout",
+        content=_source(),
+        minimum_tokens=0,
+        context_radius=0,
+        threshold=0.4,
+    )
+
+    result = ContextPruner(
+        LayeredScorer(), ReceiptStore(tmp_path / "layered")
+    ).prune(request)
+    decisions = {item.line_number: item for item in result.decisions}
+
+    assert decisions[9].reasons == (LineReason.SEMANTIC,)
+    assert LineReason.DEPENDENCY in decisions[1].reasons
+    assert decisions[1].dependency_score == 0.98
+    assert decisions[1].combined_score > request.threshold
+    assert 15 not in decisions
+
+
+def test_pipeline_keeps_original_when_no_line_clears_gate(tmp_path: Path) -> None:
+    request = PruneRequest(
+        task="Inspect",
+        content=_source(),
+        minimum_tokens=0,
+        threshold=0.8,
+    )
+
+    result = ContextPruner(
+        _Scorer({4: 0.2}), ReceiptStore(tmp_path / "empty")
+    ).prune(request)
+
+    assert result.text == request.content
+    assert result.bypass_reason == "no_relevant_lines"
+
+
 def test_pipeline_adds_only_local_context_not_a_global_rubric(tmp_path: Path) -> None:
     scorer = _Scorer({3: 0.8})
     source = (

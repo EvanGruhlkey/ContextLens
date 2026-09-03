@@ -25,13 +25,22 @@ class _Response:
 
 
 def test_semantic_scores_validate_line_coordinates() -> None:
-    scores = SemanticScores("fixture", {1: 0.2, 4: 0.9}, document_score=0.8)
+    scores = SemanticScores(
+        "fixture",
+        {1: 0.2, 4: 0.9},
+        document_score=0.8,
+        dependency_scores={2: 0.7},
+        semantic_weight=0.6,
+    )
     assert scores.line_scores == {1: 0.2, 4: 0.9}
+    assert scores.dependency_scores == {2: 0.7}
 
     with pytest.raises(ValueError, match="line numbers"):
         SemanticScores("fixture", {0: 0.5})
     with pytest.raises(ValueError, match="line scores"):
         SemanticScores("fixture", {1: 2.0})
+    with pytest.raises(ValueError, match="semantic_weight"):
+        SemanticScores("fixture", {}, semantic_weight=-0.1)
 
 
 def test_http_scorer_uses_compatible_request_and_response() -> None:
@@ -76,6 +85,27 @@ def test_http_scorer_rejects_backend_failure() -> None:
         pytest.raises(RuntimeError, match="unavailable"),
     ):
         scorer.score(request)
+
+
+def test_http_scorer_accepts_layered_scores() -> None:
+    scorer = HttpSemanticScorer()
+    request = PruneRequest(task="Fix timeout", content="one\ntwo\nthree\n")
+    response = {
+        "semantic_scores": {"1": 0.9, "2": 0.2},
+        "dependency_scores": {"2": 0.95, "3": 0.1},
+        "semantic_weight": 0.55,
+    }
+
+    with patch("urllib.request.urlopen", return_value=_Response(response)):
+        result = scorer.score(request)
+
+    assert result.line_scores == {1: 0.9, 2: 0.2}
+    assert result.dependency_scores == {2: 0.95, 3: 0.1}
+    assert result.semantic_weight == 0.55
+
+    response["semantic_weight"] = 0.0
+    with patch("urllib.request.urlopen", return_value=_Response(response)):
+        assert scorer.score(request).semantic_weight == 0.0
 
 
 def test_http_scorer_rejects_invalid_payload() -> None:

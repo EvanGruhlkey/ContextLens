@@ -90,12 +90,18 @@ class LineDecision:
     line_number: int
     semantic_score: float
     reasons: tuple[LineReason, ...]
+    dependency_score: float = 0.0
+    combined_score: float = 0.0
 
     def __post_init__(self) -> None:
         if self.line_number < 1:
             raise ValueError("line_number must be positive")
         if not 0 <= self.semantic_score <= 1:
             raise ValueError("semantic_score must be between zero and one")
+        if not 0 <= self.dependency_score <= 1:
+            raise ValueError("dependency_score must be between zero and one")
+        if not 0 <= self.combined_score <= 1:
+            raise ValueError("combined_score must be between zero and one")
         if not self.reasons:
             raise ValueError("a kept line requires at least one reason")
         object.__setattr__(self, "reasons", tuple(dict.fromkeys(self.reasons)))
@@ -104,6 +110,8 @@ class LineDecision:
         return {
             "line": self.line_number,
             "semantic_score": self.semantic_score,
+            "dependency_score": self.dependency_score,
+            "combined_score": self.combined_score,
             "reasons": [reason.value for reason in self.reasons],
         }
 

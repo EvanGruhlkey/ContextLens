@@ -55,14 +55,26 @@ class ContextPruner:
                 request, receipt, original_tokens, started, "semantic_backend_error"
             )
         line_count = len(request.content.splitlines())
-        semantic = {
-            line
-            for line, score in scores.line_scores.items()
-            if score >= request.threshold and line <= line_count
+        covered_lines = set(scores.line_scores) | set(scores.dependency_scores)
+        combined = {
+            line: (
+                scores.semantic_weight * scores.line_scores.get(line, 0.0)
+                + (1 - scores.semantic_weight)
+                * scores.dependency_scores.get(line, 0.0)
+            )
+            for line in covered_lines
+            if line <= line_count
         }
+        selected = {
+            line for line, score in combined.items() if score >= request.threshold
+        }
+        if not selected:
+            return self._passthrough(
+                request, receipt, original_tokens, started, "no_relevant_lines"
+            )
         structural = close_python_dependencies(
             request.content,
-            semantic,
+            selected,
             max_hops=request.dependency_hops,
         )
         if structural.parse_error:
@@ -71,16 +83,19 @@ class ContextPruner:
             )
 
         reasons: dict[int, set[LineReason]] = defaultdict(set)
-        for line in semantic:
-            reasons[line].add(LineReason.SEMANTIC)
+        for line in selected:
+            if scores.line_scores.get(line, 0.0) > 0:
+                reasons[line].add(LineReason.SEMANTIC)
+            if scores.dependency_scores.get(line, 0.0) > 0:
+                reasons[line].add(LineReason.DEPENDENCY)
         for line, line_reasons in structural.reasons.items():
             reasons[line].update(line_reasons)
-        for line in semantic:
+        for line in selected:
             for nearby in range(
                 max(1, line - request.context_radius),
                 min(line_count, line + request.context_radius) + 1,
             ):
-                if nearby not in semantic:
+                if nearby not in selected:
                     reasons[nearby].add(LineReason.LOCAL_CONTEXT)
 
         rendered = render_python_skeleton(
@@ -104,6 +119,8 @@ class ContextPruner:
                 line_number=line,
                 semantic_score=float(scores.line_scores.get(line, 0.0)),
                 reasons=tuple(sorted(line_reasons, key=lambda item: item.value)),
+                dependency_score=float(scores.dependency_scores.get(line, 0.0)),
+                combined_score=float(combined.get(line, 0.0)),
             )
             for line, line_reasons in sorted(reasons.items())
         )
