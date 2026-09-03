@@ -1,201 +1,169 @@
 # ContextLens
 
-ContextLens removes low-value lines from coding-task observations before they
-enter the next model call. It conditions every decision on the current task,
-then restores the definitions, imports, scopes, and control-flow structure
-needed to use the selected evidence.
+ContextLens trims coding-agent observations before the next model call. It
+keeps task-relevant Python plus the definitions and control flow needed to use
+it. Every original is stored for exact recovery.
 
-The result is smaller working context without turning source into disconnected
-snippets.
+## See it
 
-## Core idea
+```python
+# input: client.py
+from transport import BaseTransport
+from metrics import record_request
 
-A semantic scorer answers one question:
+class Client(BaseTransport):
+    def refresh_token(self, retry):
+        record_request("refresh")
+        if retry.enabled:
+            return self.post("/token", timeout=retry.timeout)
+        return self.post("/token")
 
-> Which lines directly help with the current task?
+def unrelated_report():
+    ...
+```
 
-The structural pass answers a different question:
+```bash
+contextlens prune \
+  --task "Fix the refresh-token timeout" \
+  --input client.py
+```
 
-> Which additional lines are required to understand or safely use them?
+```python
+from transport import BaseTransport
+# [ContextLens cl_0123456789abcdef01234567 omitted original lines 3-4]
 
-For example, a timeout task may directly select `refresh_token()` while the
-structural pass retains `BaseTransport`, `RetryConfig`, the enclosing method,
-and relevant branch headers. ContextLens records the reasons independently
-instead of collapsing both signals into one relevance score.
+class Client(BaseTransport):
+    def refresh_token(self, retry):
+        # [ContextLens cl_0123456789abcdef01234567 omitted original lines 7-7]
+        if retry.enabled:
+            return self.post("/token", timeout=retry.timeout)
+        return self.post("/token")
+# [ContextLens cl_0123456789abcdef01234567 omitted original lines 11-13]
+```
+
+Semantic scores find direct evidence. Dependency scores and Python AST repair
+restore imports, definitions, scopes, and branches. Those signals stay
+separate and inspectable.
+
+## Architecture
+
+### 1. Prune inside the agent loop
+
+Following [SWE-Pruner](https://arxiv.org/abs/2601.16746), ContextLens sits
+between read tools and the agent.
+
+```mermaid
+flowchart LR
+    A[Agent + current goal] --> B[Read tool]
+    B --> C[Raw source]
+    C --> D[ContextLens]
+    D --> E[Focused source]
+    E --> A
+```
+
+### 2. Decide what to keep
+
+[LaMR](https://arxiv.org/abs/2605.15315) separates direct evidence from code
+needed to support that evidence.
 
 ```mermaid
 flowchart TD
-    TASK["Current coding task"] --> GOAL["Stable task goal"]
-    FOCUS["Optional current focus"] --> QUERY["Task-conditioned query"]
-    GOAL --> QUERY
-    TOOL["Tool name and arguments"] --> QUERY
-    OBS["Tool observation"] --> HASH["Save exact original<br/>content-addressed receipt"]
-    OBS --> SIZE{"Large enough to prune?"}
-
-    SIZE -- No --> PASS["Return original unchanged"]
-    SIZE -- Yes --> FORMAT{"Supported source format?"}
-    FORMAT -- No --> PASS
-    FORMAT -- Yes --> SCORE["Line-scoring backend"]
-    QUERY --> SCORE
-    OBS --> SCORE
-
-    subgraph LAYERS["Independent retention evidence"]
-        SEM["Semantic scores<br/>direct task relevance"]
-        DEP["Dependency scores<br/>indirect structural support"]
-    end
-
-    SCORE --> SEM
-    SCORE --> DEP
-    QUERY --> GATE["Query-specific mixing weight"]
-    SEM --> COMBINE["Weighted retention gate"]
-    DEP --> COMBINE
-    GATE --> COMBINE
-
-    COMBINE --> SELECT["Selected evidence lines"]
-    SELECT --> REPAIR["Python AST closure"]
-
-    subgraph SUPPORT["Deterministic structural repair"]
-        IMPORTS["Imports and symbol definitions"]
-        SCOPES["Enclosing scopes and decorators"]
-        CONTROL["Branches, exceptions, and control flow"]
-        SYNTAX["Complete statements and bounded hops"]
-    end
-
-    REPAIR --> IMPORTS
-    REPAIR --> SCOPES
-    REPAIR --> CONTROL
-    REPAIR --> SYNTAX
-    IMPORTS --> RENDER["Render compact source skeleton"]
-    SCOPES --> RENDER
-    CONTROL --> RENDER
-    SYNTAX --> RENDER
-
-    RENDER --> VALIDATE{"Parses and saves tokens?"}
-    VALIDATE -- No --> PASS
-    VALIDATE -- Yes --> OUTPUT["Pruned observation<br/>line reasons and omitted ranges"]
-    HASH --> OUTPUT
-
-    OUTPUT --> RUN["Next task step"]
-    PASS --> RUN
-    OUTPUT --> METRICS["Task-level trajectory summary"]
-    PASS --> METRICS
-
-    RECOVER["Receipt range recovery"] -.->|Fetch omitted detail on demand| RUN
+    A[Goal + source] --> B[Line scorer]
+    B --> C[Semantic evidence]
+    B --> D[Dependency support]
+    C --> E[Query-weighted gate]
+    D --> E
+    E --> F[Keep or omit]
 ```
+
+Semantic lines tend to form relevant spans. Dependency lines can be sparse:
+imports, scope headers, definitions, and paired control flow.
+
+### 3. Repair and verify the result
+
+ContextLens adds deterministic Python repair and exact recovery around the
+paper-inspired scorer.
+
+```mermaid
+flowchart LR
+    A[Kept lines] --> B[AST closure]
+    B --> C[Source skeleton]
+    C --> D{Valid and smaller?}
+    D -- Yes --> E[Return skeleton]
+    D -- No --> F[Return original]
+```
+
+```mermaid
+flowchart LR
+    A[Raw source] --> B[Receipt store]
+    B --> C[Exact file or range recovery]
+```
+
+Small, unsupported, invalid, and non-saving results pass through unchanged.
+Today, pruning handles Python source; other observation types are classified
+but bypassed.
 
 ## Install
 
-ContextLens currently requires Python 3.11 or newer.
+Requires Python 3.11+.
 
 ```bash
 python -m pip install -e ".[dev]"
 ```
 
-Run a line-scoring backend that implements the released SWE-Pruner `/prune`
-contract, then point ContextLens at it:
+Run a line-scoring backend that implements the SWE-Pruner `/prune` contract:
 
 ```bash
-set CONTEXTLENS_BACKEND_URL=http://127.0.0.1:8000/prune
+export CONTEXTLENS_BACKEND_URL=http://127.0.0.1:8000/prune
 ```
-
-On PowerShell:
 
 ```powershell
 $env:CONTEXTLENS_BACKEND_URL = "http://127.0.0.1:8000/prune"
 ```
 
-## Prune an observation
+Narrow the query as the agent's focus changes:
 
 ```bash
 contextlens prune \
-  --task "Fix the OAuth refresh-token timeout" \
-  --input src/oauth/client.py
-```
-
-Add a narrower focus when the task changes during a run:
-
-```bash
-contextlens prune \
-  --task "Fix the OAuth refresh-token timeout" \
-  --focus "Trace retry options passed into the refresh request" \
+  --task "Fix the refresh-token timeout" \
+  --focus "Trace retry options passed to the request" \
   --tool read_file \
-  --argument path=src/oauth/client.py \
-  --input src/oauth/client.py \
+  --argument path=client.py \
+  --input client.py \
   --json
 ```
 
-The JSON result includes retained-line reasons, exact omitted ranges, measured
-reduction, backend identity, latency, and a content-addressed receipt ID.
+JSON includes line-level reasons, omitted ranges, token reduction, backend,
+latency, and receipt ID.
 
-## Recover omitted source
-
-Every observation is saved locally before pruning. Recover the complete source:
+## Recover
 
 ```bash
+# complete observation
 contextlens recover cl_0123456789abcdef01234567
-```
 
-Or recover only an omitted range:
-
-```bash
+# selected original lines
 contextlens recover cl_0123456789abcdef01234567 \
-  --start-line 80 \
-  --end-line 130
+  --start-line 80 --end-line 130
 ```
 
-Receipts default to `.contextlens/receipts`. Skeleton markers include the
-receipt ID and original line range, so a runtime can fetch detail on demand.
+Receipts live in `.contextlens/receipts` by default.
 
-## Local service
+## Serve
 
 ```bash
 contextlens serve --host 127.0.0.1 --port 8765
 ```
 
-Endpoints:
-
-- `GET /health`
-- `POST /v1/prune`
-- `POST /v1/recover`
-
-Example request:
-
-```json
-{
-  "task": "Fix the OAuth refresh-token timeout",
-  "content": "from transport import BaseTransport\n...",
-  "kind": "code",
-  "language": "python",
-  "threshold": 0.5,
-  "minimum_tokens": 256,
-  "dependency_hops": 2,
-  "context_radius": 1
-}
+```text
+GET  /health
+POST /v1/prune
+POST /v1/recover
 ```
 
-The service binds to loopback by default and limits request bodies to 16 MiB.
+The server binds to loopback by default and caps request bodies at 16 MiB.
 
-## Safety behavior
-
-ContextLens keeps the original observation when:
-
-- the observation is already below the configured minimum;
-- the language or observation type is not yet supported;
-- semantic scoring fails;
-- Python parsing or output validation fails; or
-- omission markers would cost at least as many tokens as the original lines.
-
-Generated Python skeletons are parsed again before release. Structural repair
-is deterministic and bounded; semantic scoring can be replaced independently.
-
-## Current scope
-
-The first runtime path supports Python source. Search output, logs, JSON, and
-plain text are represented in the request schema but currently pass through
-unchanged. Their structural rules will be added only with task-level retention
-tests, rather than treating every format as generic text.
-
-## Development
+## Develop
 
 ```bash
 python -m pytest -q
@@ -203,15 +171,8 @@ ruff check src tests
 mypy
 ```
 
-## Method references
+Method references: [SWE-Pruner](https://arxiv.org/abs/2601.16746) and
+[LaMR](https://arxiv.org/abs/2605.15315). ContextLens implements the general
+method; it does not bundle paper checkpoints.
 
-- [SWE-Pruner: Self-Adaptive Context Pruning for Coding Tasks](https://arxiv.org/abs/2601.16746)
-- [LaMR: Layer-Aware Modeling and Repair for Context Pruning](https://arxiv.org/abs/2605.15315)
-
-ContextLens implements the reusable method: task-conditioned semantic evidence,
-separate dependency support, syntax-aware repair, and recoverable omissions.
-It does not copy paper prose or bundle paper checkpoints.
-
-## License
-
-ContextLens is released under the [MIT License](LICENSE).
+Released under the [MIT License](LICENSE).
