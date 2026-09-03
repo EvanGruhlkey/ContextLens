@@ -1,4 +1,4 @@
-# ContextLens roadmap
+# Archived repository-context roadmap
 
 ContextLens is CI and regression testing for AI-agent repository context.
 
