@@ -63,7 +63,10 @@ def test_session_applies_task_and_current_focus(tmp_path: Path) -> None:
     assert observation.result.retained_tokens < observation.result.original_tokens
     assert scorer.requests[0].task == "Fix refresh timeout"
     assert scorer.requests[0].focus == "Trace request options"
-    assert scorer.requests[0].query.startswith("Trace request options")
+    assert scorer.requests[0].query == (
+        "For the coding task 'Fix refresh timeout', what code in src/client.py "
+        "is needed to answer: Trace request options?"
+    )
 
 
 def test_classifier_is_conservative() -> None:

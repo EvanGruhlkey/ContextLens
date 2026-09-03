@@ -68,7 +68,10 @@ def test_http_scorer_uses_compatible_request_and_response() -> None:
 
     message = captured["message"]
     payload = json.loads(message.data)
-    assert payload["query"].startswith("Where is the request timeout")
+    assert payload["query"] == (
+        "For the coding task 'Fix timeout', what code is needed to answer: "
+        "Where is the request timeout selected?"
+    )
     assert payload["code"] == request.content
     assert result.line_scores == {1: 1.0, 3: 1.0, 4: 1.0}
     assert result.document_score == 0.87

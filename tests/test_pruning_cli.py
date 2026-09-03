@@ -49,6 +49,7 @@ def test_prune_command_emits_json_and_saves_receipt(
     assert exit_code == 0
     output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert output["backend"] == "fixture-v1"
+    assert output["goal_hint"].startswith("What code is needed")
     assert output["retained_tokens"] < output["original_tokens"]
     assert list(receipts.glob("*.txt"))
 

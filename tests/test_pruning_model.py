@@ -12,7 +12,7 @@ from contextlens.pruning import (
 )
 
 
-def test_request_prefers_current_focus_and_adds_tool_context() -> None:
+def test_request_creates_self_contained_goal_from_task_and_focus() -> None:
     request = PruneRequest(
         task="Fix refresh behavior",
         content="def retry(): pass",
@@ -23,12 +23,25 @@ def test_request_prefers_current_focus_and_adds_tool_context() -> None:
     )
 
     assert request.kind is ObservationKind.CODE
-    assert request.query == (
-        "Where is retry delay selected?\n"
-        "Tool: read_file\n"
-        "Arguments: path=src/client.py"
+    assert request.goal_hint == (
+        "For the coding task 'Fix refresh behavior', what code in src/client.py "
+        "is needed to answer: Where is retry delay selected?"
     )
+    assert request.query == request.goal_hint
     assert len(request.content_hash) == 64
+
+
+def test_request_creates_goal_when_focus_is_not_supplied() -> None:
+    request = PruneRequest(
+        task="Fix refresh behavior.",
+        content="def retry(): pass",
+        arguments={"path": "src/client.py"},
+    )
+
+    assert request.goal_hint == (
+        "What code in src/client.py is needed to complete the coding task: "
+        "Fix refresh behavior?"
+    )
 
 
 def test_request_rejects_invalid_controls() -> None:
