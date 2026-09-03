@@ -62,6 +62,22 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(".contextlens/receipts"),
     )
+
+    serve = commands.add_parser("serve", help="run the local pruning service")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument(
+        "--backend-url",
+        default=os.environ.get(
+            "CONTEXTLENS_BACKEND_URL",
+            "http://127.0.0.1:8000/prune",
+        ),
+    )
+    serve.add_argument(
+        "--receipts",
+        type=Path,
+        default=Path(".contextlens/receipts"),
+    )
     return parser
 
 
@@ -74,7 +90,17 @@ def main(
     try:
         if arguments.command == "prune":
             return _prune(arguments, scorer)
-        return _recover(arguments)
+        if arguments.command == "recover":
+            return _recover(arguments)
+        from contextlens.pruning.server import serve
+
+        serve(
+            host=arguments.host,
+            port=arguments.port,
+            backend_url=arguments.backend_url,
+            receipts=arguments.receipts,
+        )
+        return 0
     except (KeyError, OSError, RuntimeError, ValueError) as error:
         print(f"contextlens: {error}", file=sys.stderr)
         return 2
