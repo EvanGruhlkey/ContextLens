@@ -46,6 +46,7 @@ class PruneRequest:
     threshold: float = 0.5
     minimum_tokens: int = 256
     dependency_hops: int = 2
+    context_radius: int = 1
 
     def __post_init__(self) -> None:
         if not self.task.strip():
@@ -56,6 +57,8 @@ class PruneRequest:
             raise ValueError("minimum_tokens cannot be negative")
         if self.dependency_hops < 0:
             raise ValueError("dependency_hops cannot be negative")
+        if self.context_radius < 0:
+            raise ValueError("context_radius cannot be negative")
         object.__setattr__(self, "arguments", MappingProxyType(dict(self.arguments)))
 
     @property

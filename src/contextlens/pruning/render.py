@@ -15,7 +15,12 @@ class RenderedObservation:
     omitted_ranges: tuple[OmittedRange, ...]
 
 
-def render_python_skeleton(content: str, kept_lines: set[int]) -> RenderedObservation:
+def render_python_skeleton(
+    content: str,
+    kept_lines: set[int],
+    *,
+    receipt_id: str | None = None,
+) -> RenderedObservation:
     """Preserve source order and replace omitted runs with comments or pass."""
 
     lines = content.splitlines()
@@ -23,8 +28,11 @@ def render_python_skeleton(content: str, kept_lines: set[int]) -> RenderedObserv
         return RenderedObservation("", ())
     valid_kept = sorted(line for line in kept_lines if 1 <= line <= len(lines))
     if not valid_kept:
-        omitted = OmittedRange(1, len(lines))
-        return RenderedObservation(_marker(omitted, ""), (omitted,))
+        all_omitted = OmittedRange(1, len(lines))
+        return RenderedObservation(
+            _marker(all_omitted, "", receipt_id),
+            (all_omitted,),
+        )
 
     ranges = _omitted_ranges(len(lines), set(valid_kept))
     by_start = {item.start_line: item for item in ranges}
@@ -44,7 +52,7 @@ def render_python_skeleton(content: str, kept_lines: set[int]) -> RenderedObserv
             if needs_pass
             else _marker_indent(lines, omitted, previous, following)
         )
-        marker = _marker(omitted, indent)
+        marker = _marker(omitted, indent, receipt_id)
         if needs_pass:
             marker = f"{indent}pass  {marker.lstrip()}"
         output.append(marker)
@@ -116,8 +124,13 @@ def _indent(line: str) -> str:
     return line[: len(line) - len(line.lstrip())]
 
 
-def _marker(omitted: OmittedRange, indent: str) -> str:
+def _marker(
+    omitted: OmittedRange,
+    indent: str,
+    receipt_id: str | None,
+) -> str:
+    receipt = f" {receipt_id}" if receipt_id else ""
     return (
-        f"{indent}# [ContextLens omitted original lines "
+        f"{indent}# [ContextLens{receipt} omitted original lines "
         f"{omitted.start_line}-{omitted.end_line}]"
     )

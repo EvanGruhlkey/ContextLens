@@ -9,6 +9,7 @@ from contextlens.pruning.model import (
     PruneResult,
     estimate_tokens,
 )
+from contextlens.pruning.pipeline import ContextPruner
 from contextlens.pruning.receipts import Receipt, ReceiptStore
 from contextlens.pruning.render import RenderedObservation, render_python_skeleton
 from contextlens.pruning.scoring import (
@@ -21,6 +22,7 @@ from contextlens.pruning.structure import StructuralResult, close_python_depende
 __all__ = [
     "LineDecision",
     "LineReason",
+    "ContextPruner",
     "ObservationKind",
     "OmittedRange",
     "PruneRequest",
