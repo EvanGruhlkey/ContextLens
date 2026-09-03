@@ -9,6 +9,7 @@ from contextlens.pruning.model import (
     PruneResult,
     estimate_tokens,
 )
+from contextlens.pruning.receipts import Receipt, ReceiptStore
 from contextlens.pruning.render import RenderedObservation, render_python_skeleton
 from contextlens.pruning.scoring import (
     HttpSemanticScorer,
@@ -24,6 +25,8 @@ __all__ = [
     "OmittedRange",
     "PruneRequest",
     "PruneResult",
+    "Receipt",
+    "ReceiptStore",
     "RenderedObservation",
     "estimate_tokens",
     "render_python_skeleton",
