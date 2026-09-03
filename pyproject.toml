@@ -7,20 +7,22 @@ name = "contextlens"
 version = "0.1.0"
 description = "Task-conditioned, structure-aware observation pruning"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "ContextLens contributors" }]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Testing",
 ]
-dependencies = []
+dependencies = [
+  "swe-pruner>=0.1.1",
+  "torch>=2.8.0",
+]
 keywords = [
   "agents-md",
   "coding-agents",

@@ -3,11 +3,17 @@ from __future__ import annotations
 import io
 import json
 import urllib.error
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
-from contextlens.pruning import HttpSemanticScorer, PruneRequest, SemanticScores
+from contextlens.pruning import (
+    HttpSemanticScorer,
+    LocalSwePrunerScorer,
+    PruneRequest,
+    SemanticScores,
+)
 
 
 class _Response:
@@ -22,6 +28,20 @@ class _Response:
 
     def read(self) -> bytes:
         return self._body
+
+
+class _LocalModel:
+    def __init__(self) -> None:
+        self.request: object | None = None
+
+    def prune(self, request: object) -> object:
+        self.request = request
+        return SimpleNamespace(
+            score=0.81,
+            kept_frags=[2, 4],
+            model_input_token_cnt=73,
+            error_msg=None,
+        )
 
 
 def test_semantic_scores_validate_line_coordinates() -> None:
@@ -88,6 +108,34 @@ def test_http_scorer_rejects_backend_failure() -> None:
         pytest.raises(RuntimeError, match="unavailable"),
     ):
         scorer.score(request)
+
+
+def test_local_scorer_lazily_runs_released_model_with_goal_hint() -> None:
+    model = _LocalModel()
+    loaded: list[str] = []
+
+    def load(model_name: str) -> _LocalModel:
+        loaded.append(model_name)
+        return model
+
+    scorer = LocalSwePrunerScorer("model/checkpoint", loader=load)
+    request = PruneRequest(
+        task="Fix timeout",
+        content="one\ntwo\nthree\nfour\n",
+        arguments={"path": "client.py"},
+    )
+
+    assert loaded == []
+    result = scorer.score(request)
+
+    assert loaded == ["model/checkpoint"]
+    assert model.request is not None
+    assert model.request.query == request.goal_hint  # type: ignore[attr-defined]
+    assert model.request.threshold == 0.5  # type: ignore[attr-defined]
+    assert result.backend == "swe-pruner-0.6b-local"
+    assert result.line_scores == {2: 1.0, 4: 1.0}
+    assert result.document_score == 0.81
+    assert result.input_tokens == 73
 
 
 def test_http_scorer_accepts_layered_scores() -> None:

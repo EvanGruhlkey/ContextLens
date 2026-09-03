@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from contextlens.pruning import PruneRequest, SemanticScores
-from contextlens.pruning_cli import main
+from contextlens.pruning_cli import build_parser, main
 
 
 class _Scorer:
@@ -18,6 +18,15 @@ def _large_source() -> str:
     lines = ["VALUE = 1", "print(VALUE)"]
     lines.extend(f"unused_{index} = {index}" for index in range(40))
     return "\n".join(lines) + "\n"
+
+
+def test_prune_defaults_to_local_released_model() -> None:
+    arguments = build_parser().parse_args(
+        ["prune", "--task", "Inspect", "--input", "sample.py"]
+    )
+
+    assert arguments.backend == "local"
+    assert arguments.model == "ayanami-kitasan/code-pruner"
 
 
 def test_prune_command_emits_json_and_saves_receipt(

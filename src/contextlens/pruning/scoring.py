@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from types import SimpleNamespace
+from typing import Any, Protocol, cast
 
 from contextlens.pruning.model import PruneRequest
+
+DEFAULT_SWE_PRUNER_MODEL = "ayanami-kitasan/code-pruner"
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +53,76 @@ class SemanticScorer(Protocol):
 
     def score(self, request: PruneRequest) -> SemanticScores:
         """Return semantic scores for covered lines."""
+
+
+class _PruningModel(Protocol):
+    def prune(self, request: object) -> object:
+        """Run the model's paper-compatible pruning interface."""
+
+
+class LocalSwePrunerScorer:
+    """Run the released 0.6B SWE-Pruner model in this process."""
+
+    backend_id = "swe-pruner-0.6b-local"
+
+    def __init__(
+        self,
+        model: str = DEFAULT_SWE_PRUNER_MODEL,
+        *,
+        loader: Callable[[str], _PruningModel] | None = None,
+    ) -> None:
+        if not model.strip():
+            raise ValueError("model must be a Hugging Face ID or local path")
+        self.model_name_or_path = model
+        self._loader = loader or _load_swe_pruner
+        self._model: _PruningModel | None = None
+        self._lock = threading.Lock()
+
+    def score(self, request: PruneRequest) -> SemanticScores:
+        """Create line scores from the official model's retained fragments."""
+
+        started = time.perf_counter()
+        model_request = SimpleNamespace(
+            query=request.goal_hint,
+            code=request.content,
+            threshold=request.threshold,
+            always_keep_first_frags=False,
+            chunk_overlap_tokens=50,
+        )
+        # Lazy loading keeps imports and bypassed observations lightweight.
+        with self._lock:
+            if self._model is None:
+                self._model = self._loader(self.model_name_or_path)
+            response = self._model.prune(model_request)
+        error_message = getattr(response, "error_msg", None)
+        if error_message:
+            raise RuntimeError(f"SWE-Pruner declined request: {error_message}")
+        kept = _positive_lines(getattr(response, "kept_frags", None))
+        return SemanticScores(
+            backend=self.backend_id,
+            line_scores={line: 1.0 for line in kept},
+            document_score=_optional_score(getattr(response, "score", None)),
+            input_tokens=_optional_int(
+                getattr(response, "model_input_token_cnt", None)
+            ),
+            latency_ms=(time.perf_counter() - started) * 1000,
+        )
+
+
+def _load_swe_pruner(model: str) -> _PruningModel:
+    try:
+        from swe_pruner.prune_wrapper import (  # type: ignore[import-not-found]
+            SwePrunerForCodePruning,
+        )
+    except ImportError as error:
+        raise RuntimeError(
+            "the local 0.6B model requires 'swe-pruner' and 'torch'; "
+            "reinstall ContextLens with model dependencies"
+        ) from error
+    return cast(
+        _PruningModel,
+        SwePrunerForCodePruning.from_pretrained(model),
+    )
 
 
 class HttpSemanticScorer:
