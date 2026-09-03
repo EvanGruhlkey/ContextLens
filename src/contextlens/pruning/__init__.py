@@ -12,6 +12,13 @@ from contextlens.pruning.model import (
 from contextlens.pruning.pipeline import ContextPruner
 from contextlens.pruning.receipts import Receipt, ReceiptStore
 from contextlens.pruning.render import RenderedObservation, render_python_skeleton
+from contextlens.pruning.runtime import (
+    PrunedObservation,
+    PruningSession,
+    TaskGoal,
+    ToolObservation,
+    classify_observation,
+)
 from contextlens.pruning.scoring import (
     HttpSemanticScorer,
     SemanticScorer,
@@ -30,6 +37,11 @@ __all__ = [
     "Receipt",
     "ReceiptStore",
     "RenderedObservation",
+    "PrunedObservation",
+    "PruningSession",
+    "TaskGoal",
+    "ToolObservation",
+    "classify_observation",
     "estimate_tokens",
     "render_python_skeleton",
     "HttpSemanticScorer",
