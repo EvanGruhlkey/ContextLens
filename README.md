@@ -23,21 +23,64 @@ structural pass retains `BaseTransport`, `RetryConfig`, the enclosing method,
 and relevant branch headers. ContextLens records the reasons independently
 instead of collapsing both signals into one relevance score.
 
-```text
-task + observation
-        |
-        v
-semantic line scores
-        |
-        v
-Python dependency closure
-  - imports and local definitions
-  - enclosing scopes and decorators
-  - branch and exception structure
-  - bounded dependency hops
-        |
-        v
-parseable source skeleton + recovery receipt
+```mermaid
+flowchart TD
+    TASK["Current coding task"] --> GOAL["Stable task goal"]
+    FOCUS["Optional current focus"] --> QUERY["Task-conditioned query"]
+    GOAL --> QUERY
+    TOOL["Tool name and arguments"] --> QUERY
+    OBS["Tool observation"] --> HASH["Save exact original<br/>content-addressed receipt"]
+    OBS --> SIZE{"Large enough to prune?"}
+
+    SIZE -- No --> PASS["Return original unchanged"]
+    SIZE -- Yes --> FORMAT{"Supported source format?"}
+    FORMAT -- No --> PASS
+    FORMAT -- Yes --> SCORE["Line-scoring backend"]
+    QUERY --> SCORE
+    OBS --> SCORE
+
+    subgraph LAYERS["Independent retention evidence"]
+        SEM["Semantic scores<br/>direct task relevance"]
+        DEP["Dependency scores<br/>indirect structural support"]
+    end
+
+    SCORE --> SEM
+    SCORE --> DEP
+    QUERY --> GATE["Query-specific mixing weight"]
+    SEM --> COMBINE["Weighted retention gate"]
+    DEP --> COMBINE
+    GATE --> COMBINE
+
+    COMBINE --> SELECT["Selected evidence lines"]
+    SELECT --> REPAIR["Python AST closure"]
+
+    subgraph SUPPORT["Deterministic structural repair"]
+        IMPORTS["Imports and symbol definitions"]
+        SCOPES["Enclosing scopes and decorators"]
+        CONTROL["Branches, exceptions, and control flow"]
+        SYNTAX["Complete statements and bounded hops"]
+    end
+
+    REPAIR --> IMPORTS
+    REPAIR --> SCOPES
+    REPAIR --> CONTROL
+    REPAIR --> SYNTAX
+    IMPORTS --> RENDER["Render compact source skeleton"]
+    SCOPES --> RENDER
+    CONTROL --> RENDER
+    SYNTAX --> RENDER
+
+    RENDER --> VALIDATE{"Parses and saves tokens?"}
+    VALIDATE -- No --> PASS
+    VALIDATE -- Yes --> OUTPUT["Pruned observation<br/>line reasons and omitted ranges"]
+    HASH --> OUTPUT
+
+    OUTPUT --> RUN["Next task step"]
+    PASS --> RUN
+    OUTPUT --> METRICS["Task-level trajectory summary"]
+    PASS --> METRICS
+
+    RECOVER["Receipt range recovery"] -.->|Fetch omitted detail on demand| RUN
 ```
 
 ## Install
