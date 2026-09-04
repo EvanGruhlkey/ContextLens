@@ -56,6 +56,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Hugging Face model ID or local checkpoint path",
     )
     prune.add_argument(
+        "--allow-cpu",
+        action="store_true",
+        help="allow slow, memory-intensive CPU model inference",
+    )
+    prune.add_argument(
         "--backend-url",
         default=os.environ.get(
             "CONTEXTLENS_BACKEND_URL",
@@ -90,6 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
             os.environ.get("SWEPRUNER_MODEL_PATH", DEFAULT_SWE_PRUNER_MODEL),
         ),
     )
+    serve.add_argument("--allow-cpu", action="store_true")
     serve.add_argument(
         "--backend-url",
         default=os.environ.get(
@@ -136,12 +142,15 @@ def _prune(arguments: argparse.Namespace, scorer: SemanticScorer | None) -> int:
         if arguments.input is not None
         else sys.stdin.read()
     )
+    tool_arguments = _parse_arguments(arguments.argument)
+    if arguments.input is not None:
+        tool_arguments.setdefault("path", str(arguments.input))
     request = PruneRequest(
         task=arguments.task,
         focus=arguments.focus,
         content=content,
-        tool=arguments.tool,
-        arguments=_parse_arguments(arguments.argument),
+        tool=arguments.tool or ("read_file" if arguments.input is not None else None),
+        arguments=tool_arguments,
         kind=ObservationKind(arguments.kind),
         language=arguments.language,
         threshold=arguments.threshold,
@@ -164,7 +173,10 @@ def _prune(arguments: argparse.Namespace, scorer: SemanticScorer | None) -> int:
 def _configured_scorer(arguments: argparse.Namespace) -> SemanticScorer:
     if arguments.backend == "http":
         return HttpSemanticScorer(arguments.backend_url)
-    return LocalSwePrunerScorer(arguments.model)
+    return LocalSwePrunerScorer(
+        arguments.model,
+        allow_cpu=arguments.allow_cpu,
+    )
 
 
 def _recover(arguments: argparse.Namespace) -> int:

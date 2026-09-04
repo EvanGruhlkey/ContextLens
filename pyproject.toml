@@ -20,6 +20,7 @@ classifiers = [
   "Topic :: Software Development :: Testing",
 ]
 dependencies = [
+  "hf-xet>=1.1.0",
   "swe-pruner>=0.1.1",
   "torch>=2.8.0,<3",
   "transformers>=4.57.1,<5",
@@ -84,6 +85,6 @@ line-length = 88
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 packages = ["contextlens"]

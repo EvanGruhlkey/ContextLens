@@ -64,7 +64,8 @@ retained line numbers.
 
 The model loads on the first eligible observation. Small or unsupported
 observations do not allocate model memory. A lock serializes local inference so
-the HTTP service does not invoke one model concurrently.
+the HTTP service does not invoke one model concurrently. Local loading requires
+CUDA unless the caller explicitly accepts the upstream CPU path.
 
 An explicit `--backend http` mode calls the same SWE-Pruner `/prune`
 contract out of process.
@@ -140,8 +141,9 @@ task trajectory.
 
 The structural path supports Python source. Search output, logs, JSON, other
 languages, and plain text currently pass through. The released model requires
-Python 3.12+, PyTorch, and roughly 1.35 GB of checkpoint storage; accelerator
-requirements and performance follow the upstream SWE-Pruner runtime.
+Python 3.12+, PyTorch, CUDA for practical use, and 1,345,835,359 bytes of
+checkpoint storage. ContextLens installs `hf-xet` for the checkpoint's Xet
+transport; accelerator performance follows the upstream SWE-Pruner runtime.
 
 The repository still contains earlier context-evaluation modules for
 compatibility and research, but the installed `contextlens` command exposes

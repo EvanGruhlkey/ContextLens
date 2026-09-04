@@ -7,6 +7,8 @@
   backend for remote model serving.
 - Added LaMR-style Python dependency closure after learned evidence selection,
   with parse/size validation, exact receipts, and auditable retention reasons.
+- Added a reproducible real-source benchmark and refused accidental CPU model
+  inference after an observed eight-minute, near-memory-capacity smoke test.
 - Added a first-class paired-agent experiment runner shared by `verify`,
   verified `minimize`, and historical case studies, with fresh isolated agent
   executions, alternating order, native-context suppression, explicit pairing,

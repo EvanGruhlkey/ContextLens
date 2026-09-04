@@ -69,12 +69,20 @@ class LocalSwePrunerScorer:
         self,
         model: str = DEFAULT_SWE_PRUNER_MODEL,
         *,
+        allow_cpu: bool = False,
         loader: Callable[[str], _PruningModel] | None = None,
     ) -> None:
         if not model.strip():
             raise ValueError("model must be a Hugging Face ID or local path")
+        if loader is None:
+            _require_local_runtime(allow_cpu=allow_cpu)
         self.model_name_or_path = model
-        self._loader = loader or _load_swe_pruner
+        self._loader = loader or (
+            lambda model_name: _load_swe_pruner(
+                model_name,
+                allow_cpu=allow_cpu,
+            )
+        )
         self._model: _PruningModel | None = None
         self._lock = threading.Lock()
 
@@ -109,9 +117,10 @@ class LocalSwePrunerScorer:
         )
 
 
-def _load_swe_pruner(model: str) -> _PruningModel:
+def _load_swe_pruner(model: str, *, allow_cpu: bool = False) -> _PruningModel:
+    _require_local_runtime(allow_cpu=allow_cpu)
     try:
-        from swe_pruner.prune_wrapper import (  # type: ignore[import-not-found]
+        from swe_pruner.prune_wrapper import (  # type: ignore[import-untyped]
             SwePrunerForCodePruning,
         )
     except ImportError as error:
@@ -123,6 +132,20 @@ def _load_swe_pruner(model: str) -> _PruningModel:
         _PruningModel,
         SwePrunerForCodePruning.from_pretrained(model),
     )
+
+
+def _require_local_runtime(*, allow_cpu: bool) -> None:
+    try:
+        import torch
+    except ImportError as error:
+        raise RuntimeError(
+            "the local 0.6B model requires 'torch'; reinstall ContextLens"
+        ) from error
+    if not torch.cuda.is_available() and not allow_cpu:
+        raise RuntimeError(
+            "the local 0.6B model requires CUDA for practical inference; "
+            "use --backend http or explicitly opt in with --allow-cpu"
+        )
 
 
 class HttpSemanticScorer:

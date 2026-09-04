@@ -106,7 +106,8 @@ python -m pip install -e ".[dev]"
 ```
 
 The default model is `ayanami-kitasan/code-pruner`. The first prune downloads
-its approximately 1.35 GB checkpoint from Hugging Face. Pin a local copy with:
+its 1,345,835,359-byte checkpoint from Hugging Face. Local inference requires
+CUDA by default. Pin a local copy with:
 
 ```bash
 hf download ayanami-kitasan/code-pruner --local-dir .contextlens/models/pruner
@@ -121,6 +122,9 @@ contextlens prune --backend http \
   --backend-url http://127.0.0.1:8000/prune \
   --task "Fix the refresh-token timeout" --input client.py
 ```
+
+CPU inference is available only as an explicit `--allow-cpu` opt-in because
+the upstream runtime pads inference to 8,192 tokens.
 
 Narrow the query as the agent's focus changes:
 
@@ -163,6 +167,35 @@ POST /v1/recover
 ```
 
 The server binds to loopback by default and caps request bodies at 16 MiB.
+
+## Benchmark
+
+Run the same model once across three realistic repository reads:
+
+```bash
+python benchmarks/pruning_runtime.py
+```
+
+The harness measures per-case wall time and token reduction, parses every
+result, and verifies byte-exact receipt recovery. It reports JSON and keeps the
+model warm between cases.
+
+### CPU smoke test
+
+Observed September 3, 2026 on Windows 11, Python 3.14.5, PyTorch 2.14,
+Intel i7-13700H, 15.6 GB RAM, and no CUDA:
+
+| Check | Result |
+| --- | --- |
+| Clean editable install | Pass |
+| Checkpoint download with `hf-xet` | Pass |
+| Cached checkpoint size | 1,345,835,359 bytes |
+| First real repository read | Stopped after 8 minutes |
+| Memory observed during inference | 6.0 GB resident; 14.8 GB private |
+
+No token-reduction number is claimed for that incomplete run. Use a CUDA host
+or `--backend http` for real agent traffic. To reproduce the CPU result
+despite the warning, pass `--allow-cpu`.
 
 ## Develop
 

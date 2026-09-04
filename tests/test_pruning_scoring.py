@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+import torch
 
 from contextlens.pruning import (
     HttpSemanticScorer,
@@ -14,6 +15,7 @@ from contextlens.pruning import (
     PruneRequest,
     SemanticScores,
 )
+from contextlens.pruning.scoring import _load_swe_pruner
 
 
 class _Response:
@@ -136,6 +138,22 @@ def test_local_scorer_lazily_runs_released_model_with_goal_hint() -> None:
     assert result.line_scores == {2: 1.0, 4: 1.0}
     assert result.document_score == 0.81
     assert result.input_tokens == 73
+
+
+def test_local_loader_refuses_accidental_cpu_inference() -> None:
+    with (
+        patch.object(torch.cuda, "is_available", return_value=False),
+        pytest.raises(RuntimeError, match="allow-cpu"),
+    ):
+        _load_swe_pruner("model/checkpoint")
+
+
+def test_local_scorer_refuses_accidental_cpu_inference_before_loading() -> None:
+    with (
+        patch.object(torch.cuda, "is_available", return_value=False),
+        pytest.raises(RuntimeError, match="backend http"),
+    ):
+        LocalSwePrunerScorer()
 
 
 def test_http_scorer_accepts_layered_scores() -> None:
