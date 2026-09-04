@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from contextlens.pruning import PruneRequest, SemanticScores
-from contextlens.pruning_cli import main
+from contextlens.pruning_cli import build_parser, main
 
 
 class _Scorer:
@@ -18,6 +18,16 @@ def _large_source() -> str:
     lines = ["VALUE = 1", "print(VALUE)"]
     lines.extend(f"unused_{index} = {index}" for index in range(40))
     return "\n".join(lines) + "\n"
+
+
+def test_prune_defaults_to_local_released_model() -> None:
+    arguments = build_parser().parse_args(
+        ["prune", "--task", "Inspect", "--input", "sample.py"]
+    )
+
+    assert arguments.backend == "local"
+    assert arguments.model == "ayanami-kitasan/code-pruner"
+    assert arguments.allow_cpu is False
 
 
 def test_prune_command_emits_json_and_saves_receipt(
@@ -49,6 +59,7 @@ def test_prune_command_emits_json_and_saves_receipt(
     assert exit_code == 0
     output = json.loads(capsys.readouterr().out)  # type: ignore[attr-defined]
     assert output["backend"] == "fixture-v1"
+    assert f"What code in {source}" in output["goal_hint"]
     assert output["retained_tokens"] < output["original_tokens"]
     assert list(receipts.glob("*.txt"))
 

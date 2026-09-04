@@ -22,7 +22,9 @@ from contextlens.pruning.runtime import (
     summarize_trajectory,
 )
 from contextlens.pruning.scoring import (
+    DEFAULT_SWE_PRUNER_MODEL,
     HttpSemanticScorer,
+    LocalSwePrunerScorer,
     SemanticScorer,
     SemanticScores,
 )
@@ -48,7 +50,9 @@ __all__ = [
     "summarize_trajectory",
     "estimate_tokens",
     "render_python_skeleton",
+    "DEFAULT_SWE_PRUNER_MODEL",
     "HttpSemanticScorer",
+    "LocalSwePrunerScorer",
     "SemanticScorer",
     "SemanticScores",
     "StructuralResult",

@@ -136,6 +136,7 @@ class ContextPruner:
             original_tokens=original_tokens,
             retained_tokens=retained_tokens,
             latency_ms=(time.perf_counter() - started) * 1000,
+            goal_hint=request.goal_hint,
         )
 
     def _passthrough(
@@ -159,4 +160,5 @@ class ContextPruner:
             retained_tokens=original_tokens,
             latency_ms=(time.perf_counter() - started) * 1000,
             bypass_reason=reason,
+            goal_hint=request.goal_hint,
         )

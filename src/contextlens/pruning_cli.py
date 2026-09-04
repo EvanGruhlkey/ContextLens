@@ -11,8 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from contextlens.pruning import (
+    DEFAULT_SWE_PRUNER_MODEL,
     ContextPruner,
     HttpSemanticScorer,
+    LocalSwePrunerScorer,
     ObservationKind,
     PruneRequest,
     ReceiptStore,
@@ -40,6 +42,25 @@ def build_parser() -> argparse.ArgumentParser:
     prune.add_argument("--dependency-hops", type=int, default=2)
     prune.add_argument("--context-radius", type=int, default=1)
     prune.add_argument(
+        "--backend",
+        choices=("local", "http"),
+        default="local",
+        help="run the 0.6B model locally (default) or call a model server",
+    )
+    prune.add_argument(
+        "--model",
+        default=os.environ.get(
+            "CONTEXTLENS_MODEL",
+            os.environ.get("SWEPRUNER_MODEL_PATH", DEFAULT_SWE_PRUNER_MODEL),
+        ),
+        help="Hugging Face model ID or local checkpoint path",
+    )
+    prune.add_argument(
+        "--allow-cpu",
+        action="store_true",
+        help="allow slow, memory-intensive CPU model inference",
+    )
+    prune.add_argument(
         "--backend-url",
         default=os.environ.get(
             "CONTEXTLENS_BACKEND_URL",
@@ -66,6 +87,15 @@ def build_parser() -> argparse.ArgumentParser:
     serve = commands.add_parser("serve", help="run the local pruning service")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--backend", choices=("local", "http"), default="local")
+    serve.add_argument(
+        "--model",
+        default=os.environ.get(
+            "CONTEXTLENS_MODEL",
+            os.environ.get("SWEPRUNER_MODEL_PATH", DEFAULT_SWE_PRUNER_MODEL),
+        ),
+    )
+    serve.add_argument("--allow-cpu", action="store_true")
     serve.add_argument(
         "--backend-url",
         default=os.environ.get(
@@ -97,8 +127,8 @@ def main(
         serve(
             host=arguments.host,
             port=arguments.port,
-            backend_url=arguments.backend_url,
             receipts=arguments.receipts,
+            scorer=_configured_scorer(arguments),
         )
         return 0
     except (KeyError, OSError, RuntimeError, ValueError) as error:
@@ -112,12 +142,15 @@ def _prune(arguments: argparse.Namespace, scorer: SemanticScorer | None) -> int:
         if arguments.input is not None
         else sys.stdin.read()
     )
+    tool_arguments = _parse_arguments(arguments.argument)
+    if arguments.input is not None:
+        tool_arguments.setdefault("path", str(arguments.input))
     request = PruneRequest(
         task=arguments.task,
         focus=arguments.focus,
         content=content,
-        tool=arguments.tool,
-        arguments=_parse_arguments(arguments.argument),
+        tool=arguments.tool or ("read_file" if arguments.input is not None else None),
+        arguments=tool_arguments,
         kind=ObservationKind(arguments.kind),
         language=arguments.language,
         threshold=arguments.threshold,
@@ -125,7 +158,7 @@ def _prune(arguments: argparse.Namespace, scorer: SemanticScorer | None) -> int:
         dependency_hops=arguments.dependency_hops,
         context_radius=arguments.context_radius,
     )
-    active_scorer = scorer or HttpSemanticScorer(arguments.backend_url)
+    active_scorer = scorer or _configured_scorer(arguments)
     result = ContextPruner(
         active_scorer,
         ReceiptStore(arguments.receipts),
@@ -135,6 +168,15 @@ def _prune(arguments: argparse.Namespace, scorer: SemanticScorer | None) -> int:
     else:
         print(result.text)
     return 0
+
+
+def _configured_scorer(arguments: argparse.Namespace) -> SemanticScorer:
+    if arguments.backend == "http":
+        return HttpSemanticScorer(arguments.backend_url)
+    return LocalSwePrunerScorer(
+        arguments.model,
+        allow_cpu=arguments.allow_cpu,
+    )
 
 
 def _recover(arguments: argparse.Namespace) -> int:

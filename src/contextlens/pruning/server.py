@@ -12,7 +12,7 @@ from typing import Any, cast
 from contextlens.pruning.model import ObservationKind, PruneRequest
 from contextlens.pruning.pipeline import ContextPruner
 from contextlens.pruning.receipts import ReceiptStore
-from contextlens.pruning.scoring import HttpSemanticScorer, SemanticScorer
+from contextlens.pruning.scoring import SemanticScorer
 
 MAX_REQUEST_BYTES = 16 * 1024 * 1024
 
@@ -60,12 +60,12 @@ def serve(
     *,
     host: str,
     port: int,
-    backend_url: str,
     receipts: Path,
+    scorer: SemanticScorer,
 ) -> None:
     """Run the local service until interrupted."""
 
-    service = PruningService(HttpSemanticScorer(backend_url), ReceiptStore(receipts))
+    service = PruningService(scorer, ReceiptStore(receipts))
     handler = _handler_for(service)
     with ThreadingHTTPServer((host, port), handler) as server:
         server.serve_forever()

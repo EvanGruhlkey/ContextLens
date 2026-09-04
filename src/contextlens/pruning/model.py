@@ -62,21 +62,27 @@ class PruneRequest:
         object.__setattr__(self, "arguments", MappingProxyType(dict(self.arguments)))
 
     @property
-    def query(self) -> str:
-        """Build a useful query without another generation step."""
+    def goal_hint(self) -> str:
+        """Create the self-contained goal question consumed by the skimmer."""
 
-        parts = [self.focus.strip() if self.focus else self.task.strip()]
-        if self.tool:
-            parts.append(f"Tool: {self.tool}")
-        if self.arguments:
-            details = ", ".join(
-                f"{key}={value}"
-                for key, value in sorted(self.arguments.items())
-                if _safe_argument(value)
+        task = " ".join(self.task.split()).rstrip(".?!")
+        target = self.arguments.get("path")
+        location = (
+            f" in {target}" if isinstance(target, str) and target.strip() else ""
+        )
+        if self.focus:
+            focus = " ".join(self.focus.split()).rstrip(".?!")
+            return (
+                f"For the coding task '{task}', what code{location} is needed "
+                f"to answer: {focus}?"
             )
-            if details:
-                parts.append(f"Arguments: {details}")
-        return "\n".join(parts)
+        return f"What code{location} is needed to complete the coding task: {task}?"
+
+    @property
+    def query(self) -> str:
+        """Return the paper-style task goal passed to the neural skimmer."""
+
+        return self.goal_hint
 
     @property
     def content_hash(self) -> str:
@@ -155,6 +161,7 @@ class PruneResult:
     retained_tokens: int
     latency_ms: float
     bypass_reason: str | None = None
+    goal_hint: str | None = None
 
     def __post_init__(self) -> None:
         if self.original_lines < 0 or self.retained_lines < 0:
@@ -195,6 +202,7 @@ class PruneResult:
             "reduction_fraction": self.reduction_fraction,
             "latency_ms": self.latency_ms,
             "bypass_reason": self.bypass_reason,
+            "goal_hint": self.goal_hint,
         }
 
 
@@ -202,7 +210,3 @@ def estimate_tokens(content: str) -> int:
     """Return a deterministic estimate when no tokenizer is available."""
 
     return math.ceil(len(content.encode("utf-8")) / 4)
-
-
-def _safe_argument(value: Any) -> bool:
-    return isinstance(value, str | int | float | bool) and len(str(value)) <= 500
