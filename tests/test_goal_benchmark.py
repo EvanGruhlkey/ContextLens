@@ -1,6 +1,12 @@
+import json
+import shutil
+import subprocess
+import sys
+
 import pytest
 
-from benchmarks.goal import analyze, command_for, prompt, usage
+from benchmarks.goal import analyze, command_for, grade, patch, prompt, usage
+from evals.repository_cases import load_manifest
 
 
 def row(policy, passed=True, tokens=100, status="completed", reads=1):
@@ -84,3 +90,59 @@ def test_compact_configuration_is_on_demand_without_eager_evidence(tmp_path):
     assert "Initial repository evidence" not in text
     assert "evidence_verify" not in text
     assert "when useful" in text
+
+
+def test_grading_replays_new_files_without_changing_base(tmp_path):
+    base = tmp_path / "base"
+    base.mkdir()
+    (base / "module.py").write_text("value = 1\n")
+    subprocess.run(["git", "init", "-q"], cwd=base, check=True)
+    subprocess.run(["git", "add", "."], cwd=base, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Benchmark",
+            "-c",
+            "user.email=benchmark@example.invalid",
+            "commit",
+            "-qm",
+            "base",
+        ],
+        cwd=base,
+        check=True,
+    )
+    revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=base, text=True
+    ).strip()
+    manifest_path = tmp_path / "case.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "case_id": "test",
+                "suite": "smoke",
+                "repo": "owner/repo",
+                "commit": revision,
+                "task": "Fix value",
+                "verification": {
+                    "commands": [
+                        [
+                            sys.executable,
+                            "-c",
+                            "import module,helper;assert module.value == 2;assert helper.ready",
+                        ]
+                    ]
+                },
+            }
+        )
+    )
+    workspace = tmp_path / "workspace"
+    shutil.copytree(base, workspace)
+    (workspace / "module.py").write_text("value = 2\n")
+    (workspace / "helper.py").write_text("ready = True\n")
+    diff = patch(workspace)
+    assert b"helper.py" in diff
+    result = grade(base, tmp_path / "grading", diff, load_manifest(manifest_path))
+    assert result["success"]
+    assert (base / "module.py").read_text() == "value = 1\n"
+    assert not (base / "helper.py").exists()

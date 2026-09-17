@@ -8,7 +8,7 @@ index f205c79..55a2cb4 100644
  
 -            if default_string:
 +            if default_string or default_value == "":
-+                if default_value == "":
++                if default_value == "" and not show_default_is_str:
 +                    default_string = "''"
                  extra.append(_("default: {default}").format(default=default_string))
  
