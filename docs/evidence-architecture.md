@@ -57,3 +57,43 @@ not task completion. No new custom CoACT/LaMR model has been trained or claimed.
 The completed pilot observed 8/9 dependency successes versus 9/9 full-file, so
 full-file is now the production default. Dependency and lexical policies require
 explicit opt-in. See [the measured results](evidence-benchmark.md).
+
+## Research reassessment after the expanded evaluation
+
+The stopped expanded evaluation recorded 85 finished attempts. It found higher
+gross provider token usage for the tested eager ContextLens workflows than for
+normal tools. This does not isolate the cause of individual incorrect patches,
+or establish proportional dollar costs. See
+[the collected results](comprehensive-benchmark.md).
+
+Three independent reviews found that the current implementation is a foundation,
+not the complete proposed research system. `PruningSession.observe` exposes an
+internal transformation boundary, but the native CLI adapter does not call it
+before tool observations enter the solver's history. Capturing CLI events after
+execution supports auditing, not interception. MCP controls its own responses;
+it cannot automatically replace native shell output or remove hosted history.
+
+The proposed next integration has two explicit modes:
+
+- **Lean MCP tools:** optional discovery and direct exact reads, compact handles,
+  internal freshness checks, and budgets on complete solver-facing responses.
+  It should avoid eager seeds and required duplicate reads. Savings remain an
+  empirical outcome; native tools remain outside its control.
+- **A controlled agent scaffold:** store raw observations outside model history,
+  transform them before appending, and manage versioned visible-context coverage.
+  This is the boundary needed for observation replacement and actual history
+  masking. It is not implemented by the current CLI subprocess adapter.
+
+Selection should preserve evidence/support groups within the rendered budget
+rather than dropping spans after alphabetical sorting. Method-level source units
+and explicit unresolved-support recovery address large-class granularity without
+claiming semantic completeness. Deduplication must account for compaction and
+explicit rereads; a stored receipt does not prove its text remains visible.
+
+FastContext was withdrawn for stated product IP reasons; its old artifact links
+are not an available integration dependency. CoACT has a public trained checkpoint
+that could be evaluated before custom training, but compatibility and end-to-end
+quality remain unverified here. The
+[updated research study](research-context-efficiency-2026-09.md#second-pass-study-why-the-current-workflow-misses-the-mechanism)
+records primary sources, implementation gaps and the revised sequence. These
+paragraphs describe planned corrections, not newly implemented capabilities.
