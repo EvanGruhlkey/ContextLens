@@ -164,6 +164,40 @@ def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
             "the raw report. Agent prompts and production source were unchanged.",
             "",
         ]
+    if report.get("historical_runtime_reports"):
+        lines += [
+            "### Earlier neural runtime measurements",
+            "",
+            "These archived free-Colab T4 runs used an earlier source snapshot and "
+            "three files with three reads each. They measure returned-text size "
+            "and runtime, rather than total agent tokens or bug-fix correctness.",
+            "",
+            "| Runtime | Backend failures | Returned-text reduction | First read | "
+            "Warm median |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+        for archived in report["historical_runtime_reports"]:
+            summary = archived["summary"]
+            label = (
+                "Default (invalid run)"
+                if archived["status"] == "invalid"
+                else "Experimental efficient SDPA"
+            )
+            lines.append(
+                f"| {label} | {summary['failed_observations']}/"
+                f"{summary['observations']} | "
+                f"{summary['observation_reduction_fraction']:.2%} | "
+                f"{summary['first_request_wall_ms'] / 1000:.2f}s | "
+                f"{summary['subsequent_request_median_ms'] / 1000:.2f}s |"
+            )
+        lines += [
+            "",
+            "The default exhausted GPU memory. The experimental variant's "
+            "numerical equivalence is unverified; its smaller returned text "
+            "does not establish agent-quality preservation. See the "
+            "[runtime audit and raw reports](docs/benchmark-audit.md).",
+            "",
+        ]
     return "\n".join(lines)
 
 
@@ -178,6 +212,17 @@ def main() -> int:
     environment_path = args.input.parent / "environment.json"
     if environment_path.exists():
         report["environment"] = json.loads(environment_path.read_text(encoding="utf-8"))
+    archived_reports = []
+    for name in ("colab-t4-initial", "colab-t4-efficient"):
+        path = args.project / "benchmarks" / "results" / f"{name}.json"
+        if path.exists():
+            archived = json.loads(path.read_text(encoding="utf-8"))
+            archived_reports.append(
+                {key: archived[key] for key in ("summary", "status", "commit")}
+                | {"report": f"benchmarks/results/{name}.json"}
+            )
+    if archived_reports:
+        report["historical_runtime_reports"] = archived_reports
     analysis = analyze(report)
     report["analysis"] = analysis
     project = args.project.resolve()
