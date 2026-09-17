@@ -117,12 +117,17 @@ def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
         "",
         "This is a convenience sample of public historical fixes, not a "
         "contamination-free or randomly selected benchmark. Checks cover the bug "
-        "and selected regressions, not complete project test suites. Full-file "
+        "and selected regressions, not complete project test suites. Tasks often "
+        "name affected symbols; these results do not establish performance on "
+        "vague reports, large feature work or unseen repositories. Full-file "
         "ContextLens seeds up to three ranked files under a 30,000-source-token "
         "budget; lexical and dependency policies use 3,000. ContextLens conditions "
         "must exercise live hash verification and range reads; the normal baseline "
         "has no ContextLens server or seed context. Two attempts run concurrently. "
         "No newly trained neural model is used.",
+        "This matrix evaluates deterministic retrieval and source-read integration. "
+        "Optional neural pruning and long-conversation memory are separate "
+        "capabilities whose end-to-end quality is not established here.",
         "",
         "No paid API calls were initiated. Agent runs consume existing subscription "
         "capacity; dollar cost and dollar savings are unknown.",
