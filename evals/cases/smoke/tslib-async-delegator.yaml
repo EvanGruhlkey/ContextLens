@@ -7,6 +7,12 @@
   "task": "__asyncDelegator reports done too early for the first return delegation step. The wrapper step that yields the awaited return must remain incomplete until the delegated result is resumed. Keep CommonJS and ES module helpers consistent.",
   "setup": [],
   "verification": {
-    "commands": [["node", "-e", "const assert=require('assert'); const t=require('./tslib.js'); const delegate={next:v=>({value:v,done:false}),return:v=>({value:v,done:true})}; const wrapped=t.__asyncDelegator(delegate); const first=wrapped.return(42); assert.strictEqual(first.done,false); assert.ok(first.value); const second=wrapped.return(42); assert.strictEqual(second,42);"]]
+    "commands": [
+      [
+        "node",
+        "-e",
+        "const assert=require('assert'),fs=require('fs'); async function main(){const modules=[require('./tslib.js'),await import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync('tslib.es6.js','utf8')).toString('base64'))];for(const t of modules){const delegate={next:v=>({value:v,done:false}),return:v=>({value:v,done:true})};const wrapped=t.__asyncDelegator(delegate);const first=wrapped.return(42);assert.strictEqual(first.done,false);assert.ok(first.value);assert.strictEqual(wrapped.return(42),42);const n=t.__asyncDelegator(delegate);assert.strictEqual(n.next(7).done,false);const resumed={value:7,done:false};assert.strictEqual(n.next(resumed),resumed);}}main().catch(e=>{console.error(e);process.exit(1)});"
+      ]
+    ]
   }
 }

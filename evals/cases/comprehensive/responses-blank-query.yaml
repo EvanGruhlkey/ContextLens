@@ -1,0 +1,26 @@
+{
+  "case_id": "responses-blank-query",
+  "suite": "comprehensive",
+  "category": "bug_fix",
+  "repo": "getsentry/responses",
+  "commit": "983a4975c969432d468c35085b613a3bec0edc46",
+  "task": "query_string_matcher silently ignores blank-valued query parameters. Treat blank parameters as significant: a required blank parameter must be present, and an unexpected blank parameter must prevent a match. Preserve order-independent matching and empty-query behavior.",
+  "setup": [],
+  "verification": {
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "requests",
+        "--with",
+        "pyyaml",
+        "python",
+        "-c",
+        "from responses import matchers;from types import SimpleNamespace as R;m=matchers.query_string_matcher('test=1&foo=');assert not m(R(url='http://example.com?test=1'))[0];assert m(R(url='http://example.com?foo=&test=1'))[0];assert not matchers.query_string_matcher('test=1')(R(url='http://example.com?test=1&foo='))[0];assert matchers.query_string_matcher('test=1')(R(url='http://example.com?test=1'))[0];assert matchers.query_string_matcher('')(R(url='http://example.com'))[0]"
+      ]
+    ]
+  }
+}

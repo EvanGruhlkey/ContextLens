@@ -94,8 +94,8 @@ def load_manifest(path: Path) -> RepositoryCaseManifest:
         raise ValueError(f"invalid public GitHub repository: {repo!r}")
     if not _SHA.fullmatch(commit):
         raise ValueError("commit must be a full 40-character SHA")
-    if suite != "smoke":
-        raise ValueError("the initial repository corpus only supports suite='smoke'")
+    if suite not in {"smoke", "comprehensive"}:
+        raise ValueError("repository corpus supports smoke and comprehensive suites")
     setup = _commands(value.get("setup", []), "setup")
     verification = value.get("verification")
     if not isinstance(verification, dict):

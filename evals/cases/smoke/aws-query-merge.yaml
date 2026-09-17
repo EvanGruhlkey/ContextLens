@@ -7,6 +7,20 @@
   "task": "ALBEvent and APIGatewayProxyEvent lose single-value query parameters whenever multi-value parameters are also present. Merge both collections, normalize single values to lists, and let multi-value entries win on duplicate keys. Preserve behavior when either collection is absent.",
   "setup": [],
   "verification": {
-    "commands": [["uv", "run", "--no-project", "--isolated", "--with", "jmespath", "--with", "typing-extensions", "python", "-c", "from aws_lambda_powertools.utilities.data_classes.alb_event import ALBEvent; from aws_lambda_powertools.utilities.data_classes.api_gateway_proxy_event import APIGatewayProxyEvent; raw={'queryStringParameters':{'status':'active','key':'single'},'multiValueQueryStringParameters':{'ids':['1','2'],'key':['multi']}}; expected={'status':['active'],'ids':['1','2'],'key':['multi']}; assert ALBEvent(raw).resolved_query_string_parameters == expected; assert APIGatewayProxyEvent(raw).resolved_query_string_parameters == expected"]]
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "jmespath",
+        "--with",
+        "typing-extensions",
+        "python",
+        "-c",
+        "from aws_lambda_powertools.utilities.data_classes.alb_event import ALBEvent; from aws_lambda_powertools.utilities.data_classes.api_gateway_proxy_event import APIGatewayProxyEvent; raw={'queryStringParameters':{'status':'active','key':'single'},'multiValueQueryStringParameters':{'ids':['1','2'],'key':['multi']}}; expected={'status':['active'],'ids':['1','2'],'key':['multi']}; assert ALBEvent(raw).resolved_query_string_parameters == expected; assert APIGatewayProxyEvent(raw).resolved_query_string_parameters == expected;\nfor cls in (ALBEvent,APIGatewayProxyEvent):\n assert cls({'queryStringParameters':{'a':'1'}}).resolved_query_string_parameters=={'a':['1']}\n assert cls({'multiValueQueryStringParameters':{'a':['1','2']}}).resolved_query_string_parameters=={'a':['1','2']}\n assert cls({'queryStringParameters':None,'multiValueQueryStringParameters':None}).resolved_query_string_parameters=={}\n assert cls({'queryStringParameters':{'a':''},'multiValueQueryStringParameters':{}}).resolved_query_string_parameters=={'a':['']}"
+      ]
+    ]
   }
 }

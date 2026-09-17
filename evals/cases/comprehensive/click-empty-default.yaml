@@ -1,0 +1,24 @@
+{
+  "case_id": "click-empty-default",
+  "suite": "comprehensive",
+  "category": "bug_fix",
+  "repo": "pallets/click",
+  "commit": "c021f05c838c1d0401ebc340d1de9b663c7fb578",
+  "task": "Click omits an explicitly empty string default from option help. When show_default is enabled, display that empty default clearly. Preserve help for nonempty strings, numeric defaults, omitted defaults and boolean flags.",
+  "setup": [],
+  "verification": {
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "colorama",
+        "python",
+        "-c",
+        "import sys;sys.path.insert(0,'src');import click;ctx=click.Context(click.Command('cli'));h=lambda **kw:click.Option(['--limit'],**kw).get_help_record(ctx)[1];assert '[default: \"\"]' in h(default='',show_default=True);assert '[default: text]' in h(default='text',show_default=True);assert '[default: 3]' in h(default=3,show_default=True);assert '[default:' not in h(show_default=True);assert '[default:' not in h(default='',show_default=False)"
+      ]
+    ]
+  }
+}
