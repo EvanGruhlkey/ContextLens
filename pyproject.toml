@@ -36,6 +36,7 @@ keywords = [
 ]
 
 [project.optional-dependencies]
+benchmark = ["tiktoken>=0.8,<1"]
 dev = [
   "mypy>=1.10",
   "pytest>=8.2",
