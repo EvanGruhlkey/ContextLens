@@ -56,7 +56,7 @@ def public_report(report: dict[str, Any]) -> dict[str, Any]:
     return json.loads(encoded)
 
 
-def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
+def detailed_benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
     protocol = report["protocol"]
     planned = len(protocol["manifests"]) * protocol["trials"] * len(POLICIES)
     complete = len(report["rows"]) == planned
@@ -75,7 +75,7 @@ def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
         f"{len(report['rows'])}/{planned} attempts across "
         f"{len(protocol['manifests'])} historical bug-fix tasks in "
         f"{len({m['repo'] for m in protocol['manifests']})} real repositories. "
-        f"Each task has {protocol['trials']} repeats per condition, using "
+        f"We allocated {protocol['trials']} repeats per task and condition, using "
         f"`{protocol['model']}` with low reasoning effort.",
         "",
         readme_table(analysis),
@@ -89,6 +89,14 @@ def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
         "satisfy its tool protocol. An invalid "
         "run is not a pass; timeouts are also counted as unsuccessful attempts. "
         "Every unmodified checkout failed its checks before agent execution.",
+        (
+            "The evaluation stopped at the user's request. "
+            f"{len(report.get('interrupted_attempts', []))} in-progress attempts "
+            "were canceled; their unknown usage is excluded from the totals. "
+            "Conditions contain different numbers of finished tasks."
+            if report.get("status") == "stopped_by_user"
+            else ""
+        ),
         (
             f"{protocol_invalid} {'attempt' if protocol_invalid == 1 else 'attempts'} "
             "failed the required successful evidence "
@@ -205,6 +213,193 @@ def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
+    protocol = report["protocol"]
+    planned = len(protocol["manifests"]) * protocol["trials"] * len(POLICIES)
+    label = (
+        "Stopped evaluation"
+        if report.get("status") == "stopped_by_user"
+        else "Completed evaluation"
+        if len(report["rows"]) == planned
+        else "Incomplete evaluation"
+    )
+    results_table = [
+        "| Approach | Passed / finished | Total model tokens | Median time |",
+        "| --- | ---: | ---: | ---: |",
+    ]
+    names = {
+        "normal": "Normal tools",
+        "full": "ContextLens full files",
+        "lexical": "Lexical compression",
+        "dependency": "Dependency compression",
+    }
+    for policy, condition in analysis["conditions"].items():
+        tokens = condition["total_provider_tokens"]
+        timing = condition["median_end_to_end_seconds"]
+        results_table.append(
+            f"| {names[policy]} | {condition['passed']} / {condition['attempted']} | "
+            + (f"{tokens:,}" if tokens is not None else "Unknown")
+            + " | "
+            + (f"{timing:.1f}s" if timing is not None else "Unknown")
+            + " |"
+        )
+    lines = [
+        "## Benchmarks",
+        "",
+        "### What we tested",
+        "",
+        f"**{label}:** {len(report['rows'])}/{planned} attempts finished on "
+        f"{len(protocol['manifests'])} historical bug-fix tasks across AWS Powertools, "
+        "Luigi, tslib, Click and responses. The agent used "
+        f"`{protocol['model']}` with low reasoning effort.",
+        "",
+        "Each run started from a pinned repository checkout. We checked the patch "
+        "with hidden tests for the bug and selected regressions. Every unmodified "
+        "checkout failed its checks before the agent attempted a fix.",
+        "",
+        "We compared four approaches:",
+        "",
+        "- **Normal tools:** the agent searches and reads the repository itself.",
+        "- **Full files:** ContextLens supplies up to three matching files, with a "
+        "30,000-source-token budget.",
+        "- **Lexical compression:** ContextLens supplies matching code sections, "
+        "with a 3,000-source-token budget.",
+        "- **Dependency compression:** matching sections plus their static "
+        "dependencies, with the same 3,000-source-token budget.",
+        "",
+        "### Collected results",
+        "",
+        "\n".join(results_table),
+        "",
+        "Tokens include reported input, cached input and output across each "
+        "finished attempt, including failed fixes and extra reads. Cached input "
+        "is included once. Median time includes retrieval, agent execution and "
+        "the original external checks; checkout and offline regrading are excluded.",
+        "",
+    ]
+    interrupted = len(report.get("interrupted_attempts", []))
+    if report.get("status") == "stopped_by_user":
+        lines += [
+            f"Testing stopped at the user's request before all {planned} planned "
+            f"runs finished. {interrupted} in-progress attempts were canceled; "
+            "their usage is unknown and is excluded from this table.",
+            "",
+        ]
+    invalid = sum(c["invalid"] for c in analysis["conditions"].values())
+    if invalid:
+        invalid_correct = sum(
+            r["status"] != "completed" and r["verification"]["success"]
+            for r in report["rows"]
+        )
+        lines += [
+            f"{invalid} invalid run failed the required evidence verification/read "
+            f"workflow despite {invalid_correct} patch passing the code checks. "
+            "It does not count as a pass. Its reported tokens remain "
+            "in the table.",
+            "",
+        ]
+    lines += [
+        "### What we learned",
+        "",
+        "The conditions have different numbers of finished runs. To compare token "
+        "usage fairly, we matched runs on the same task and trial:",
+        "",
+    ]
+    labels = {
+        "full": "Full files",
+        "lexical": "Lexical compression",
+        "dependency": "Dependency compression",
+    }
+    for comparison in analysis["comparisons"]:
+        if comparison["reference"] != "normal":
+            continue
+        reduction = comparison["matched_provider_token_reduction"]
+        change = (
+            f"{abs(reduction):.1%} {'fewer' if reduction >= 0 else 'more'} tokens"
+            if reduction is not None
+            else "unknown token usage"
+        )
+        lines.append(
+            f"- **{labels[comparison['candidate']]}:** {change} than normal tools "
+            f"over {comparison['complete_pairs']} valid matched pairs."
+        )
+    normal_comparisons = [
+        c for c in analysis["comparisons"] if c["reference"] == "normal"
+    ]
+    no_savings = all(
+        c["matched_provider_token_reduction"] is not None
+        and c["matched_provider_token_reduction"] <= 0
+        for c in normal_comparisons
+    )
+    regressions = any(c["observed_regressions"] for c in normal_comparisons)
+    lines += [
+        "",
+        (
+            "**These runs do not demonstrate total token savings over normal tools.** "
+            if no_savings
+            else "These results do not establish universal token savings. "
+        )
+        + (
+            "We also observed correct-to-incorrect fix regressions in matched runs. "
+            if regressions
+            else "These results do not establish quality preservation. "
+        )
+        + "Smaller source context alone does not establish cheaper or equally "
+        "accurate agent execution.",
+        "",
+        "This is a small sample of public historical tasks using one model, not "
+        "a held-out benchmark or full project test suites. ContextLens runs must "
+        "verify evidence and read a range, which adds workflow overhead. Different "
+        "budgets also affect the comparison. This evaluation does not establish "
+        "quality for optional neural pruning or long-conversation memory.",
+        "",
+        "No paid API calls were started. The runs used existing subscription "
+        "capacity and authorized free reset credits; dollar savings are unknown.",
+        "",
+    ]
+    archived = report.get("historical_runtime_reports", [])
+    if archived:
+        lines += [
+            "### Earlier free-GPU runtime test",
+            "",
+            "An earlier source snapshot was tested on a free Colab T4: three files, "
+            "three reads each. This measures returned-text size and runtime, "
+            "rather than bug-fix accuracy or total agent tokens.",
+            "",
+            "| Neural runtime | Backend failures | Returned-text reduction | "
+            "First read | Warm median |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+        for runtime in archived:
+            s = runtime["summary"]
+            name = (
+                "Default (invalid run)"
+                if runtime["status"] == "invalid"
+                else "Experimental efficient SDPA"
+            )
+            lines.append(
+                f"| {name} | {s['failed_observations']}/{s['observations']} | "
+                f"{s['observation_reduction_fraction']:.2%} | "
+                f"{s['first_request_wall_ms'] / 1000:.2f}s | "
+                f"{s['subsequent_request_median_ms'] / 1000:.2f}s |"
+            )
+        lines += [
+            "",
+            "The default ran out of GPU memory. The experimental variant's "
+            "numerical equivalence and agent-quality preservation are unverified.",
+            "",
+        ]
+    lines += [
+        "[Per-task results, methods and uncertainty](docs/comprehensive-benchmark.md) "
+        "· [JSON results](benchmarks/results/comprehensive.json) "
+        "· [CSV results](benchmarks/results/comprehensive.csv) "
+        "· [Reproduce the runs](benchmarks/README.md) "
+        "· [GPU runtime audit](docs/benchmark-audit.md)",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
@@ -268,7 +463,8 @@ def main() -> int:
         original[:start] + section + "\n" + original[end:], encoding="utf-8"
     )
     details = (
-        "# Expanded repository benchmark\n\n" + section.split("## Benchmarks\n\n", 1)[1]
+        "# Expanded repository benchmark\n\n"
+        + detailed_benchmark_section(report, analysis).split("## Benchmarks\n\n", 1)[1]
     )
     details += "\n## Paired uncertainty\n\n"
     for c in analysis["comparisons"]:
