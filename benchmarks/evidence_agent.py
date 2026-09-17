@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import random
 import shutil
 import statistics
@@ -19,6 +20,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from benchmarks.evidence_analysis import analyze_pairs
 from contextlens.evidence import retrieve_evidence
 from contextlens.evidence_index import build_index
 from contextlens.evidence_session import tokenizer
@@ -31,6 +33,16 @@ def dump(path: Path, value: Any) -> None:
     path.write_text(
         json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
+
+
+def isolated_agent_environment() -> dict[str, str]:
+    """Keep authentication but separate child runs from desktop session routing."""
+    return {
+        name: value
+        for name, value in os.environ.items()
+        if (not name.startswith("CODEX_") or name == "CODEX_HOME")
+        and name != "OPENAI_API_KEY"
+    }
 
 
 def verify(workspace: Path, commands: tuple[tuple[str, ...], ...]) -> dict[str, Any]:
@@ -223,6 +235,8 @@ def main() -> int:
                     'mcp_servers.contextlens.default_tools_approval_mode="approve"',
                     "-",
                 ]
+                if os.name == "nt":
+                    command[-1:-1] = ["-c", 'windows.sandbox="elevated"']
                 started = time.perf_counter()
                 try:
                     completed = subprocess.run(
@@ -234,6 +248,7 @@ def main() -> int:
                         encoding="utf-8",
                         errors="replace",
                         timeout=args.timeout,
+                        env=isolated_agent_environment(),
                         check=False,
                     )
                     raw, stderr = completed.stdout, completed.stderr
@@ -254,6 +269,11 @@ def main() -> int:
                 (run_dir / "stderr.txt").write_text(stderr, encoding="utf-8")
                 wall = time.perf_counter() - started
                 parsed = _parse_jsonl(raw)
+                if (
+                    "blocked by read-only sandbox" in stderr
+                    or "blocked by policy" in stderr
+                ):
+                    status = "invalid_sandbox_configuration"
                 verification = verify(workspace, manifest.verification)
                 dump(run_dir / "verification.json", verification)
                 diff = subprocess.run(
@@ -299,6 +319,7 @@ def main() -> int:
                 }
                 report["rows"].append(row)
                 report["summary"] = summarize(report["rows"])
+                report["paired_analysis"] = analyze_pairs(report["rows"])
                 dump(output / "report.json", report)
                 print(
                     json.dumps(
