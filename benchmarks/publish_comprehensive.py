@@ -40,9 +40,10 @@ def public_report(report: dict[str, Any]) -> dict[str, Any]:
     result = copy.deepcopy(report)
     # Raw console output stays local; commands and statuses remain auditable.
     for row in result["rows"]:
-        for command in row["verification"]["commands"]:
-            command.pop("stdout", None)
-            command.pop("stderr", None)
+        for key in ("verification", "original_verification"):
+            for command in row.get(key, {}).get("commands", []):
+                command.pop("stdout", None)
+                command.pop("stderr", None)
     for preflight in result["preflights"]:
         for command in preflight["verification"]["commands"]:
             command.pop("stdout", None)
@@ -131,6 +132,14 @@ def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
         "[Reproduction instructions](benchmarks/README.md)",
         "",
     ]
+    if report.get("verification_revisions"):
+        lines += [
+            "Verifier calibration: undocumented formatting requirements were "
+            "removed for Click help and Luigi error messages. All affected attempts "
+            "were rechecked uniformly; original checks and scores are retained in "
+            "the raw report. Agent prompts and production source were unchanged.",
+            "",
+        ]
     return "\n".join(lines)
 
 
@@ -142,6 +151,9 @@ def main() -> int:
     )
     args = parser.parse_args()
     report = json.loads(args.input.read_text(encoding="utf-8"))
+    environment_path = args.input.parent / "environment.json"
+    if environment_path.exists():
+        report["environment"] = json.loads(environment_path.read_text(encoding="utf-8"))
     analysis = analyze(report)
     report["analysis"] = analysis
     project = args.project.resolve()
@@ -196,9 +208,7 @@ def main() -> int:
     details += (
         "\nProduction source SHA-256: `" + report["protocol"]["source_sha256"] + "`.\n"
     )
-    details = details.replace("(docs/", "(").replace(
-        "(benchmarks/", "(../benchmarks/"
-    )
+    details = details.replace("(docs/", "(").replace("(benchmarks/", "(../benchmarks/")
     (project / "docs" / "comprehensive-benchmark.md").write_text(
         details, encoding="utf-8"
     )

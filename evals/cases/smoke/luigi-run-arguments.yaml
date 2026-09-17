@@ -23,7 +23,7 @@
         "typing-extensions",
         "python",
         "-c",
-        "import luigi;\nfor value in (123, {'task':'X'}, 'X'):\n try: luigi.run(value)\n except TypeError as e: assert 'list or tuple' in str(e)\n else: raise AssertionError(value)\nfor value in ([], ()):\n try: luigi.run(value)\n except (SystemExit, Exception) as e:\n  assert not isinstance(e, TypeError)\nclass BenchmarkReady(luigi.Task):\n def complete(self): return True\nassert luigi.run(['BenchmarkReady','--local-scheduler','--no-lock'])\nassert luigi.run(('BenchmarkReady','--local-scheduler','--no-lock'))\nimport sys; sys.argv=['luigi','BenchmarkReady','--local-scheduler','--no-lock']; assert luigi.run(None)"
+        "import luigi;\nfor value in (123, {'task':'X'}, 'X'):\n try: luigi.run(value)\n except TypeError as e: assert 'list' in str(e).lower() and 'tuple' in str(e).lower()\n else: raise AssertionError(value)\nfor value in ([], ()):\n try: luigi.run(value)\n except (SystemExit, Exception) as e:\n  assert not isinstance(e, TypeError)\nclass BenchmarkReady(luigi.Task):\n def complete(self): return True\nassert luigi.run(['BenchmarkReady','--local-scheduler','--no-lock'])\nassert luigi.run(('BenchmarkReady','--local-scheduler','--no-lock'))\nimport sys; sys.argv=['luigi','BenchmarkReady','--local-scheduler','--no-lock']; assert luigi.run(None)"
       ]
     ]
   }
