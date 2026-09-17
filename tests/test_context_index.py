@@ -6,6 +6,28 @@ import pytest
 from contextlens.context_index import discover_candidates
 
 
+def test_limited_discovery_expands_only_requested_matches(tmp_path, monkeypatch):
+    import contextlens.context_index as index_module
+
+    root = repository(
+        tmp_path, "def first():\n    return 1\n\ndef second():\n    return 2\n"
+    )
+    state = tmp_path / "state"
+    expected = discover_candidates(root, state, "return")
+    assert len(expected) == 2
+    expanded = []
+    original = index_module._support_closure
+
+    def closure(index, unit, enclosing):
+        expanded.append(unit.key)
+        return original(index, unit, enclosing)
+
+    monkeypatch.setattr(index_module, "_support_closure", closure)
+    selected = discover_candidates(root, state, "return", limit=1)
+    assert selected == expected[:1]
+    assert expanded == [selected[0].unit.key]
+
+
 def repository(tmp_path: Path, source: str) -> Path:
     root = tmp_path / "repository"
     root.mkdir()

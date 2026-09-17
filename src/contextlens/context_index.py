@@ -322,7 +322,7 @@ def _javascript_units(
 
 
 def discover_candidates(
-    root: Path, state: Path, query: str, focus: str = ""
+    root: Path, state: Path, query: str, focus: str = "", *, limit: int | None = None
 ) -> list[Candidate]:
     """Rank exact code units; abstain when no indexed evidence matches."""
     if not query.strip() and not focus.strip():
@@ -353,12 +353,20 @@ def discover_candidates(
         enclosing.update(headers)
     granular_index = replace(index, units=units)
     exact = set(re.findall(r"[\w./-]+", query + " " + focus))
-    result = []
+    ranked = []
     for unit, score in rank_units(granular_index, query, focus):
         if score <= 0:
             continue
         score += 20 * len(exact & set(unit.bindings))
         score += 10 * int(unit.path in exact)
+        ranked.append((unit, score))
+    ranked.sort(key=lambda item: (-item[1], item[0].path, item[0].start_line))
+    if limit is not None:
+        if limit < 1:
+            raise ValueError("limit must be positive")
+        ranked = ranked[:limit]
+    result = []
+    for unit, score in ranked:
         fragments, missing = _support_closure(granular_index, unit, enclosing)
         result.append(
             Candidate(
@@ -370,9 +378,7 @@ def discover_candidates(
                 missing,
             )
         )
-    return sorted(
-        result, key=lambda item: (-item.score, item.unit.path, item.unit.start_line)
-    )
+    return result
 
 
 def _overlaps(left: Unit, right: Unit) -> bool:

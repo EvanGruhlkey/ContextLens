@@ -80,7 +80,9 @@ class RepositoryContext:
         lines = [
             "Repository matches (locations only; read handles for exact evidence):"
         ]
-        candidates = discover_candidates(self.root, self.state, query, focus)
+        candidates = discover_candidates(
+            self.root, self.state, query, focus, limit=limit
+        )
         for candidate in candidates[:limit]:
             unit = candidate.unit
             spans = [
