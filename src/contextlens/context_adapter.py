@@ -75,6 +75,10 @@ class ContextAdapter:
     Full recovery is a host method, never a tool that asks the solver to resend
     an observation. Tool and pruning failures return generic errors, preserving
     the raw observation locally without leaking exception text to the solver.
+    Repository implementations may expose ``begin_context`` and ``acknowledge``
+    hooks to track evidence actually appended to this owned history. A host that
+    compacts or removes history must reset that visibility epoch with
+    ``begin_context`` before issuing further repository reads.
     """
 
     def __init__(
@@ -118,6 +122,9 @@ class ContextAdapter:
             raise ValueError("task must match the PruningSession objective")
         self.history = [Message("system", constraints), Message("user", task)]
         self.audit = []
+        begin_context = getattr(self.repository, "begin_context", None)
+        if callable(begin_context):
+            begin_context()
         for _ in range(max_turns):
             action = solver(tuple(self.history))
             if isinstance(action, Answer):
@@ -130,6 +137,19 @@ class ContextAdapter:
             self.history.append(
                 Message("tool", self._execute(action.name, arguments), action.name)
             )
+            if action.name in {"find", "read", "expand"}:
+                acknowledge = getattr(self.repository, "acknowledge", None)
+                if callable(acknowledge):
+                    try:
+                        acknowledge(self.history[-1].content)
+                    except Exception as error:
+                        # Evidence already reached the solver history. Never
+                        # repeat an executor to repair visibility bookkeeping.
+                        self.audit.append(
+                            ObservationAudit(
+                                action.name, None, f"acknowledge:{type(error).__name__}"
+                            )
+                        )
         raise TurnLimitExceeded(f"solver exceeded {max_turns} turns")
 
     def _execute(self, name: str, arguments: Mapping[str, Any]) -> str:

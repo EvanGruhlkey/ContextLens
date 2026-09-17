@@ -104,3 +104,32 @@ def test_errors_and_turn_limit_are_bounded(tmp_path: Path) -> None:
             ReceiptStore(tmp_path),
             tools={"read_file": HostTool(str, True)},
         )
+
+
+def test_visibility_hooks_acknowledge_only_appended_history(tmp_path: Path) -> None:
+    events = []
+
+    class OwnedRepository(Repository):
+        def begin_context(self) -> None:
+            events.append("begin")
+
+        def call(self, operation: str, arguments: Any) -> str:
+            events.append("execute")
+            return super().call(operation, arguments)
+
+        def acknowledge(self, text: str) -> None:
+            assert adapter.history[-1].role == "tool"
+            assert adapter.history[-1].content == text
+            assert adapter.history[0].content == "keep interfaces"
+            events.append("acknowledge")
+            raise RuntimeError("bookkeeping failure")
+
+    adapter = ContextAdapter(OwnedRepository(), ReceiptStore(tmp_path))
+    actions = iter([ToolCall("read", {"handle": "h1"}), Answer("done")])
+    assert (
+        adapter.run(lambda history: next(actions), "fix", constraints="keep interfaces")
+        == "done"
+    )
+    assert events == ["begin", "execute", "acknowledge"]
+    assert adapter.audit[-1].error == "acknowledge:RuntimeError"
+    assert adapter.history[-2].content == "exact small source"
