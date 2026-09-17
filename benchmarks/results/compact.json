@@ -1,0 +1,93 @@
+{
+  "benchmark": "compact_evidence_delivery",
+  "python": "3.13.2",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "repository_revision": "db358742cf00f880e56a4cbc8ad91c0ea0842707",
+  "encoding": "o200k_base",
+  "limits": "Returned text and required source anchors only; no solver, fix accuracy, provider tokens or dollar savings measured.",
+  "rows": [
+    {
+      "case": "fixture: auth.py / refresh_token",
+      "kind": "fixture",
+      "source_sha256": "61c561c22f6f81784e0ea675782bfe6ae639adf01a331800938468a3309fab56",
+      "full_read_tokens": 3645,
+      "find_plus_read_tokens": 88,
+      "returned_text_reduction_percent": 97.6,
+      "cold_ms": 308.4,
+      "warm_median_ms": 250.7,
+      "required_anchors": [
+        "def refresh_token",
+        "TIMEOUT = 30"
+      ],
+      "evidence_check": "passed",
+      "repeats": 3
+    },
+    {
+      "case": "fixture: client.py / refresh_token",
+      "kind": "fixture",
+      "source_sha256": "c3bca02619921bb946775ba7218ab65a281aaf012073905694532e13af33e006",
+      "full_read_tokens": 1247,
+      "find_plus_read_tokens": 117,
+      "returned_text_reduction_percent": 90.6,
+      "cold_ms": 287.2,
+      "warm_median_ms": 253.7,
+      "required_anchors": [
+        "class Client:",
+        "def refresh_token",
+        "TIMEOUT = 30"
+      ],
+      "evidence_check": "passed",
+      "repeats": 3
+    },
+    {
+      "case": "fixture: helpers.py / refresh_token",
+      "kind": "fixture",
+      "source_sha256": "0c4f51f8a274aa3071ab7c33b4ab53c5e9c029c35526a86cc31117c47ef4bfeb",
+      "full_read_tokens": 3651,
+      "find_plus_read_tokens": 111,
+      "returned_text_reduction_percent": 97.0,
+      "cold_ms": 300.9,
+      "warm_median_ms": 257.6,
+      "required_anchors": [
+        "def refresh_token",
+        "def helper",
+        "LIMIT = 30"
+      ],
+      "evidence_check": "passed",
+      "repeats": 3
+    },
+    {
+      "case": "repository: src/contextlens/context_tools.py / _subtract",
+      "kind": "repository",
+      "source_sha256": "202e68d85db07ef17c70b2ef64989c4ccdcd790495df601d37ac2dfc47a81967",
+      "full_read_tokens": 2884,
+      "find_plus_read_tokens": 167,
+      "returned_text_reduction_percent": 94.2,
+      "cold_ms": 3172.1,
+      "warm_median_ms": 2439.3,
+      "required_anchors": [
+        "def _subtract",
+        "remaining.append"
+      ],
+      "evidence_check": "passed",
+      "repeats": 3
+    },
+    {
+      "case": "repository: src/contextlens/context_index.py / _scope_declarations",
+      "kind": "repository",
+      "source_sha256": "7970184c1b00dd4b6bf4a616c7d13c66a744c50a3c8d3899c71bc5d76f940641",
+      "full_read_tokens": 3667,
+      "find_plus_read_tokens": 255,
+      "returned_text_reduction_percent": 93.0,
+      "cold_ms": 3281.3,
+      "warm_median_ms": 2468.4,
+      "required_anchors": [
+        "def _scope_declarations",
+        "ast.Global",
+        "ast.Nonlocal"
+      ],
+      "evidence_check": "passed",
+      "repeats": 3
+    }
+  ]
+}

@@ -266,7 +266,7 @@ Source: [selection and rendering](../src/contextlens/evidence.py),
 [session tools](../src/contextlens/evidence_session.py),
 [middleware](../src/contextlens/pruning/runtime.py),
 [CLI adapter](../src/contextlens/experiments/codex_cli.py), and
-[measured report](../benchmarks/results/comprehensive.json).
+historical report (removed from the current tree; retained in Git history).
 
 The core diagnosis is an **integration mismatch**. Missing learned models do not
 by themselves explain the negative benchmark: the earlier proposal explicitly

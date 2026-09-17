@@ -79,10 +79,10 @@ stale source, root confinement, budgets, repeat reads, visibility resets and the
 pre-history observation boundary. Independent correctness review found dependency
 scope and partial-read disclosure issues; both were fixed with regression tests.
 
-The [stopped 85-run evaluation](comprehensive-benchmark.md) tested the previous
-eager workflow and found higher gross provider token usage than normal tools.
-It does not validate the new architecture. Further live agent runs remain stopped
-at the user's request; no new token-saving or task-quality claims are made.
+The [small local benchmark](../benchmarks/README.md) measures returned-text size,
+required evidence anchors and CPU latency. It does not measure coding-agent task
+accuracy or total provider tokens. Old published benchmark reports were removed.
+No new live agent evaluation or token-saving claim is made.
 
 These changes implement the integration corrections from the
 [research reassessment](research-context-efficiency-2026-09.md). They do not reproduce
