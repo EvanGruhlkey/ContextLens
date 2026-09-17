@@ -26,19 +26,22 @@ def retrieve_evidence(
 ) -> dict[str, Any]:
     """Return ranked verbatim units under an approximate source-token budget.
 
-    Budget covers retained source only; JSON metadata is separately counted.
+    Budget covers retained source only; JSON metadata is excluded.
     Git enumeration respects ignored files. Non-Python files and parse failures
     are reported rather than silently treated as analyzed evidence.
     """
     if budget < 1 or not task.strip():
         raise ValueError("task must be nonempty and budget must be positive")
     root = root.resolve()
-    command = subprocess.run(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-        cwd=root,
-        capture_output=True,
-        check=True,
-    )
+    try:
+        command = subprocess.run(
+            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            cwd=root,
+            capture_output=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as error:
+        raise ValueError("evidence retrieval requires a Git repository") from error
     query = _terms(task)
     units: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []

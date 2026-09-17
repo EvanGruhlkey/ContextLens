@@ -29,6 +29,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
+    retrieve = commands.add_parser(
+        "retrieve", help="retrieve complete Python evidence without model inference"
+    )
+    retrieve.add_argument("--task", required=True)
+    retrieve.add_argument("--root", type=Path, default=Path.cwd())
+    retrieve.add_argument("--budget", type=int, default=2000)
+    retrieve.add_argument(
+        "--receipts", type=Path, default=Path(".contextlens/receipts")
+    )
+
     prune = commands.add_parser("prune", help="prune one source observation")
     prune.add_argument("--task", required=True)
     prune.add_argument("--focus")
@@ -118,6 +128,17 @@ def main(
 ) -> int:
     arguments = build_parser().parse_args(argv)
     try:
+        if arguments.command == "retrieve":
+            from contextlens.evidence import retrieve_evidence
+
+            result = retrieve_evidence(
+                arguments.root,
+                arguments.task,
+                ReceiptStore(arguments.receipts),
+                budget=arguments.budget,
+            )
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 0
         if arguments.command == "prune":
             return _prune(arguments, scorer)
         if arguments.command == "recover":

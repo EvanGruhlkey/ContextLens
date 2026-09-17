@@ -63,3 +63,50 @@ def test_unrelated_task_returns_no_evidence(tmp_path: Path) -> None:
     root = repository(tmp_path, "answer = 7\n")
     result = retrieve_evidence(root, "frobnicate", ReceiptStore(root / ".r"))
     assert result["spans"] == []
+
+
+def test_cli_retrieval_and_range_recovery(tmp_path: Path, capsys) -> None:
+    import json
+
+    from contextlens.pruning_cli import main
+
+    root = repository(tmp_path, "def refresh():\n    return 30\n")
+    receipts = root / ".r"
+    assert (
+        main(
+            [
+                "retrieve",
+                "--root",
+                str(root),
+                "--task",
+                "refresh",
+                "--receipts",
+                str(receipts),
+            ]
+        )
+        == 0
+    )
+    span = json.loads(capsys.readouterr().out)["spans"][0]
+    assert (
+        main(
+            [
+                "recover",
+                span["receipt_id"],
+                "--start-line",
+                str(span["start_line"]),
+                "--end-line",
+                str(span["end_line"]),
+                "--receipts",
+                str(receipts),
+            ]
+        )
+        == 0
+    )
+    assert capsys.readouterr().out == span["text"]
+
+
+def test_cli_non_repository_returns_error(tmp_path: Path, capsys) -> None:
+    from contextlens.pruning_cli import main
+
+    assert main(["retrieve", "--root", str(tmp_path), "--task", "refresh"]) == 2
+    assert "requires a Git repository" in capsys.readouterr().err
