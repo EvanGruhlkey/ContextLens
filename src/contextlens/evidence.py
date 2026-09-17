@@ -1,165 +1,227 @@
-"""Deterministic Python evidence retrieval without neural inference.
-
-Select complete top-level units, expose omitted dependencies, and retain exact
-source snapshots for expansion. Static name matching is deliberately conservative.
-"""
+"""Budgeted, versioned evidence selection and dependency-aware expansion."""
 
 from __future__ import annotations
 
-import ast
 import hashlib
-import re
-import subprocess
+import json
+import math
+import time
+from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from contextlens.evidence_index import RepositoryIndex, Unit, build_index, terms
 from contextlens.pruning import PruneRequest, ReceiptStore
 from contextlens.pruning.model import estimate_tokens
 
+STOP_WORDS = {
+    "the",
+    "a",
+    "an",
+    "to",
+    "of",
+    "and",
+    "in",
+    "is",
+    "for",
+    "with",
+    "it",
+    "that",
+    "when",
+    "be",
+    "as",
+    "by",
+    "on",
+    "make",
+    "fix",
+}
 
-def _terms(text: str) -> set[str]:
-    return set(re.findall(r"[a-z][a-z0-9]*", text.lower()))
+
+def rank_units(
+    index: RepositoryIndex, task: str, focus: str = ""
+) -> list[tuple[Unit, float]]:
+    """BM25-style lexical ranking with path and exact symbol boosts."""
+    query = set(terms(task + " " + focus)) - STOP_WORDS
+    documents = [Counter(terms(u.text)) for u in index.units]
+    average = sum(sum(doc.values()) for doc in documents) / max(len(documents), 1)
+    frequencies = Counter(term for doc in documents for term in doc)
+    ranked = []
+    for unit, doc in zip(index.units, documents, strict=True):
+        length = sum(doc.values())
+        score = 0.0
+        for term in query:
+            count = doc[term]
+            weight = math.log(
+                1
+                + (len(documents) - frequencies[term] + 0.5) / (frequencies[term] + 0.5)
+            )
+            denominator = count + 1.2 * (0.25 + 0.75 * length / max(average, 1))
+            score += weight * count * 2.2 / denominator
+        score += 2 * len(query & set(terms(" ".join(unit.bindings))))
+        score += 0.5 * len(query & set(terms(unit.path)))
+        ranked.append((unit, score))
+    return sorted(ranked, key=lambda row: (-row[1], row[0].path, row[0].start_line))
 
 
 def retrieve_evidence(
-    root: Path, task: str, receipts: ReceiptStore, *, budget: int = 2000
+    root: Path,
+    task: str,
+    receipts: ReceiptStore,
+    *,
+    budget: int = 2000,
+    focus: str = "",
+    token_counter: Callable[[str], int] = estimate_tokens,
+    token_count_method: str = "estimated_utf8_bytes_div_4",
+    response_budget: int | None = None,
+    policy: str = "dependency",
+    index: RepositoryIndex | None = None,
 ) -> dict[str, Any]:
-    """Return ranked verbatim units under an approximate source-token budget.
-
-    Budget covers retained source only; JSON metadata is excluded.
-    Git enumeration respects ignored files. Non-Python files and parse failures
-    are reported rather than silently treated as analyzed evidence.
-    """
-    if budget < 1 or not task.strip():
-        raise ValueError("task must be nonempty and budget must be positive")
-    root = root.resolve()
-    try:
-        command = subprocess.run(
-            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-            cwd=root,
-            capture_output=True,
-            check=True,
-        )
-    except subprocess.CalledProcessError as error:
-        raise ValueError("evidence retrieval requires a Git repository") from error
-    query = _terms(task)
-    units: list[dict[str, Any]] = []
-    skipped: list[dict[str, str]] = []
-    for name in sorted(set(command.stdout.decode("utf-8").split("\0")) - {""}):
-        path = root / name
-        if path.suffix != ".py":
-            continue
-        if not path.resolve().is_relative_to(root):
-            skipped.append({"path": name, "reason": "outside_repository"})
-            continue
-        try:
-            content = path.read_bytes().decode("utf-8")
-            tree = ast.parse(content)
-        except (OSError, UnicodeError, SyntaxError):
-            skipped.append({"path": name, "reason": "unreadable_or_invalid_python"})
-            continue
-        lines = content.splitlines(keepends=True)
-        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
-        for node in tree.body:
-            decorators = getattr(node, "decorator_list", [])
-            start = min([node.lineno, *[item.lineno for item in decorators]])
-            end = node.end_lineno or node.lineno
-            text = "".join(lines[start - 1 : end])
-            names = {item.id for item in ast.walk(node) if isinstance(item, ast.Name)}
-            bindings = {
-                item.id
-                for item in ast.walk(node)
-                if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store)
-            }
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                bindings = {node.name}
-            elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                bindings = {
-                    alias.asname or alias.name.split(".")[0] for alias in node.names
-                }
-            score = len(query & _terms(text)) + 2 * len(query & _terms(name))
-            units.append(
-                {
-                    "path": name,
-                    "start_line": start,
-                    "end_line": end,
-                    "text": text,
-                    "content_hash": digest,
-                    "score": score,
-                    "tokens": estimate_tokens(text),
-                    "names": names,
-                    "bindings": bindings,
-                    "source": content,
-                }
-            )
-    units.sort(key=lambda unit: (-unit["score"], unit["path"], unit["start_line"]))
-    selected: list[tuple[int, str]] = []
-    used = 0
-    for index, unit in enumerate(units):
-        if unit["score"] and used + unit["tokens"] <= budget:
-            selected.append((index, "lexical_match"))
-            used += unit["tokens"]
-    # Expand same-file definitions conservatively. Complete bodies are kept.
-    pending = list(selected)
-    seen = {index for index, _ in selected}
+    """Reserve dependencies before lower-ranked matches; never rewrite source."""
+    if (
+        budget < 1
+        or not task.strip()
+        or (response_budget is not None and response_budget < 1)
+    ):
+        raise ValueError("task must be nonempty and budgets must be positive")
+    if policy not in {"dependency", "lexical", "full"}:
+        raise ValueError("unknown evidence policy")
+    started = time.perf_counter()
+    index = index or build_index(root, receipts.root.parent / "index.sqlite")
+    if index.root != root.resolve():
+        raise ValueError("index belongs to a different repository")
+    snapshots = {
+        path: receipts.save(PruneRequest(task=task, content=source)).receipt_id
+        for path, source in index.sources.items()
+    }
+    ranked = rank_units(index, task, focus)
+    selected: dict[str, tuple[Unit, str]] = {}
     unresolved: list[dict[str, Any]] = []
-    while pending:
-        index, _ = pending.pop()
-        unit = units[index]
-        for other_index, other in enumerate(units):
-            if other_index in seen or other["path"] != unit["path"]:
+    used = 0
+    if policy == "full":
+        file_scores: dict[str, float] = {}
+        for unit, score in ranked:
+            file_scores[unit.path] = max(file_scores.get(unit.path, 0), score)
+        candidates = [
+            Unit(path, 1, len(source.splitlines()), source, [], [], [], "text", True)
+            for path, source in index.sources.items()
+            if file_scores.get(path, 0) > 0
+        ]
+        ranked = sorted(
+            [(u, file_scores[u.path]) for u in candidates],
+            key=lambda row: (-row[1], row[0].path),
+        )[:3]
+    for seed, score in ranked:
+        if not score or seed.key in selected:
+            continue
+        pending = [(seed, "lexical_match" if policy != "full" else "full_file")]
+        visited: set[str] = set()
+        while pending:
+            unit, reason = pending.pop(0)
+            if unit.key in selected or unit.key in visited:
                 continue
-            symbols = unit["names"] & other["bindings"]
-            if not symbols:
+            visited.add(unit.key)
+            count = token_counter(unit.text)
+            if used + count > budget:
+                if reason == "dependency":
+                    unresolved.append(
+                        {
+                            "path": unit.path,
+                            "start_line": unit.start_line,
+                            "end_line": unit.end_line,
+                            "symbols": unit.bindings,
+                            "receipt_id": snapshots[unit.path],
+                            "reason": "dependency_exceeds_budget",
+                        }
+                    )
                 continue
-            if used + other["tokens"] <= budget:
-                seen.add(other_index)
-                selected.append((other_index, "same_file_dependency"))
-                pending.append((other_index, "same_file_dependency"))
-                used += other["tokens"]
-            else:
-                unresolved.append(
-                    {
-                        "path": other["path"],
-                        "start_line": other["start_line"],
-                        "end_line": other["end_line"],
-                        "symbols": sorted(symbols),
-                        "reason": "dependency_exceeds_budget",
-                    }
-                )
-    spans = []
-    for index, reason in selected:
-        unit = units[index]
-        receipt = receipts.save(PruneRequest(task=task, content=unit["source"]))
-        spans.append(
-            {
-                key: unit[key]
-                for key in (
-                    "path",
-                    "start_line",
-                    "end_line",
-                    "text",
-                    "content_hash",
-                    "tokens",
-                )
-            }
-            | {"reason": reason, "receipt_id": receipt.receipt_id}
-        )
-    omitted = [
-        {key: unit[key] for key in ("path", "start_line", "end_line")}
-        for index, unit in enumerate(units)
-        if index not in seen
+            selected[unit.key] = (unit, reason)
+            used += count
+            if policy == "dependency":
+                dependencies, missing = index.dependencies(unit)
+                unresolved.extend(missing)
+                pending.extend((dep, "dependency") for dep in dependencies)
+    spans = [
+        {
+            "path": unit.path,
+            "start_line": unit.start_line,
+            "end_line": unit.end_line,
+            "text": unit.text,
+            "content_hash": index.hashes[unit.path],
+            "tokens": token_counter(unit.text),
+            "reason": reason,
+            "language": unit.language,
+            "fallback": unit.fallback,
+            "receipt_id": snapshots[unit.path],
+        }
+        for unit, reason in selected.values()
     ]
-    return {
+    spans.sort(key=lambda span: (span["path"], span["start_line"]))
+    omitted = [
+        {
+            "path": u.path,
+            "start_line": u.start_line,
+            "end_line": u.end_line,
+            "receipt_id": snapshots[u.path],
+        }
+        for u in index.units
+        if u.key not in selected and policy != "full"
+    ]
+    unresolved = list(
+        {json.dumps(item, sort_keys=True): item for item in unresolved}.values()
+    )
+    bundle: dict[str, Any] = {
+        "schema_version": "2.0",
         "task": task,
-        "repository": str(root),
+        "focus": focus,
+        "repository": str(index.root),
+        "repository_version": index.version,
+        "commit": index.commit,
+        "policy": policy,
         "spans": spans,
-        "omitted": omitted,
-        "unresolved_dependencies": unresolved,
-        "skipped": skipped,
+        "omitted": omitted[:20],
+        "omitted_count": len(omitted),
+        "unresolved_dependencies": unresolved[:20],
+        "unresolved_dependency_count": len(unresolved),
+        "skipped": index.skipped[:20],
+        "skipped_count": len(index.skipped),
         "source_tokens": used,
         "source_budget": budget,
-        "token_count_method": "estimated_utf8_bytes_div_4",
-        "analysis_scope": "python_top_level_same_file_static_names",
+        "token_count_method": token_count_method,
+        "cache_hits": index.cache_hits,
+        "analysis_scope": "static_python_js_ts_imports_with_text_fallback",
         "semantic_completeness_verified": False,
+        "status": "selected" if spans else "no_matching_unit_fits",
     }
+    if response_budget is not None:
+        bundle["omitted"] = []
+        while (
+            bundle["spans"]
+            and token_counter(json.dumps(bundle, ensure_ascii=False)) + 64
+            > response_budget
+        ):
+            removed = bundle["spans"].pop()
+            bundle["source_tokens"] -= removed["tokens"]
+            bundle["status"] = "response_budget_limited_expand_required"
+        if token_counter(json.dumps(bundle, ensure_ascii=False)) + 64 > response_budget:
+            raise ValueError(
+                "response budget cannot fit evidence metadata; increase it"
+            )
+    bundle["selection_ms"] = round((time.perf_counter() - started) * 1000, 3)
+    bundle["response_tokens"] = 0
+    for _ in range(3):
+        bundle["response_tokens"] = token_counter(
+            json.dumps(bundle, ensure_ascii=False)
+        )
+    if response_budget is not None and bundle["response_tokens"] > response_budget:
+        raise ValueError("response budget cannot fit accounting metadata; increase it")
+    return bundle
+
+
+def verify_source(root: Path, path: str, expected_hash: str) -> None:
+    """Reject stale or escaped source before edits or live expansion."""
+    target = (root / path).resolve()
+    if not target.is_relative_to(root.resolve()):
+        raise ValueError("source path is outside the repository")
+    if hashlib.sha256(target.read_bytes()).hexdigest() != expected_hash:
+        raise ValueError("source changed; retrieve fresh evidence before editing")
