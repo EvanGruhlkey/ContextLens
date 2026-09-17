@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -253,6 +254,34 @@ def main() -> int:
     manifests = [load_manifest(p) for p in args.case]
     if len({m.case_id for m in manifests}) != len(manifests):
         parser.error("duplicate case IDs")
+    public_manifests = [m.public_value() for m in manifests]
+    revisions_path = output / "verification-revisions.json"
+    if args.resume and revisions_path.exists():
+        revisions = json.loads(revisions_path.read_text(encoding="utf-8"))
+        for revision in revisions:
+            for i, manifest in enumerate(manifests):
+                if manifest.case_id != revision["case"]:
+                    continue
+                if (
+                    public_manifests[i]["manifest_sha256"]
+                    != revision["revised_manifest_sha256"]
+                    or manifest.task != revision["original_manifest"]["task"]
+                ):
+                    raise ValueError("unaudited manifest change on resume")
+                # Preserve original in-run checks; uniform offline calibration
+                # is applied after execution, including to resumed attempts.
+                manifests[i] = replace(
+                    manifest,
+                    verification=tuple(
+                        tuple(c)
+                        for c in revision["original_manifest"]["verification"][
+                            "commands"
+                        ]
+                    ),
+                )
+                public_manifests[i]["manifest_sha256"] = revision[
+                    "original_manifest_sha256"
+                ]
     protocol = {
         "model": args.model,
         "trials": args.trials,
@@ -261,7 +290,7 @@ def main() -> int:
         "policies": list(POLICIES),
         "seed": 731,
         "source_sha256": source_hash(project),
-        "manifests": [m.public_value() for m in manifests],
+        "manifests": public_manifests,
     }
     if args.resume:
         report = json.loads((output / "report.json").read_text())
