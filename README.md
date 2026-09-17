@@ -21,9 +21,9 @@ with optional JavaScript and TypeScript parsing. The MCP server lets agents
 retrieve code, read ranges, recover snapshots, and store observations outside
 their conversation. Optional neural pruning uses the released SWE-Pruner model.
 
-**Current status:** experimental. Full-file retrieval is the default because the
-compressed policy did not preserve task accuracy in the latest benchmark.
-Dependency compression requires explicit opt-in.
+**Current status:** experimental. The tests below have not demonstrated total
+agent token savings while preserving task accuracy. Full-file retrieval is the
+default; compression requires explicit opt-in.
 
 ## Quick start
 
@@ -56,32 +56,64 @@ budgets, recovery, and optional neural pruning.
 
 ## Benchmarks
 
-The latest pilot ran **18 real coding-agent attempts**: three repository tasks,
-three repeats per task, with full-file and compressed context compared using the
-same model and mechanical task checks.
+### What we tested
 
-- **Full-file context:** 9 of 9 attempts passed.
-- **Compressed context:** 8 of 9 attempts passed.
-- **Total model tokens:** compression used **20.8% fewer**, including cached input
-  and output tokens across all attempts.
+**Stopped evaluation:** 85/120 attempts finished on 10 historical bug-fix tasks across AWS Powertools, Luigi, tslib, Click and responses. The agent used `gpt-5.6-luna` with low reasoning effort.
 
-Compression saved tokens overall, but failed one task attempt and used more tokens
-on the tslib task. It was also slower at the median. **These results do not show
-that compression preserves accuracy**, so it remains experimental.
+Each run started from a pinned repository checkout. We checked the patch with hidden tests for the bug and selected regressions. Every unmodified checkout failed its checks before the agent attempted a fix.
 
-This is a small pilot on public historical tasks, with focused checks rather than
-complete project test suites. No paid API calls were started; the agent runs used
-existing subscription capacity and one authorized free reset credit. Dollar
-savings are unknown.
+We compared four approaches:
 
-Read the [benchmark results](docs/evidence-benchmark.md) or inspect the
-[raw report](benchmarks/results/evidence-agent-pilot.json).
-[Benchmark instructions](benchmarks/README.md) also cover the separate CPU
-retrieval and free-GPU neural-pruning experiments.
+- **Normal tools:** the agent searches and reads the repository itself.
+- **Full files:** ContextLens supplies up to three matching files, with a 30,000-source-token budget.
+- **Lexical compression:** ContextLens supplies matching code sections, with a 3,000-source-token budget.
+- **Dependency compression:** matching sections plus their static dependencies, with the same 3,000-source-token budget.
+
+### Collected results
+
+| Approach | Passed / finished | Total model tokens | Median time |
+| --- | ---: | ---: | ---: |
+| Normal tools | 19 / 21 | 5,466,699 | 76.6s |
+| ContextLens full files | 18 / 20 | 11,273,242 | 88.5s |
+| Lexical compression | 20 / 23 | 7,924,708 | 86.8s |
+| Dependency compression | 18 / 21 | 7,618,593 | 79.6s |
+
+Tokens include reported input, cached input and output across each finished attempt, including failed fixes and extra reads. Cached input is included once. Median time includes retrieval, agent execution and the original external checks; checkout and offline regrading are excluded.
+
+Testing stopped at the user's request before all 120 planned runs finished. 2 in-progress attempts were canceled; their usage is unknown and is excluded from this table.
+
+1 invalid run failed the required evidence verification/read workflow despite 1 patch passing the code checks. It does not count as a pass. Its reported tokens remain in the table.
+
+### What we learned
+
+The conditions have different numbers of finished runs. To compare token usage fairly, we matched runs on the same task and trial:
+
+- **Full files:** 114.2% more tokens than normal tools over 16 valid matched pairs.
+- **Lexical compression:** 40.7% more tokens than normal tools over 16 valid matched pairs.
+- **Dependency compression:** 35.1% more tokens than normal tools over 14 valid matched pairs.
+
+**These runs do not demonstrate total token savings over normal tools.** We also observed correct-to-incorrect fix regressions in matched runs. Smaller source context alone does not establish cheaper or equally accurate agent execution.
+
+This is a small sample of public historical tasks using one model, not a held-out benchmark or full project test suites. ContextLens runs must verify evidence and read a range, which adds workflow overhead. Different budgets also affect the comparison. This evaluation does not establish quality for optional neural pruning or long-conversation memory.
+
+No paid API calls were started. The runs used existing subscription capacity and authorized free reset credits; dollar savings are unknown.
+
+### Earlier free-GPU runtime test
+
+An earlier source snapshot was tested on a free Colab T4: three files, three reads each. This measures returned-text size and runtime, rather than bug-fix accuracy or total agent tokens.
+
+| Neural runtime | Backend failures | Returned-text reduction | First read | Warm median |
+| --- | ---: | ---: | ---: | ---: |
+| Default (invalid run) | 4/9 | 25.62% | 45.99s | 2.56s |
+| Experimental efficient SDPA | 0/9 | 75.45% | 17.69s | 2.83s |
+
+The default ran out of GPU memory. The experimental variant's numerical equivalence and agent-quality preservation are unverified.
+
+[Per-task results, methods and uncertainty](docs/comprehensive-benchmark.md) · [JSON results](benchmarks/results/comprehensive.json) · [CSV results](benchmarks/results/comprehensive.csv) · [Reproduce the runs](benchmarks/README.md) · [GPU runtime audit](docs/benchmark-audit.md)
 
 ## Development
 
-The latest implementation passed **234 automated tests**, lint, and type checks.
+The most recent checks passed **239 automated tests**, lint, and type checks.
 
 ```bash
 python -m pip install -e ".[dev,evidence]"
