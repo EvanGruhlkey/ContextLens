@@ -126,3 +126,17 @@ def test_external_import_is_explicit(tmp_path: Path) -> None:
         u["reason"] == "external_or_unresolved_import"
         for u in result["unresolved_dependencies"]
     )
+
+
+def test_response_budget_reports_removed_source(tmp_path: Path) -> None:
+    root = repo(
+        tmp_path,
+        {"auth.py": "def refresh():\n    return '" + "x" * 2000 + "'\n"},
+    )
+    store = ReceiptStore(root / ".contextlens/receipts")
+    result = retrieve_evidence(root, "refresh", store, budget=3000, response_budget=500)
+    assert result["spans"] == []
+    assert result["response_budget_omission_count"] == 1
+    assert result["omitted_count"] == 1
+    assert result["source_tokens"] == 0
+    assert result["status"] == "response_budget_limited_expand_required"

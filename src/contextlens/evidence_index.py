@@ -236,7 +236,7 @@ def build_index(root: Path, cache: Path | None = None) -> RepositoryIndex:
                 sources[name] = content
                 hashes[name] = digest
             except SyntaxError:
-                # Retain malformed code as an explicit whole-file fallback.
+                # Report invalid Python instead of silently indexing a partial AST.
                 skipped.append({"path": name, "reason": "unreadable_or_invalid_python"})
             except (OSError, UnicodeError):
                 skipped.append({"path": name, "reason": "unreadable_source"})

@@ -69,7 +69,7 @@ class EvidenceSession:
         try:
             result = self._call(operation, arguments)
             return result
-        except (ValueError, KeyError, OSError, RuntimeError) as exc:
+        except Exception as exc:
             error = str(exc)
             result = {"error": error}
             raise

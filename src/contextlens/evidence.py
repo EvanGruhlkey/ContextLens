@@ -192,6 +192,7 @@ def retrieve_evidence(
         "analysis_scope": "static_python_js_ts_imports_with_text_fallback",
         "semantic_completeness_verified": False,
         "status": "selected" if spans else "no_matching_unit_fits",
+        "response_budget_omission_count": 0,
     }
     if response_budget is not None:
         bundle["omitted"] = []
@@ -202,6 +203,8 @@ def retrieve_evidence(
         ):
             removed = bundle["spans"].pop()
             bundle["source_tokens"] -= removed["tokens"]
+            bundle["response_budget_omission_count"] += 1
+            bundle["omitted_count"] += 1
             bundle["status"] = "response_budget_limited_expand_required"
         if token_counter(json.dumps(bundle, ensure_ascii=False)) + 64 > response_budget:
             raise ValueError(
