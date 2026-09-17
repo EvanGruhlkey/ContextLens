@@ -59,7 +59,15 @@ def public_report(report: dict[str, Any]) -> dict[str, Any]:
 def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
     protocol = report["protocol"]
     planned = len(protocol["manifests"]) * protocol["trials"] * len(POLICIES)
-    complete = analysis["protocol_complete_without_invalid_or_timeout_runs"]
+    complete = len(report["rows"]) == planned
+    protocol_invalid = sum(
+        r["status"] == "invalid_live_tools_not_exercised" for r in report["rows"]
+    )
+    invalid_correct = sum(
+        r["status"] == "invalid_live_tools_not_exercised"
+        and r["verification"]["success"]
+        for r in report["rows"]
+    )
     lines = [
         "## Benchmarks",
         "",
@@ -77,9 +85,19 @@ def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
         "usage is never counted as zero. Time includes initial retrieval, agent "
         "execution and external verification; checkout/setup time is excluded.",
         "",
-        "Passes mean the resulting patch passed the hidden task checks. An invalid "
+        "Passes require the patch to pass the hidden task checks and the run to "
+        "satisfy its tool protocol. An invalid "
         "run is not a pass; timeouts are also counted as unsuccessful attempts. "
         "Every unmodified checkout failed its checks before agent execution.",
+        (
+            f"{protocol_invalid} attempts failed the required successful evidence "
+            f"verification/read workflow; {invalid_correct} of those patches "
+            "passed the code checks. They remain invalid in the table and are "
+            "excluded from matched comparisons; their reported tokens remain "
+            "in the totals."
+            if protocol_invalid
+            else ""
+        ),
         "",
         "### Results by task",
         "",
