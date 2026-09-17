@@ -35,8 +35,24 @@ def build_parser() -> argparse.ArgumentParser:
     retrieve.add_argument("--task", required=True)
     retrieve.add_argument("--root", type=Path, default=Path.cwd())
     retrieve.add_argument("--budget", type=int, default=2000)
+    retrieve.add_argument("--focus", default="")
+    retrieve.add_argument("--response-budget", type=int)
+    retrieve.add_argument("--encoding", default="estimate")
+    retrieve.add_argument(
+        "--policy", choices=("dependency", "lexical", "full"), default="dependency"
+    )
     retrieve.add_argument(
         "--receipts", type=Path, default=Path(".contextlens/receipts")
+    )
+
+    mcp = commands.add_parser(
+        "mcp", help="serve root-confined evidence tools over stdio"
+    )
+    mcp.add_argument("--root", type=Path, default=Path.cwd())
+    mcp.add_argument("--state", type=Path, default=Path(".contextlens"))
+    mcp.add_argument("--encoding", default="estimate")
+    mcp.add_argument(
+        "--policy", choices=("dependency", "lexical", "full"), default="dependency"
     )
 
     prune = commands.add_parser("prune", help="prune one source observation")
@@ -128,14 +144,35 @@ def main(
 ) -> int:
     arguments = build_parser().parse_args(argv)
     try:
+        if arguments.command == "mcp":
+            from contextlens.evidence_mcp import serve_stdio
+            from contextlens.evidence_session import EvidenceSession
+
+            serve_stdio(
+                EvidenceSession(
+                    arguments.root,
+                    arguments.state,
+                    encoding=arguments.encoding,
+                    policy=arguments.policy,
+                )
+            )
+            return 0
         if arguments.command == "retrieve":
             from contextlens.evidence import retrieve_evidence
+            from contextlens.evidence_session import tokenizer
+
+            counter, method = tokenizer(arguments.encoding)
 
             result = retrieve_evidence(
                 arguments.root,
                 arguments.task,
                 ReceiptStore(arguments.receipts),
                 budget=arguments.budget,
+                focus=arguments.focus,
+                response_budget=arguments.response_budget,
+                policy=arguments.policy,
+                token_counter=counter,
+                token_count_method=method,
             )
             print(json.dumps(result, indent=2, sort_keys=True))
             return 0

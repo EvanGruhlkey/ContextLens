@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from contextlens.pruning.model import PruneRequest, estimate_tokens
 
@@ -102,6 +104,9 @@ class ReceiptStore:
             content = content_path.read_bytes().decode("utf-8")
         except FileNotFoundError as error:
             raise KeyError(receipt_id) from error
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        if f"cl_{digest[:24]}" != receipt_id:
+            raise RuntimeError("receipt content integrity check failed")
         if start_line is None and end_line is None:
             return content
         if start_line is None or end_line is None:
@@ -118,6 +123,9 @@ class ReceiptStore:
 
 
 def _atomic_write(path: Path, content: str) -> None:
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_bytes(content.encode("utf-8"))
-    temporary.replace(path)
+    temporary = path.with_suffix(path.suffix + f".{uuid4().hex}.tmp")
+    try:
+        temporary.write_bytes(content.encode("utf-8"))
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
