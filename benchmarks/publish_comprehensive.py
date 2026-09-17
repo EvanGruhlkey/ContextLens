@@ -142,7 +142,9 @@ def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
         "ContextLens seeds up to three ranked files under a 30,000-source-token "
         "budget; lexical and dependency policies use 3,000. ContextLens conditions "
         "must exercise live hash verification and range reads; the normal baseline "
-        "has no ContextLens server or seed context. Two attempts run concurrently. "
+        "has no ContextLens server or seed context. That mandatory step adds "
+        "integration overhead, so the baseline comparison includes both retrieval "
+        "choices and this workflow requirement. Two attempts run concurrently. "
         "No newly trained neural model is used.",
         "This matrix evaluates deterministic retrieval and source-read integration. "
         "Optional neural pruning and long-conversation memory are separate "
@@ -162,6 +164,8 @@ def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
             "removed for Click help and Luigi error messages. All affected attempts "
             "were rechecked uniformly; original checks and scores are retained in "
             "the raw report. Agent prompts and production source were unchanged.",
+            "Offline regrading time is excluded from attempt timings; those "
+            "include the original external verification step.",
             "",
         ]
     if report.get("historical_runtime_reports"):
@@ -268,11 +272,21 @@ def main() -> int:
     )
     details += "\n## Paired uncertainty\n\n"
     for c in analysis["comparisons"]:
-        details += (
-            f"- {c['candidate']} versus {c['reference']}: mean paired success "
-            f"difference {c['paired_success_difference']}; task-cluster bootstrap "
-            f"95% interval {c['task_cluster_bootstrap_95_interval']}.\n"
+        difference = c["paired_success_difference"]
+        interval = c["task_cluster_bootstrap_95_interval"]
+        uncertainty = (
+            f"{difference * 100:+.1f} percentage points; task-cluster bootstrap "
+            f"95% interval [{interval[0] * 100:+.1f}, {interval[1] * 100:+.1f}] "
+            "percentage points"
+            if difference is not None and interval is not None
+            else "unknown difference and interval"
         )
+        details += (
+            f"- {c['candidate']} versus {c['reference']}: task-weighted success "
+            f"difference {uncertainty}, from {c['complete_pairs']} valid matched "
+            f"pairs across {c['paired_tasks']} tasks.\n"
+        )
+    details += "\nIntervals use 2,000 task resamples with analysis seed 731.\n"
     details += "\n" + analysis["interval_caveat"] + "\n"
     details += (
         "\n## Token and tool accounting\n\n"
