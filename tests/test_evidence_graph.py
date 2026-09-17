@@ -33,7 +33,10 @@ def test_relative_alias_and_constant_chain(tmp_path: Path) -> None:
         },
     )
     result = retrieve_evidence(
-        root, "refresh", ReceiptStore(root / ".contextlens/receipts")
+        root,
+        "refresh",
+        ReceiptStore(root / ".contextlens/receipts"),
+        policy="dependency",
     )
     spans = result["spans"]
     assert any(
@@ -53,7 +56,10 @@ def test_module_attribute_import(tmp_path: Path) -> None:
         },
     )
     result = retrieve_evidence(
-        root, "refresh", ReceiptStore(root / ".contextlens/receipts")
+        root,
+        "refresh",
+        ReceiptStore(root / ".contextlens/receipts"),
+        policy="dependency",
     )
     assert any(s["path"] == "settings.py" for s in result["spans"])
 
@@ -76,7 +82,11 @@ def test_cycle_and_content_cache_refresh(tmp_path: Path) -> None:
     assert third.version != first.version
     assert third.cache_hits == 0
     result = retrieve_evidence(
-        root, "first", ReceiptStore(root / ".contextlens/receipts"), index=first
+        root,
+        "first",
+        ReceiptStore(root / ".contextlens/receipts"),
+        index=first,
+        policy="dependency",
     )
     assert len(result["spans"]) == 2
 
@@ -92,7 +102,10 @@ def test_ts_import_alias_preserves_export_body(tmp_path: Path) -> None:
         },
     )
     result = retrieve_evidence(
-        root, "refresh token", ReceiptStore(root / ".contextlens/receipts")
+        root,
+        "refresh token",
+        ReceiptStore(root / ".contextlens/receipts"),
+        policy="dependency",
     )
     assert any(
         s["path"] == "settings.ts" and "return 30" in s["text"] for s in result["spans"]
@@ -102,7 +115,9 @@ def test_ts_import_alias_preserves_export_body(tmp_path: Path) -> None:
 def test_response_budget_and_stale_edit_guard(tmp_path: Path) -> None:
     root = repo(tmp_path, {"auth.py": "def refresh():\n    return 30\n"})
     store = ReceiptStore(root / ".contextlens/receipts")
-    result = retrieve_evidence(root, "refresh", store, response_budget=1000)
+    result = retrieve_evidence(
+        root, "refresh", store, response_budget=1000, policy="dependency"
+    )
     assert result["response_tokens"] <= 1000
     assert result["response_tokens"] == (len(json.dumps(result).encode()) + 3) // 4
     span = result["spans"][0]
@@ -120,7 +135,10 @@ def test_external_import_is_explicit(tmp_path: Path) -> None:
         {"auth.py": "import external\ndef refresh():\n    return external.call()\n"},
     )
     result = retrieve_evidence(
-        root, "refresh", ReceiptStore(root / ".contextlens/receipts")
+        root,
+        "refresh",
+        ReceiptStore(root / ".contextlens/receipts"),
+        policy="dependency",
     )
     assert any(
         u["reason"] == "external_or_unresolved_import"
@@ -134,7 +152,9 @@ def test_response_budget_reports_removed_source(tmp_path: Path) -> None:
         {"auth.py": "def refresh():\n    return '" + "x" * 2000 + "'\n"},
     )
     store = ReceiptStore(root / ".contextlens/receipts")
-    result = retrieve_evidence(root, "refresh", store, budget=3000, response_budget=500)
+    result = retrieve_evidence(
+        root, "refresh", store, budget=3000, response_budget=500, policy="dependency"
+    )
     assert result["spans"] == []
     assert result["response_budget_omission_count"] == 1
     assert result["omitted_count"] == 1

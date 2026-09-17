@@ -45,7 +45,7 @@ class EvidenceSession:
         state: Path,
         *,
         encoding: str = "estimate",
-        policy: str = "dependency",
+        policy: str = "full",
         scorer: SemanticScorer | None = None,
     ) -> None:
         self.root = root.resolve()
@@ -97,7 +97,9 @@ class EvidenceSession:
                 self.root,
                 task,
                 self.receipts,
-                budget=_integer(args, "budget", 3000),
+                budget=_integer(
+                    args, "budget", 30000 if self.policy == "full" else 3000
+                ),
                 focus=_string(args, "focus", ""),
                 index=index,
                 policy=self.policy,

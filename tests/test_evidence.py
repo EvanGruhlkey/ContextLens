@@ -22,7 +22,7 @@ def test_retrieval_preserves_helper_body_and_decorators(tmp_path: Path) -> None:
     )
     root = repository(tmp_path, source)
     store = ReceiptStore(root / ".receipts")
-    result = retrieve_evidence(root, "refresh token", store)
+    result = retrieve_evidence(root, "refresh token", store, policy="dependency")
     text = "".join(span["text"] for span in result["spans"])
     assert "return TIMEOUT * 1000\r\n" in text
     assert "@staticmethod\r\n" in text
@@ -42,6 +42,7 @@ def test_budget_exposes_missing_dependency(tmp_path: Path) -> None:
         "refresh",
         ReceiptStore(tmp_path / ".r"),
         budget=30,
+        policy="dependency",
     )
     assert result["source_tokens"] <= 30
     assert result["unresolved_dependencies"][0]["symbols"] == ["helper"]
@@ -52,7 +53,9 @@ def test_ignored_files_and_invalid_python(tmp_path: Path) -> None:
     root = repository(tmp_path, "def invalid(:\n")
     (root / ".gitignore").write_text("secret.py\n")
     (root / "secret.py").write_text("refresh = 1\n")
-    result = retrieve_evidence(root, "refresh", ReceiptStore(root / ".r"))
+    result = retrieve_evidence(
+        root, "refresh", ReceiptStore(root / ".r"), policy="dependency"
+    )
     assert result["spans"] == []
     assert result["skipped"] == [
         {"path": "auth.py", "reason": "unreadable_or_invalid_python"}
@@ -61,7 +64,9 @@ def test_ignored_files_and_invalid_python(tmp_path: Path) -> None:
 
 def test_unrelated_task_returns_no_evidence(tmp_path: Path) -> None:
     root = repository(tmp_path, "answer = 7\n")
-    result = retrieve_evidence(root, "frobnicate", ReceiptStore(root / ".r"))
+    result = retrieve_evidence(
+        root, "frobnicate", ReceiptStore(root / ".r"), policy="dependency"
+    )
     assert result["spans"] == []
 
 
@@ -86,7 +91,10 @@ def test_cli_retrieval_and_range_recovery(tmp_path: Path, capsys) -> None:
         )
         == 0
     )
-    span = json.loads(capsys.readouterr().out)["spans"][0]
+    result = json.loads(capsys.readouterr().out)
+    assert result["policy"] == "full"
+    assert result["source_budget"] == 30000
+    span = result["spans"][0]
     assert (
         main(
             [

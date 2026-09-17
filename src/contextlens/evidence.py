@@ -69,12 +69,12 @@ def retrieve_evidence(
     task: str,
     receipts: ReceiptStore,
     *,
-    budget: int = 2000,
+    budget: int = 30000,
     focus: str = "",
     token_counter: Callable[[str], int] = estimate_tokens,
     token_count_method: str = "estimated_utf8_bytes_div_4",
     response_budget: int | None = None,
-    policy: str = "dependency",
+    policy: str = "full",
     index: RepositoryIndex | None = None,
 ) -> dict[str, Any]:
     """Reserve dependencies before lower-ranked matches; never rewrite source."""

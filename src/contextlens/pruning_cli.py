@@ -30,16 +30,16 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     retrieve = commands.add_parser(
-        "retrieve", help="retrieve complete Python evidence without model inference"
+        "retrieve", help="retrieve versioned source evidence without model inference"
     )
     retrieve.add_argument("--task", required=True)
     retrieve.add_argument("--root", type=Path, default=Path.cwd())
-    retrieve.add_argument("--budget", type=int, default=2000)
+    retrieve.add_argument("--budget", type=int)
     retrieve.add_argument("--focus", default="")
     retrieve.add_argument("--response-budget", type=int)
     retrieve.add_argument("--encoding", default="estimate")
     retrieve.add_argument(
-        "--policy", choices=("dependency", "lexical", "full"), default="dependency"
+        "--policy", choices=("dependency", "lexical", "full"), default="full"
     )
     retrieve.add_argument(
         "--receipts", type=Path, default=Path(".contextlens/receipts")
@@ -57,7 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     mcp.add_argument("--allow-cpu", action="store_true")
     mcp.add_argument("--checkpoint-namespace")
     mcp.add_argument(
-        "--policy", choices=("dependency", "lexical", "full"), default="dependency"
+        "--policy", choices=("dependency", "lexical", "full"), default="full"
     )
 
     prune = commands.add_parser("prune", help="prune one source observation")
@@ -183,7 +183,9 @@ def main(
                 arguments.root,
                 arguments.task,
                 ReceiptStore(arguments.receipts),
-                budget=arguments.budget,
+                budget=arguments.budget
+                if arguments.budget is not None
+                else (30000 if arguments.policy == "full" else 3000),
                 focus=arguments.focus,
                 response_budget=arguments.response_budget,
                 policy=arguments.policy,
