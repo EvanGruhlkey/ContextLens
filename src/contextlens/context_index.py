@@ -11,9 +11,11 @@ from pathlib import Path
 from typing import Any
 
 from contextlens.evidence import rank_units
-from contextlens.evidence_index import Unit, build_index
+from contextlens.evidence_index import RepositoryIndex, Unit, build_index
 
 Declaration = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
+SUPPORT_DEPTH_LIMIT = 4
+SUPPORT_UNIT_LIMIT = 64
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,47 @@ def _python_units(
             for item in ast.walk(node)
             if isinstance(item, ast.Attribute) and isinstance(item.value, ast.Name)
         )
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            local = {
+                argument.arg
+                for argument in (
+                    *node.args.posonlyargs,
+                    *node.args.args,
+                    *node.args.kwonlyargs,
+                    *([node.args.vararg] if node.args.vararg else []),
+                    *([node.args.kwarg] if node.args.kwarg else []),
+                )
+            }
+            statements: list[ast.AST] = list(node.body)
+            while statements:
+                statement = statements.pop()
+                if isinstance(
+                    statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                ):
+                    local.add(statement.name)
+                    continue
+                if isinstance(statement, ast.Name) and isinstance(
+                    statement.ctx, ast.Store
+                ):
+                    local.add(statement.id)
+                statements.extend(ast.iter_child_nodes(statement))
+            refs = {
+                ref
+                for ref in refs
+                if ref.split(".", 1)[0] not in local
+                or ref.startswith(("self.", "cls."))
+            }
+            # Default values, decorators and annotations are evaluated outside
+            # the function's parameter scope.
+            signature: list[ast.AST] = [node.args, *node.decorator_list]
+            if node.returns:
+                signature.append(node.returns)
+            refs.update(
+                child.id
+                for part in signature
+                for child in ast.walk(part)
+                if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load)
+            )
         bindings = (
             [node.name]
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
@@ -253,12 +296,23 @@ def discover_candidates(
     enclosing: dict[str, tuple[Unit, ...]] = {}
     for path, source in index.sources.items():
         if path.endswith(".py"):
-            granular, headers = _python_units(path, source)
+            try:
+                granular, headers = _python_units(path, source)
+            except SyntaxError:
+                # A malformed unrelated file must not prevent healthy matches.
+                continue
         elif path.endswith((".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs")):
             granular, headers = _javascript_units(path, source)
         else:
             continue
+        additions = {unit.key: unit for unit in granular}
         known = {unit.key for unit in units}
+        units = [
+            replace(additions[unit.key], imports=unit.imports)
+            if unit.key in additions
+            else unit
+            for unit in units
+        ]
         units.extend(unit for unit in granular if unit.key not in known)
         enclosing.update(headers)
     granular_index = replace(index, units=units)
@@ -269,38 +323,86 @@ def discover_candidates(
             continue
         score += 20 * len(exact & set(unit.bindings))
         score += 10 * int(unit.path in exact)
-        fragments = {piece.key: piece for piece in enclosing.get(unit.key, ())}
-        references = set(unit.references)
-        for piece in fragments.values():
-            references.update(piece.references)
-        references.update(
-            ref.split(".", 1)[1]
-            for ref in tuple(references)
-            if ref.startswith(("self.", "cls."))
-        )
-        dependencies, missing = granular_index.dependencies(
-            replace(unit, references=sorted(references))
-        )
-        for dependency in dependencies:
-            # Never expand a method back into its complete enclosing class.
-            if dependency.path == unit.path and (
-                dependency.start_line <= unit.start_line
-                and dependency.end_line >= unit.end_line
-                or unit.start_line <= dependency.start_line
-                and unit.end_line >= dependency.end_line
-            ):
-                continue
-            fragments[dependency.key] = dependency
+        fragments, missing = _support_closure(granular_index, unit, enclosing)
         result.append(
             Candidate(
                 unit,
-                tuple(fragments.values()),
+                fragments,
                 score,
                 index.hashes[unit.path],
                 index.version,
-                tuple(f"{item['symbol']}: {item['reason']}" for item in missing),
+                missing,
             )
         )
     return sorted(
         result, key=lambda item: (-item.score, item.unit.path, item.unit.start_line)
     )
+
+
+def _overlaps(left: Unit, right: Unit) -> bool:
+    return left.path == right.path and (
+        left.start_line <= right.end_line and right.start_line <= left.end_line
+    )
+
+
+def _support_closure(
+    index: RepositoryIndex,
+    primary: Unit,
+    enclosing: dict[str, tuple[Unit, ...]],
+) -> tuple[tuple[Unit, ...], tuple[str, ...]]:
+    """Bound dependency exploration and expose incomplete or ambiguous support."""
+    fragments: dict[str, Unit] = {}
+    unresolved: set[str] = set()
+    queue = [(primary, 0)]
+    visited: set[str] = set()
+    while queue:
+        current, depth = queue.pop(0)
+        if current.key in visited:
+            continue
+        visited.add(current.key)
+        references = set(current.references)
+        for header in enclosing.get(current.key, ()):
+            references.update(header.references)
+            if not _overlaps(header, primary) and header.key not in fragments:
+                if len(fragments) >= SUPPORT_UNIT_LIMIT:
+                    unresolved.add("support_unit_limit_reached")
+                    continue
+                fragments[header.key] = header
+                queue.append((header, depth))
+        references.update(
+            ref.split(".", 1)[1]
+            for ref in tuple(references)
+            if ref.startswith(("self.", "cls."))
+        )
+        dependencies, missing = index.dependencies(
+            replace(current, references=sorted(references))
+        )
+        unresolved.update(f"{item['symbol']}: {item['reason']}" for item in missing)
+        # Lexical resolution is conservative: repeated bindings in distinct
+        # scopes are not proof that any particular definition is the target.
+        bindings: dict[tuple[str, str], list[Unit]] = {}
+        for dependency in dependencies:
+            for name in set(dependency.bindings) & references:
+                bindings.setdefault((dependency.path, name), []).append(dependency)
+        ambiguous = {
+            name
+            for (_, name), matches in bindings.items()
+            if len({match.key for match in matches}) > 1
+        }
+        unresolved.update(f"{name}: ambiguous_binding" for name in ambiguous)
+        for dependency in dependencies:
+            if _overlaps(dependency, primary) or _overlaps(dependency, current):
+                continue
+            if dependency.key in fragments:
+                continue
+            if set(dependency.bindings) & ambiguous:
+                continue
+            if depth >= SUPPORT_DEPTH_LIMIT:
+                unresolved.add(f"{dependency.key}: support_depth_limit_reached")
+                continue
+            if len(fragments) >= SUPPORT_UNIT_LIMIT:
+                unresolved.add("support_unit_limit_reached")
+                continue
+            fragments[dependency.key] = dependency
+            queue.append((dependency, depth + 1))
+    return tuple(fragments.values()), tuple(sorted(unresolved))
