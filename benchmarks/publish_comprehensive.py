@@ -141,7 +141,7 @@ def main() -> int:
         "--project", type=Path, default=Path(__file__).resolve().parents[1]
     )
     args = parser.parse_args()
-    report = json.loads(args.input.read_text())
+    report = json.loads(args.input.read_text(encoding="utf-8"))
     analysis = analyze(report)
     report["analysis"] = analysis
     project = args.project.resolve()
@@ -176,7 +176,7 @@ def main() -> int:
                 }
             )
     path = project / "README.md"
-    original = path.read_text()
+    original = path.read_text(encoding="utf-8")
     start, end = original.index("## Benchmarks"), original.index("## Development")
     section = benchmark_section(report, analysis)
     path.write_text(
