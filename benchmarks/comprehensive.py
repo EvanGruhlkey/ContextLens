@@ -267,6 +267,23 @@ def main() -> int:
         report = json.loads((output / "report.json").read_text())
         if report["protocol"] != protocol:
             raise ValueError("resume protocol or source differs; use new output")
+        # Recover rows atomically saved by a worker before the controller stopped.
+        recovered = {(r["case"], r["trial"], r["policy"]): r for r in report["rows"]}
+        for path in output.glob("*/row.json"):
+            row = json.loads(path.read_text())
+            recovered[(row["case"], row["trial"], row["policy"])] = row
+        report["rows"] = list(recovered.values())
+        retries = [
+            r for r in report["rows"] if r["status"] == "subscription_limit_reached"
+        ]
+        report.setdefault("infrastructure_retry_history", []).extend(retries)
+        report["rows"] = [r for r in report["rows"] if r not in retries]
+        for row in retries:
+            previous = output / f"{row['case']}-{row['trial']}-{row['policy']}"
+            archive = output / (previous.name + "-limit-" + str(time.time_ns()))
+            if not previous.resolve().is_relative_to(output):
+                raise ValueError("retry path escaped the benchmark output")
+            previous.rename(archive)
     else:
         output.mkdir(parents=True, exist_ok=False)
         shutil.copytree(
@@ -285,6 +302,9 @@ def main() -> int:
             "preflights": [],
             "status": "preflight",
         }
+        (output / "driver-source.py").write_text(
+            Path(__file__).read_text(), encoding="utf-8"
+        )
         dump(output / "report.json", report)
     bases = {}
     for manifest in manifests:
