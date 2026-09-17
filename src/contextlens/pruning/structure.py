@@ -72,6 +72,7 @@ def close_python_dependencies(
                 dependency_queue.append((ancestor, 0))
             elif isinstance(ancestor, _COMPOUNDS):
                 analyzer.add_control_structure(ancestor, support)
+                dependency_queue.append((ancestor, 0))
 
     while dependency_queue:
         node, depth = dependency_queue.popleft()
@@ -82,14 +83,15 @@ def close_python_dependencies(
         if depth >= max_hops:
             continue
         for name in analyzer.header_names(node):
-            definition = analyzer.bindings.get(name)
-            if definition is None:
-                continue
-            analyzer.add_dependency(definition, support)
-            dependency_queue.append((definition, depth + 1))
-            for ancestor in analyzer.parents_of(definition):
-                if isinstance(ancestor, _SCOPES):
-                    analyzer.add_scope_header(ancestor, support)
+            for definition in analyzer.resolve_bindings(name, node):
+                analyzer.add_dependency(definition, support)
+                dependency_queue.append((definition, depth + 1))
+                for ancestor in analyzer.parents_of(definition):
+                    if isinstance(ancestor, _SCOPES):
+                        analyzer.add_scope_header(ancestor, support)
+                    elif isinstance(ancestor, _COMPOUNDS):
+                        analyzer.add_control_structure(ancestor, support)
+                        dependency_queue.append((ancestor, depth + 1))
 
     normalized = {
         line: tuple(sorted(reasons, key=lambda item: item.value))
@@ -104,28 +106,62 @@ class _PythonStructure:
         self.lines = content.splitlines()
         self.tree = tree
         self.parents: dict[ast.AST, ast.AST] = {}
-        self.bindings: dict[str, ast.AST] = {}
+        self.bindings: dict[ast.AST, dict[str, list[ast.AST]]] = defaultdict(dict)
         for parent in ast.walk(tree):
             for child in ast.iter_child_nodes(parent):
                 self.parents[child] = parent
+        for parent in ast.walk(tree):
             self._record_bindings(parent)
+
+    def _scope_of(self, node: ast.AST) -> ast.AST:
+        return next(
+            (
+                parent
+                for parent in self.parents_of(node)
+                if isinstance(parent, (*_SCOPES, ast.Lambda))
+            ),
+            self.tree,
+        )
+
+    def _bind(self, name: str, node: ast.AST) -> None:
+        self.bindings[self._scope_of(node)].setdefault(name, []).append(node)
+
+    def resolve_bindings(self, name: str, node: ast.AST) -> tuple[ast.AST, ...]:
+        """Resolve lexical names without borrowing locals from sibling functions.
+
+        Keep all assignments in the nearest scope: choosing one requires
+        control-flow analysis. Function headers evaluate in their outer scope.
+        """
+        scope = self._scope_of(node)
+        while True:
+            definitions = self.bindings.get(scope, {}).get(name)
+            if definitions:
+                return tuple(definitions)
+            if scope is self.tree:
+                return ()
+            scope = self._scope_of(scope)
+            # A method does not close over its class's namespace.
+            while isinstance(scope, ast.ClassDef):
+                scope = self._scope_of(scope)
 
     def _record_bindings(self, node: ast.AST) -> None:
         if isinstance(node, ast.Import):
             for alias in node.names:
-                self.bindings[alias.asname or alias.name.split(".")[0]] = node
+                self._bind(alias.asname or alias.name.split(".")[0], node)
         elif isinstance(node, ast.ImportFrom):
             for alias in node.names:
-                self.bindings[alias.asname or alias.name] = node
+                self._bind(alias.asname or alias.name, node)
         elif isinstance(node, _SCOPES):
-            self.bindings[node.name] = node
+            self._bind(node.name, node)
+        elif isinstance(node, ast.arg):
+            self._bind(node.arg, node)
         elif isinstance(node, ast.Assign):
             for target in node.targets:
                 for name in _bound_names(target):
-                    self.bindings[name] = node
+                    self._bind(name, node)
         elif isinstance(node, ast.AnnAssign):
             for name in _bound_names(node.target):
-                self.bindings[name] = node
+                self._bind(name, node)
 
     def smallest_statement(self, line: int) -> ast.stmt | None:
         candidates = [
@@ -157,9 +193,8 @@ class _PythonStructure:
         if not isinstance(node, _SIMPLE_STATEMENTS):
             return
         start, end = _span(node)
-        if end - start <= 20:
-            for line in range(start, end + 1):
-                support[line].add(LineReason.SYNTAX)
+        for line in range(start, end + 1):
+            support[line].add(LineReason.SYNTAX)
 
     def add_scope_header(
         self,
@@ -171,7 +206,8 @@ class _PythonStructure:
             (item.lineno for item in node.decorator_list),
             default=node.lineno,
         )
-        for line in range(start, node.lineno + 1):
+        header_end = max(node.lineno, node.body[0].lineno - 1)
+        for line in range(start, header_end + 1):
             support[line].add(LineReason.SCOPE)
 
     def add_control_structure(
@@ -181,7 +217,10 @@ class _PythonStructure:
     ) -> None:
         line = getattr(node, "lineno", None)
         if line:
-            support[line].add(LineReason.CONTROL_FLOW)
+            body = getattr(node, "body", [])
+            header_end = max(line, body[0].lineno - 1) if body else line
+            for header_line in range(line, header_end + 1):
+                support[header_line].add(LineReason.CONTROL_FLOW)
         for branch_line in self._branch_headers(node):
             support[branch_line].add(LineReason.CONTROL_FLOW)
 
@@ -192,6 +231,9 @@ class _PythonStructure:
     ) -> None:
         if isinstance(node, _SCOPES):
             self.add_scope_header(node, support)
+            return
+        if isinstance(node, ast.arg):
+            # Its enclosing function header already preserves the parameter.
             return
         start, end = _span(node)
         for line in range(start, end + 1):
@@ -218,6 +260,15 @@ class _PythonStructure:
             )
             if node.returns is not None:
                 roots.append(node.returns)
+        elif isinstance(node, _COMPOUNDS):
+            # Follow names in conditions/iterators, not unselected bodies.
+            for field_name, value in ast.iter_fields(node):
+                if field_name in {"body", "orelse", "finalbody", "handlers", "cases"}:
+                    continue
+                if isinstance(value, ast.AST):
+                    roots.append(value)
+                elif isinstance(value, list):
+                    roots.extend(item for item in value if isinstance(item, ast.AST))
         else:
             roots.append(node)
         return {
@@ -240,7 +291,11 @@ class _PythonStructure:
 
 
 def _bound_names(node: ast.AST) -> set[str]:
-    return {item.id for item in ast.walk(node) if isinstance(item, ast.Name)}
+    return {
+        item.id
+        for item in ast.walk(node)
+        if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store)
+    }
 
 
 def _span(node: ast.AST) -> tuple[int, int]:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import time
 from collections import defaultdict
+from collections.abc import Callable
 
 from contextlens.pruning.model import (
     LineDecision,
@@ -23,14 +24,21 @@ from contextlens.pruning.structure import close_python_dependencies
 class ContextPruner:
     """Combine semantic evidence with deterministic structural support."""
 
-    def __init__(self, scorer: SemanticScorer, receipts: ReceiptStore) -> None:
+    def __init__(
+        self,
+        scorer: SemanticScorer,
+        receipts: ReceiptStore,
+        *,
+        token_counter: Callable[[str], int] = estimate_tokens,
+    ) -> None:
         self.scorer = scorer
         self.receipts = receipts
+        self.token_counter = token_counter
 
     def prune(self, request: PruneRequest) -> PruneResult:
         started = time.perf_counter()
         receipt = self.receipts.save(request)
-        original_tokens = estimate_tokens(request.content)
+        original_tokens = self.token_counter(request.content)
         if not request.content:
             return self._passthrough(
                 request, receipt, original_tokens, started, "empty_observation"
@@ -48,6 +56,14 @@ class ContextPruner:
                 request, receipt, original_tokens, started, "unsupported_language"
             )
 
+        # Reject partial/invalid source before paying for neural inference.
+        try:
+            ast.parse(request.content)
+        except SyntaxError:
+            return self._passthrough(
+                request, receipt, original_tokens, started, "source_parse_error"
+            )
+
         try:
             scores = self.scorer.score(request)
         except Exception:
@@ -59,8 +75,7 @@ class ContextPruner:
         combined = {
             line: (
                 scores.semantic_weight * scores.line_scores.get(line, 0.0)
-                + (1 - scores.semantic_weight)
-                * scores.dependency_scores.get(line, 0.0)
+                + (1 - scores.semantic_weight) * scores.dependency_scores.get(line, 0.0)
             )
             for line in covered_lines
             if line <= line_count
@@ -109,7 +124,7 @@ class ContextPruner:
             return self._passthrough(
                 request, receipt, original_tokens, started, "render_validation_error"
             )
-        retained_tokens = estimate_tokens(rendered.text)
+        retained_tokens = self.token_counter(rendered.text)
         if retained_tokens >= original_tokens:
             return self._passthrough(
                 request, receipt, original_tokens, started, "no_net_reduction"
