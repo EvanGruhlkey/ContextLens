@@ -24,7 +24,7 @@ def test_read_expand_and_verify(tmp_path: Path) -> None:
     assert tools.call(
         "verify", {"path": "auth.py", "expected_hash": result["content_hash"]}
     )["current_source_verified"]
-    (tmp_path / "auth.py").write_text("changed = True\n")
+    (tmp_path / "auth.py").write_bytes(b"changed = True\n")
     with pytest.raises(ValueError, match="changed"):
         tools.call(
             "verify", {"path": "auth.py", "expected_hash": result["content_hash"]}
@@ -108,3 +108,20 @@ def test_long_read_signals_expansion_and_observe_fails_open(tmp_path: Path) -> N
     assert "exceeds_budget" in result["status"]
     observed = tools.call("observe", {"task": "refresh", "content": "source"})
     assert observed["content"] == "source"
+
+
+def test_deduplication_requires_same_current_content_and_expands(
+    tmp_path: Path,
+) -> None:
+    tools = session(tmp_path)
+    first = tools.call("read", {"path": "auth.py", "deduplicate": True})
+    repeated = tools.call("read", {"path": "auth.py", "deduplicate": True})
+    assert repeated["content"] == ""
+    assert "already_returned" in repeated["status"]
+    assert (
+        tools.call("expand", {"receipt_id": first["receipt_id"]})["content"]
+        == first["content"]
+    )
+    (tmp_path / "auth.py").write_bytes(b"changed = True\n")
+    changed = tools.call("read", {"path": "auth.py", "deduplicate": True})
+    assert changed["content"] == "changed = True\n"

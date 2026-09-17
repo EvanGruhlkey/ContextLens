@@ -57,6 +57,7 @@ class EvidenceSession:
         self.scorer = scorer
         self.calls: list[dict[str, Any]] = []
         self.memory: list[dict[str, Any]] = []
+        self.returned_ranges: set[tuple[str, int, int]] = set()
         memory = self.state / "memory.json"
         if memory.exists():
             self.memory = json.loads(memory.read_text(encoding="utf-8"))
@@ -136,6 +137,21 @@ class EvidenceSession:
                     "content": "",
                     "source_tokens": self.count(content),
                 }
+            range_key = (receipt.content_hash, start, end)
+            deduplicate = args.get("deduplicate", False)
+            if not isinstance(deduplicate, bool):
+                raise ValueError("deduplicate must be a boolean")
+            if deduplicate and range_key in self.returned_ranges:
+                return {
+                    "path": path,
+                    "receipt_id": receipt.receipt_id,
+                    "content_hash": receipt.content_hash,
+                    "start_line": start,
+                    "end_line": end,
+                    "content": "",
+                    "status": "already_returned_expand_if_needed",
+                }
+            self.returned_ranges.add(range_key)
             return {
                 "path": path,
                 "receipt_id": receipt.receipt_id,
@@ -177,11 +193,10 @@ class EvidenceSession:
                     kind=ObservationKind.TEXT,
                 )
             )
-            item = {
+            item: dict[str, Any] = {
                 "label": label,
                 "receipt_id": receipt.receipt_id,
                 "tokens": self.count(content),
-                "content": content,
                 "pinned": bool(args.get("pinned", False)),
             }
             self.memory.append(item)
@@ -201,9 +216,11 @@ class EvidenceSession:
                 key=lambda pair: (not pair[1]["pinned"], -pair[0]),
             )
             for _, item in ordered:
-                count = self.count(json.dumps(item))
+                expanded = dict(item)
+                expanded["content"] = self.receipts.read(item["receipt_id"])
+                count = self.count(json.dumps(expanded))
                 if used + count <= budget:
-                    kept.append(item)
+                    kept.append(expanded)
                     used += count
                 else:
                     deferred.append(

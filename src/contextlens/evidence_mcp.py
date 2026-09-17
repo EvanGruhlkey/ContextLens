@@ -34,6 +34,7 @@ def tool_definitions() -> list[dict[str, Any]]:
             {
                 "path": string,
                 "expected_hash": string,
+                "deduplicate": {"type": "boolean"},
                 "start_line": integer,
                 "end_line": integer,
                 "budget": integer,
