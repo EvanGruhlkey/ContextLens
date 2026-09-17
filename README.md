@@ -11,52 +11,59 @@ It provides context tools for an agent; it does not generate the fix itself.
 
 ## How it works
 
-1. Find files and code that match the task.
-2. Optionally narrow the context to complete code sections and their dependencies.
-3. Keep exact source snapshots so omitted code can be read later.
-4. Check source hashes to detect changes before using an old snapshot.
+1. **Find locations:** search returns short handles and code locations, without eagerly adding file bodies.
+2. **Read evidence:** request a handle or a known path. Reads return exact code with its statically identified support and check freshness internally.
+3. **Recover safely:** original snapshots remain local. Historical expansion is clearly marked; changed source requires a fresh read.
+4. **Control what enters history:** the optional callback adapter transforms registered tool observations before sending them to the solver.
 
-Retrieval runs locally without a GPU or model service. Python is supported,
-with optional JavaScript and TypeScript parsing. The MCP server lets agents
-retrieve code, read ranges, recover snapshots, and store observations outside
-their conversation. Optional neural pruning uses the released SWE-Pruner model.
+Python methods and nested functions are indexed individually. Optional JavaScript
+and TypeScript parsing provides similar granularity. Support resolution is bounded
+and static; unresolved dependencies are reported. Oversized evidence groups are
+refused rather than silently truncated. Budgets include the complete returned text.
 
-**Current status:** experimental. The tests below have not demonstrated total
-agent token savings while preserving task accuracy. Full-file retrieval is the
-default; compression requires explicit opt-in.
+**Current status:** experimental. The new on-demand architecture passes local
+correctness checks; its end-to-end token savings and task accuracy have not been
+measured. The benchmarks below evaluate the earlier eager retrieval architecture.
+MCP controls its own responses; a controlled adapter is required to replace other
+tool observations before they enter history.
 
 ## Quick start
 
-Requires Git and Python 3.12+. Run these commands from the cloned repository:
+Requires Git and Python 3.12+. From the cloned repository:
 
 ```bash
 python -m pip install -e ".[evidence]"
-
-contextlens retrieve --root . --task "Fix the refresh-token timeout" --encoding o200k_base
+contextlens find --root . --query "refresh-token timeout" --encoding o200k_base
+contextlens read --root . --handle h_REPLACE_WITH_RETURNED_HANDLE --encoding o200k_base
 ```
 
-The command returns JSON containing source text, file paths, line ranges, hashes,
-and recovery IDs. It does not edit your code. Installation currently includes
-PyTorch and SWE-Pruner, even when you only use local retrieval.
-
-To try experimental compression:
+If you already know the location, read it directly:
 
 ```bash
-contextlens retrieve --root . --task "Fix the refresh-token timeout" --policy dependency --budget 3000 --encoding o200k_base
+contextlens read --root . --path src/auth.py --start-line 20 --end-line 60 --encoding o200k_base
 ```
 
-To expose the tools to an MCP-compatible agent:
+To expose the three compact tools to an MCP-compatible agent:
 
 ```bash
 contextlens mcp --root . --state .contextlens --encoding o200k_base
 ```
 
-See the [setup and usage guide](docs/evidence-retrieval.md) for agent configuration,
-budgets, recovery, and optional neural pruning.
+Discovery defaults to 1,200 returned-text tokens; reads default to 3,000. Use
+`--budget` to change these limits. Exact token counting uses the selected encoding;
+`estimate` is an explicitly approximate fallback. Installation currently includes
+neural dependencies, although this workflow runs locally without loading a model
+or requiring a GPU. Legacy retrieval and neural MCP tools remain available through
+`retrieve` and `mcp --profile legacy`.
+
+See the [architecture and controlled adapter guide](docs/evidence-architecture.md)
+for integration, and the [legacy usage guide](docs/evidence-retrieval.md) for older tools.
 
 ## Benchmarks
 
 ### What we tested
+
+These results are from the **previous eager retrieval workflow**, not the new compact tools or controlled adapter.
 
 **Stopped evaluation:** 85/120 attempts finished on 10 historical bug-fix tasks across AWS Powertools, Luigi, tslib, Click and responses. The agent used `gpt-5.6-luna` with low reasoning effort.
 
@@ -113,7 +120,7 @@ The default ran out of GPU memory. The experimental variant's numerical equivale
 
 ## Development
 
-The most recent checks passed **239 automated tests**, lint, and type checks.
+The current implementation passes **266 automated tests**, lint, and strict type checks.
 
 ```bash
 python -m pip install -e ".[dev,evidence]"

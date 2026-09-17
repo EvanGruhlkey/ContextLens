@@ -1,99 +1,91 @@
-# Implemented evidence architecture
+# ContextLens architecture
 
-The default production path is local Git discovery, content-hash parsing cache,
-BM25-style ranking, conservative dependency expansion, and complete source units
-under explicit budgets. The dependency policy reserves supporting definitions
-before spending tokens on additional lexical matches. Receipt recovery supplies
-omitted source on demand, while hash verification distinguishes snapshots from
-current files. JSON envelopes have a separate optional response budget.
+ContextLens selects repository evidence on demand. It preserves exact source and
+recovery information locally, while returning compact text to the coding agent.
+The implementation has two integration modes with different control boundaries.
 
-The root-confined stdio MCP boundary exposes seven agent tools and records local
-request/response token counts and latency. Optional neural observation pruning is
-kept behind this boundary and fails open through the existing pruner. Explicit
-checkpoint namespaces prevent cached semantic scores being silently reused across
-model versions. The default pipeline does not load a neural model or need a GPU.
+## Compact repository tools
 
-External memory preserves original observations as handles, offers a bounded view
-with pinned/recent priority, and supports exact expansion. The agent must own and
-apply its conversation compaction; MCP cannot delete hosted conversation messages.
-Built-in shell reads also remain available, so installing the server alone does
-not guarantee savings. The live benchmark measures the resulting complete agent
-usage, including rereads and recovery, rather than counting selected source alone.
+`RepositoryContext` exposes `find`, `read` and `expand`; the default MCP profile
+maps these to `context_find`, `context_read` and `context_expand`.
 
-## Review findings and practical limits
+1. Git discovery and the content-hash parsing cache feed lexical ranking.
+2. Python methods/nested functions and optional JS/TS source units provide fine granularity.
+3. Bounded static support closure collects referenced helpers, constants, imports and enclosing declarations. Ambiguity and exhausted limits are reported.
+4. Discovery returns only locations and short handles. Provenance and exact source receipts stay on disk.
+5. A read checks current source hashes and returns the complete selected evidence/support group. An oversized group is refused; an explicit range is available with a support-omission notice.
+6. Expansion recovers the original snapshot, clearly labeled historical. It does not establish that current code is unchanged.
 
-Complete AST units avoid misleading pass stubs, but large classes can exceed the
-source budget and require range expansion. Dependency resolution is static and
-conservative: aliases, relative imports and selected module attributes work;
-dynamic dispatch, import side effects, ambiguous bindings and re-export chains
-can require additional reads. The output always disclaims semantic completeness.
-JS/TS grammars are optional, with explicit complete-file fallback. Invalid Python,
-large files and parser/read failures are reported instead of silently treated as
-irrelevant. Ignored untracked files are excluded from discovery.
+Budgets count the complete rendered response, including citations and notices.
+MCP returns plain text rather than an inline JSON evidence envelope. Transport JSON
+is decoded by the client. Select an explicit tokenizer encoding for exact counts;
+the default estimator is approximate. Limits apply to context text, not protocol
+metadata, tool schemas or the whole conversation.
 
-Hashes invalidate changed parses and protect current-source verification. Receipts
-validate recovered content and use atomic unique temporary writes. The local MCP
-service never edits repository source or executes verification commands; the
-agent and external evaluation harness perform those operations independently.
-A verification-to-edit race still requires the editing client to check versions
-at the write boundary; this service cannot enforce atomic edits made by a shell.
+Reads are root-confined and capped at 1 MiB. Handles are bound to a repository,
+metadata is integrity-checked, and receipts preserve original bytes as UTF-8 text,
+including line endings. Hash checks apply to the bytes returned. An editing client
+must still guard against changes between reading and writing.
 
-## Evaluation gate
+## Controlled solver adapter
 
-The real-task pilot uses pinned historical repository commits and fresh checkouts,
-randomized condition order, the same model and discovery index, and mechanical
-verification hidden from the agent. Both policies must call live verification
-and source-read tools. Full-file retrieval retains up to three ranked files under
-a 30,000-source-token budget; dependency retrieval uses 3,000. The comparison
-therefore measures these policies together with their chosen budgets.
+`ContextAdapter` owns a callback solver loop. The host supplies inference and tool
+executors; the adapter makes no model-service or billing calls itself.
 
-Provider input/output usage is the end-to-end token measure. Cached input is
-reported separately and dollars remain unknown. Infra failures, missing usage,
-or observed paired quality regressions prevent a favorable policy decision.
-Repeated trials of three tasks are a pilot, not a proof of quality preservation.
-The separate CPU lexical ablation measures retrieval overhead and serialization,
-not task completion. No new custom CoACT/LaMR model has been trained or claimed.
+```python
+from pathlib import Path
+from contextlens.context_adapter import ContextAdapter, HostTool
+from contextlens.context_tools import RepositoryContext
+from contextlens.pruning import ReceiptStore
 
-The completed pilot observed 8/9 dependency successes versus 9/9 full-file, so
-full-file is now the production default. Dependency and lexical policies require
-explicit opt-in. See [the measured results](evidence-benchmark.md).
+repository = RepositoryContext(Path('.'), Path('.contextlens'), encoding='o200k_base')
+adapter = ContextAdapter(repository, ReceiptStore(Path('.contextlens/observations')))
+# Your solver accepts a sequence of Message objects and returns ToolCall or Answer.
+# It may request find/read/expand; tool output is appended before its next call.
+result = adapter.run(your_solver, 'Fix the refresh-token timeout')
+```
 
-## Research reassessment after the expanded evaluation
+Register additional executors as `HostTool(execute=callback, prune=True)` and supply
+a task-matching `PruningSession` to transform their observations. Each executor
+runs once. Raw output is stored before transformation; only the transformed output
+enters solver history. Edits and tests can use unpruned executors. Failures produce
+generic solver errors without leaking raw output. `adapter.recover(receipt_id)`
+returns exact observations to the host for inspection or further processing.
 
-The stopped expanded evaluation recorded 85 finished attempts. It found higher
-gross provider token usage for the tested eager ContextLens workflows than for
-normal tools. This does not isolate the cause of individual incorrect patches,
-or establish proportional dollar costs. See
-[the collected results](comprehensive-benchmark.md).
+The repository service tracks visible line intervals only in this owned loop,
+after output is appended and acknowledged. Overlapping reads return unseen lines;
+`reread=True` forces a full read. Coverage is versioned by source hash. Starting a
+new run resets the visibility epoch. If the host compacts or removes history, it
+must call `repository.begin_context()` before further reads. Ordinary MCP sessions
+do not suppress repeat reads because they cannot establish what remains visible.
 
-Three independent reviews found that the current implementation is a foundation,
-not the complete proposed research system. `PruningSession.observe` exposes an
-internal transformation boundary, but the native CLI adapter does not call it
-before tool observations enter the solver's history. Capturing CLI events after
-execution supports auditing, not interception. MCP controls its own responses;
-it cannot automatically replace native shell output or remove hosted history.
+## Boundaries and compatibility
 
-The proposed next integration has two explicit modes:
+MCP cannot intercept native shell outputs or remove hosted conversation messages.
+The callback adapter supplies that observation boundary only for registered tools;
+it is not a native CLI interceptor. Automatic history compaction is not implemented.
+Static support is conservative, not a guarantee of semantic completeness. Dynamic
+imports, dispatch and parser fallbacks may require additional discovery or reads.
 
-- **Lean MCP tools:** optional discovery and direct exact reads, compact handles,
-  internal freshness checks, and budgets on complete solver-facing responses.
-  It should avoid eager seeds and required duplicate reads. Savings remain an
-  empirical outcome; native tools remain outside its control.
-- **A controlled agent scaffold:** store raw observations outside model history,
-  transform them before appending, and manage versioned visible-context coverage.
-  This is the boundary needed for observation replacement and actual history
-  masking. It is not implemented by the current CLI subprocess adapter.
+The earlier eager bundle workflow remains available through `retrieve` and
+`mcp --profile legacy`. Neural pruning backends use the legacy MCP profile or an
+explicit controlled `PruningSession`. The core compact path does not load a model.
+Installation still includes the existing neural dependencies.
 
-Selection should preserve evidence/support groups within the rendered budget
-rather than dropping spans after alphabetical sorting. Method-level source units
-and explicit unresolved-support recovery address large-class granularity without
-claiming semantic completeness. Deduplication must account for compaction and
-explicit rereads; a stored receipt does not prove its text remains visible.
+## Validation and research status
 
-FastContext was withdrawn for stated product IP reasons; its old artifact links
-are not an available integration dependency. CoACT has a public trained checkpoint
-that could be evaluated before custom training, but compatibility and end-to-end
-quality remain unverified here. The
-[updated research study](research-context-efficiency-2026-09.md#second-pass-study-why-the-current-workflow-misses-the-mechanism)
-records primary sources, implementation gaps and the revised sequence. These
-paragraphs describe planned corrections, not newly implemented capabilities.
+Local tests cover discovery, support closure, scope/shadowing, exact recovery,
+stale source, root confinement, budgets, repeat reads, visibility resets and the
+pre-history observation boundary. Independent correctness review found dependency
+scope and partial-read disclosure issues; both were fixed with regression tests.
+
+The [stopped 85-run evaluation](comprehensive-benchmark.md) tested the previous
+eager workflow and found higher gross provider token usage than normal tools.
+It does not validate the new architecture. Further live agent runs remain stopped
+at the user's request; no new token-saving or task-quality claims are made.
+
+These changes implement the integration corrections from the
+[research reassessment](research-context-efficiency-2026-09.md). They do not reproduce
+or train CoACT/LaMR, prove a globally optimal architecture, or depend on withdrawn
+FastContext artifacts. Optional trained-model integration requires separate
+compatibility and quality evaluation.

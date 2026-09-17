@@ -1,3 +1,5 @@
+> This guide describes the legacy evidence workflow. For the default compact tools and controlled adapter, see [the current architecture](evidence-architecture.md).
+
 # Versioned evidence retrieval
 
 ContextLens first retrieves complete source units using local BM25-style ranking,
@@ -7,7 +9,7 @@ lower-ranked matches. No inference service is required for this path.
 ```sh
 uv pip install -e ".[dev,evidence]"
 contextlens retrieve --root . --task "fix refresh-token timeout" --policy dependency --budget 3000
-contextlens mcp --root . --state .contextlens --encoding o200k_base
+contextlens mcp --profile legacy --root . --state .contextlens --encoding o200k_base
 ```
 
 Python AST units retain decorators and full function/class bodies. Optional
