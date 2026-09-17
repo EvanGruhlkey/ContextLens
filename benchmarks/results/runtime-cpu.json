@@ -1,0 +1,26 @@
+{
+  "benchmark_kind": "real_model_observation_microbenchmark",
+  "status": "running",
+  "agent_quality_measured": false,
+  "provider_usage_measured": false,
+  "production_savings_claim": null,
+  "model_requested": "ayanami-kitasan/code-pruner",
+  "model_revision_verified": false,
+  "backend": "local",
+  "encoding": "o200k_base",
+  "threshold": 0.5,
+  "repeats": 1,
+  "python": "3.13.2",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "commit": "595094ea3ad7e474450fb17d7be6ab620aa6c848",
+  "working_tree_diff_sha256": "41e51d18b7bf56a4ea749f9f547f6c72d342de59bd7747269f4bd43522a82429",
+  "packages": {
+    "torch": "2.14.0",
+    "swe-pruner": "0.1.1",
+    "transformers": "4.57.6",
+    "tiktoken": "0.14.0"
+  },
+  "cases": [],
+  "cuda_available": false,
+  "device": "cpu"
+}

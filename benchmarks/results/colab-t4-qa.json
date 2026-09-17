@@ -1,0 +1,172 @@
+{
+  "benchmark_kind": "exploratory_posthoc_code_comprehension_smoke",
+  "model": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+  "model_revision": "2e1fd397ee46e1388853d2af2c993145b0f1098a",
+  "agent_quality_measured": false,
+  "statistical_quality_preservation_claim": null,
+  "questions_selected_after_pruning_run": true,
+  "do_sample": false,
+  "max_new_tokens": 96,
+  "attention_variant": "experimental_efficient_sdpa_expanded_gqa",
+  "conditions": [
+    {
+      "case": "repository-scope",
+      "condition": "full",
+      "question": "What exception does _normalize_targets raise when an absolute target is outside the repository root? Return JSON with key exception and the exception class name as its value.",
+      "expected": {
+        "exception": "ValueError"
+      },
+      "answer": "```json\n{\n  \"exception\": \"ValueError\",\n  \"exception_class_name\": \"ValueError\"\n}\n```",
+      "parsed": {
+        "exception": "ValueError",
+        "exception_class_name": "ValueError"
+      },
+      "input_tokens": 11596,
+      "output_tokens": 25,
+      "wall_ms": 4403.407384000047,
+      "prompt_sha256": "1683e9d845fb590a18887cf6d583b83aa5f2eceeb294e9a942ca622aa9e4f74f",
+      "schema_correct": false,
+      "factual_correct": true,
+      "required_implementation_present": true
+    },
+    {
+      "case": "repository-scope",
+      "condition": "pruned",
+      "question": "What exception does _normalize_targets raise when an absolute target is outside the repository root? Return JSON with key exception and the exception class name as its value.",
+      "expected": {
+        "exception": "ValueError"
+      },
+      "answer": "```json\n{\"exception\":\"ValueError\"}\n```",
+      "parsed": {
+        "exception": "ValueError"
+      },
+      "input_tokens": 1923,
+      "output_tokens": 11,
+      "wall_ms": 732.532855999807,
+      "prompt_sha256": "52f6c35b24fad86ad11148e46c4935f64e1f71e33ac52ad84a5ea8993369feaa",
+      "schema_correct": true,
+      "factual_correct": true,
+      "required_implementation_present": false
+    },
+    {
+      "case": "ast-repair",
+      "condition": "pruned",
+      "question": "In _branch_headers, does the implementation add the lineno of every exception handler when node is ast.Try? Return JSON with key adds_handler_lineno and a boolean value.",
+      "expected": {
+        "adds_handler_lineno": true
+      },
+      "answer": "```json\n{\n  \"adds_handler_lineno\": true\n}\n```",
+      "parsed": {
+        "adds_handler_lineno": true
+      },
+      "input_tokens": 1142,
+      "output_tokens": 15,
+      "wall_ms": 827.9766660000405,
+      "prompt_sha256": "e59734fee2a41f6f266ea907cbf80c152e17d6cef40a4fb619c77eb2e3876757",
+      "schema_correct": true,
+      "factual_correct": true,
+      "required_implementation_present": false
+    },
+    {
+      "case": "ast-repair",
+      "condition": "full",
+      "question": "In _branch_headers, does the implementation add the lineno of every exception handler when node is ast.Try? Return JSON with key adds_handler_lineno and a boolean value.",
+      "expected": {
+        "adds_handler_lineno": true
+      },
+      "answer": "```json\n{\"adds_handler_lineno\": true}\n```",
+      "parsed": {
+        "adds_handler_lineno": true
+      },
+      "input_tokens": 2486,
+      "output_tokens": 12,
+      "wall_ms": 712.5227320000249,
+      "prompt_sha256": "df40bf308edd30a0f75308fc1fef89e488b5fd885169b8dc5b6e43370c574ddc",
+      "schema_correct": true,
+      "factual_correct": true,
+      "required_implementation_present": true
+    },
+    {
+      "case": "paired-order",
+      "condition": "full",
+      "question": "When order_seed is None, what are the orders for trials 1 and 2 in ContextExperimentRunner.run? Return JSON with keys trial_1 and trial_2 whose values are lists of variant names.",
+      "expected": {
+        "trial_1": [
+          "base",
+          "candidate"
+        ],
+        "trial_2": [
+          "candidate",
+          "base"
+        ]
+      },
+      "answer": "```json\n{\n  \"trial_1\": [\"base\", \"candidate\"],\n  \"trial_2\": [\"candidate\", \"base\"]\n}\n```",
+      "parsed": {
+        "trial_1": [
+          "base",
+          "candidate"
+        ],
+        "trial_2": [
+          "candidate",
+          "base"
+        ]
+      },
+      "input_tokens": 7037,
+      "output_tokens": 31,
+      "wall_ms": 2433.7990830001672,
+      "prompt_sha256": "fbb1426bf29bd37e74ac8fb46c1b7e716dc2035417c74906d58519978ab0c73d",
+      "schema_correct": true,
+      "factual_correct": true,
+      "required_implementation_present": true
+    },
+    {
+      "case": "paired-order",
+      "condition": "pruned",
+      "question": "When order_seed is None, what are the orders for trials 1 and 2 in ContextExperimentRunner.run? Return JSON with keys trial_1 and trial_2 whose values are lists of variant names.",
+      "expected": {
+        "trial_1": [
+          "base",
+          "candidate"
+        ],
+        "trial_2": [
+          "candidate",
+          "base"
+        ]
+      },
+      "answer": "```json\n{\n  \"trial_1\": [\"base\", \"candidate\"],\n  \"trial_2\": [\"candidate\", \"base\"]\n}\n```",
+      "parsed": {
+        "trial_1": [
+          "base",
+          "candidate"
+        ],
+        "trial_2": [
+          "candidate",
+          "base"
+        ]
+      },
+      "input_tokens": 3019,
+      "output_tokens": 31,
+      "wall_ms": 1434.1298960000586,
+      "prompt_sha256": "5723884e2318e47810a4ff5c2c595a39367dca6e454cc19dc7f53814b90a585b",
+      "schema_correct": true,
+      "factual_correct": true,
+      "required_implementation_present": true
+    }
+  ],
+  "summary": {
+    "questions": 3,
+    "factual_correct": {
+      "full": 3,
+      "pruned": 3
+    },
+    "schema_correct": {
+      "full": 2,
+      "pruned": 3
+    },
+    "required_implementation_present": {
+      "full": 3,
+      "pruned": 1
+    }
+  },
+  "grading_note": "Regraded saved generations without rerunning inference. Extra JSON fields are a schema failure, not a factual failure. Manual inspection found the relevant helper bodies omitted in two pruned contexts; correct answers therefore do not establish quality preservation."
+}
