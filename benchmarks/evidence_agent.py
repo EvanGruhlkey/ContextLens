@@ -85,11 +85,12 @@ def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "runs": len(runs),
             "successful": sum(r["verification"]["success"] for r in runs),
             "infrastructure_errors": sum(r["status"] != "completed" for r in runs),
-            "provider_input_tokens": sum(r.get("input_tokens") or 0 for r in runs),
-            "provider_cached_input_tokens": sum(
-                r.get("cached_input_tokens") or 0 for r in runs
-            ),
-            "provider_output_tokens": sum(r.get("output_tokens") or 0 for r in runs),
+            **{
+                "provider_" + field: sum(r[field] for r in runs)
+                if runs and all(r.get(field) is not None for r in runs)
+                else None
+                for field in ("input_tokens", "cached_input_tokens", "output_tokens")
+            },
             "provider_usage_complete": all(
                 r.get("input_tokens") is not None and r.get("output_tokens") is not None
                 for r in runs
@@ -131,6 +132,7 @@ def main() -> int:
     patch = subprocess.run(
         ["git", "diff", "HEAD"], cwd=project, capture_output=True, text=True, check=True
     ).stdout
+    (output / "implementation.patch").write_text(patch, encoding="utf-8")
     report: dict[str, Any] = {
         "benchmark_kind": "live_mcp_paired_repository_patch_pilot",
         "implementation_commit": revision,
@@ -191,6 +193,8 @@ def main() -> int:
                     "Resolve the following repository task. Make a minimal patch. "
                     "Use evidence_read or evidence_expand for missing implementation; "
                     "verify current hashes before editing source from a snapshot. "
+                    "Before editing, call the ContextLens evidence_verify MCP tool "
+                    "on a relevant initial span and evidence_read on its source range. "
                     "You may also search, read, edit and test normally with the shell. "
                     "Do not inspect parent directories or Git history. "
                     "Do not commit or push.\n\nTask:\n"
@@ -292,6 +296,14 @@ def main() -> int:
                     if calls_path.exists()
                     else []
                 )
+                if status == "completed" and not all(
+                    any(
+                        c["operation"] == operation and not c.get("error")
+                        for c in calls
+                    )
+                    for operation in ("verify", "read")
+                ):
+                    status = "invalid_live_tools_not_exercised"
                 row = {
                     "case": manifest.case_id,
                     "repository_commit": manifest.commit,
