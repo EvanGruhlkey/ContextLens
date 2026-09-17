@@ -238,7 +238,8 @@ def run_attempt(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--case", type=Path, action="append", required=True)
+    parser.add_argument("--case", type=Path, action="append", default=[])
+    parser.add_argument("--case-dir", type=Path, action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--workers", type=int, default=2)
@@ -251,7 +252,12 @@ def main() -> int:
         parser.error("trials, workers and timeout must be positive")
     project = Path(__file__).resolve().parents[1]
     output = args.output.resolve()
-    manifests = [load_manifest(p) for p in args.case]
+    case_paths = args.case + [
+        p for directory in args.case_dir for p in sorted(directory.glob("*.yaml"))
+    ]
+    if not case_paths:
+        parser.error("provide --case or --case-dir")
+    manifests = [load_manifest(p) for p in case_paths]
     if len({m.case_id for m in manifests}) != len(manifests):
         parser.error("duplicate case IDs")
     public_manifests = [m.public_value() for m in manifests]

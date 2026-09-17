@@ -103,3 +103,46 @@ repository-level generalization, provider tokenizer equivalence or dollar saving
 Completed results: [live agent pilot](../docs/evidence-benchmark.md). The quality
 gate rejected dependency compression for default deployment despite lower total
 tokens. Production entry points default to full-file retrieval.
+
+
+## Expanded real-repository evaluation
+
+```bash
+python -m benchmarks.comprehensive --case-dir evals/cases/smoke --case-dir evals/cases/comprehensive --output evals/artifacts/comprehensive-v1 --trials 3 --workers 2 --timeout 300
+```
+
+Ten pinned historical bug-fix tasks span five repositories (Luigi, tslib, AWS
+Powertools, Click and responses). Four conditions run three times per task:
+normal agent tools without ContextLens; ranked full files; lexical spans; and
+spans with static dependency expansion. This is 120 allocated attempts.
+The convenience sample is not a contamination-free held-out corpus.
+
+The production source is frozen under the output directory. Model, low reasoning
+effort, verification, trial limits and worker count stay fixed. Seed 731 controls
+execution order, not the model's randomness. Fresh pinned checkouts have no Git
+remote or upstream history. Hidden checks run externally and test both the defect
+and selected unaffected behavior. Two attempts run concurrently, so observed
+wall time includes provider and shared-resource variability. Model runs consume
+an existing signed-in subscription; no API key is used or paid API spend started.
+
+`report.json`, per-run `row.json`, raw events, prompts, source receipts, patches
+and verification output remain under the local artifact directory. Aggregate
+reports retain failed-fix costs and label missing usage as unknown. Subscription
+limit interruptions stop queued work; `--resume` preserves finished trials and
+keeps an audit history of infrastructure retries. It does not retry incorrect
+patches to improve their score.
+
+During calibration, exact formatting requirements absent from the task text
+were removed for Click help and Luigi errors. Every affected attempt is rescored
+uniformly, with original verifier commands and scores retained. To reproduce
+that audit from the original run artifacts:
+
+```bash
+python -m benchmarks.regrade_comprehensive --input evals/artifacts/comprehensive-v1/report.json
+python -m benchmarks.publish_comprehensive --input evals/artifacts/comprehensive-v1/report-scored.json
+```
+
+A fresh run uses the corrected case manifests directly and can be published from
+its ordinary `report.json`. The publisher writes overall and per-task README
+tables, JSON/CSV results, and task-cluster bootstrap uncertainty. No interval or
+small observed pass-rate difference establishes general quality preservation.
