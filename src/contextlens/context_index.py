@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import io
 import re
+import textwrap
 import tokenize
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -16,6 +17,24 @@ from contextlens.evidence_index import RepositoryIndex, Unit, build_index
 Declaration = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
 SUPPORT_DEPTH_LIMIT = 4
 SUPPORT_UNIT_LIMIT = 64
+
+
+def _scope_declarations(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> tuple[set[str], set[str]]:
+    global_names: set[str] = set()
+    nonlocal_names: set[str] = set()
+    queue: list[ast.AST] = list(node.body)
+    while queue:
+        current = queue.pop()
+        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        if isinstance(current, ast.Global):
+            global_names.update(current.names)
+        elif isinstance(current, ast.Nonlocal):
+            nonlocal_names.update(current.names)
+        queue.extend(ast.iter_child_nodes(current))
+    return global_names, nonlocal_names
 
 
 @dataclass(frozen=True)
@@ -76,6 +95,11 @@ def _python_units(
                 ):
                     local.add(statement.id)
                 statements.extend(ast.iter_child_nodes(statement))
+            global_names, nonlocal_names = _scope_declarations(node)
+            local.difference_update(global_names | nonlocal_names)
+            # Assignment can itself depend on the prior external binding,
+            # notably augmented assignments whose target has Store context.
+            refs.update(global_names | nonlocal_names)
             refs = {
                 ref
                 for ref in refs
@@ -142,7 +166,19 @@ def _python_units(
                     for child in ast.walk(part)
                     if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load)
                 }
-                return replace(piece, references=sorted(references))
+                bindings = list(piece.bindings)
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    bindings.extend(
+                        argument.arg
+                        for argument in (
+                            *node.args.posonlyargs,
+                            *node.args.args,
+                            *node.args.kwonlyargs,
+                            *([node.args.vararg] if node.args.vararg else []),
+                            *([node.args.kwarg] if node.args.kwarg else []),
+                        )
+                    )
+                return replace(piece, bindings=bindings, references=sorted(references))
         return make(node)
 
     def visit(node: ast.AST, ancestors: tuple[Declaration, ...]) -> None:
@@ -374,6 +410,28 @@ def _support_closure(
             for ref in tuple(references)
             if ref.startswith(("self.", "cls."))
         )
+        if current.language == "python":
+            try:
+                parsed = ast.parse(textwrap.dedent(current.text))
+            except SyntaxError:
+                parsed = ast.Module(body=[], type_ignores=[])
+            if parsed.body and isinstance(
+                parsed.body[0], (ast.FunctionDef, ast.AsyncFunctionDef)
+            ):
+                _, nonlocal_names = _scope_declarations(parsed.body[0])
+                for name in nonlocal_names:
+                    # A nonlocal refers to enclosing function scopes, never a
+                    # same-named module binding. Enclosing exact fragments
+                    # supply captured assignments and their own dependencies.
+                    references.discard(name)
+                    references = {
+                        ref for ref in references if not ref.startswith(name + ".")
+                    }
+                    if not any(
+                        name in piece.bindings
+                        for piece in enclosing.get(current.key, ())
+                    ):
+                        unresolved.add(f"{name}: nonlocal_binding_unresolved")
         dependencies, missing = index.dependencies(
             replace(current, references=sorted(references))
         )

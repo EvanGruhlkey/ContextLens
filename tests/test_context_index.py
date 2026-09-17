@@ -140,3 +140,42 @@ def test_ambiguous_nested_bindings_are_disclosed(tmp_path: Path) -> None:
     )
     selected = discover_candidates(root, tmp_path / "state", "target")[0]
     assert "helper: ambiguous_binding" in selected.unresolved
+
+
+def test_global_augmented_assignment_retains_module_constant(tmp_path: Path) -> None:
+    root = repository(
+        tmp_path,
+        "TIMEOUT = 30\ndef refresh():\n    global TIMEOUT\n"
+        "    TIMEOUT += 1\n    return TIMEOUT\n",
+    )
+    selected = discover_candidates(root, tmp_path / "state", "refresh")[0]
+    assert {unit.text for unit in selected.support} == {"TIMEOUT = 30\n"}
+    assert selected.unresolved == ()
+
+
+def test_nonlocal_assignment_retains_enclosing_binding_without_module_shadow(
+    tmp_path: Path,
+) -> None:
+    root = repository(
+        tmp_path,
+        "count = 99\ndef outer():\n    count = 1\n"
+        "    def refresh():\n        nonlocal count\n        count += 1\n"
+        "        return count\n    return refresh\n",
+    )
+    selected = discover_candidates(root, tmp_path / "state", "refresh")[0]
+    assert {unit.text for unit in selected.support} == {
+        "def outer():\n",
+        "    count = 1\n",
+    }
+    assert selected.unresolved == ()
+
+
+def test_nonlocal_parameter_is_supplied_by_enclosing_header(tmp_path: Path) -> None:
+    root = repository(
+        tmp_path,
+        "def outer(count):\n    def refresh():\n        nonlocal count\n"
+        "        count += 1\n        return count\n    return refresh\n",
+    )
+    selected = discover_candidates(root, tmp_path / "state", "refresh")[0]
+    assert {unit.text for unit in selected.support} == {"def outer(count):\n"}
+    assert selected.unresolved == ()
