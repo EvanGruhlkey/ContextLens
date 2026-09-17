@@ -8,6 +8,7 @@ import re
 import tokenize
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Any
 
 from contextlens.evidence import rank_units
 from contextlens.evidence_index import Unit, build_index
@@ -130,6 +131,117 @@ def _python_units(
     return units, support
 
 
+def _javascript_units(
+    path: str, source: str
+) -> tuple[list[Unit], dict[str, tuple[Unit, ...]]]:
+    """Use the optional parser to expose nested JS/TS declarations safely."""
+    try:
+        from tree_sitter import Language, Parser
+
+        if path.endswith((".ts", ".tsx")):
+            import tree_sitter_typescript as grammar
+
+            capsule = (
+                grammar.language_tsx()
+                if path.endswith(".tsx")
+                else grammar.language_typescript()
+            )
+        else:
+            import tree_sitter_javascript as js_grammar
+
+            capsule = js_grammar.language()
+    except ImportError:
+        return [], {}
+    data = source.encode()
+    tree = Parser(Language(capsule)).parse(data)
+    if tree.root_node.has_error:
+        return [], {}
+    lines = source.splitlines(keepends=True)
+    language = "typescript" if path.endswith((".ts", ".tsx")) else "javascript"
+    units: list[Unit] = []
+    support: dict[str, tuple[Unit, ...]] = {}
+    declarations = {
+        "function_declaration",
+        "generator_function_declaration",
+        "method_definition",
+        "class_declaration",
+        "function_expression",
+        "arrow_function",
+    }
+
+    def text(node: Any) -> str:
+        return data[node.start_byte : node.end_byte].decode()
+
+    def make(node: Any, end: int | None = None) -> Unit:
+        start = node.start_point.row + 1
+        finish = end or node.end_point.row + 1
+        name = node.child_by_field_name("name")
+        if not name and node.parent and node.parent.type == "variable_declarator":
+            name = node.parent.child_by_field_name("name")
+        refs: set[str] = set()
+        queue = [node]
+        while queue:
+            child = queue.pop()
+            queue.extend(child.named_children)
+            if child.type in {"identifier", "property_identifier", "type_identifier"}:
+                refs.add(text(child))
+        return Unit(
+            path,
+            start,
+            finish,
+            "".join(lines[start - 1 : finish]),
+            [text(name)] if name else [],
+            sorted(refs),
+            [],
+            language,
+        )
+
+    def visit(node: Any, ancestors: tuple[Any, ...]) -> None:
+        if node.type in declarations:
+            unit = make(node)
+            units.append(unit)
+            fragments: dict[str, Unit] = {}
+            for ancestor in ancestors:
+                body = ancestor.child_by_field_name("body")
+                if not body:
+                    continue
+                header = make(ancestor, body.start_point.row + 1)
+                # All fragments remain complete, original source lines.
+                fragments[header.key] = replace(
+                    header,
+                    references=re.findall(r"[A-Za-z_$][\w$]*", header.text),
+                )
+                for field in body.named_children:
+                    if field.type not in {
+                        "public_field_definition",
+                        "field_definition",
+                        "lexical_declaration",
+                        "variable_declaration",
+                    }:
+                        continue
+                    field_names = [
+                        field.child_by_field_name("name")
+                        or field.child_by_field_name("property")
+                    ]
+                    field_names.extend(
+                        child.child_by_field_name("name")
+                        for child in field.named_children
+                        if child.type == "variable_declarator"
+                    )
+                    if any(
+                        name and text(name) in unit.references for name in field_names
+                    ):
+                        piece = make(field)
+                        fragments[piece.key] = piece
+            support[unit.key] = tuple(fragments.values())
+            ancestors = (*ancestors, node)
+        for child in node.named_children:
+            visit(child, ancestors)
+
+    visit(tree.root_node, ())
+    return units, support
+
+
 def discover_candidates(
     root: Path, state: Path, query: str, focus: str = ""
 ) -> list[Candidate]:
@@ -140,9 +252,12 @@ def discover_candidates(
     units = list(index.units)
     enclosing: dict[str, tuple[Unit, ...]] = {}
     for path, source in index.sources.items():
-        if not path.endswith(".py"):
+        if path.endswith(".py"):
+            granular, headers = _python_units(path, source)
+        elif path.endswith((".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs")):
+            granular, headers = _javascript_units(path, source)
+        else:
             continue
-        granular, headers = _python_units(path, source)
         known = {unit.key for unit in units}
         units.extend(unit for unit in granular if unit.key not in known)
         enclosing.update(headers)

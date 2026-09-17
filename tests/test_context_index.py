@@ -1,6 +1,8 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from contextlens.context_index import discover_candidates
 
 
@@ -54,3 +56,26 @@ def test_nested_function_has_enclosing_header_and_closure(tmp_path: Path) -> Non
 def test_no_match_abstains(tmp_path: Path) -> None:
     root = repository(tmp_path, "def visible():\n    return 1\n")
     assert discover_candidates(root, tmp_path / "state", "zzzxxyyunknown") == []
+
+
+def test_javascript_method_and_nested_function(tmp_path: Path) -> None:
+    pytest.importorskip("tree_sitter_javascript")
+    root = repository(tmp_path, "")
+    (root / "service.js").write_bytes(
+        b"class Service {\n  timeout = 20;\n  refreshToken() {\n"
+        b"    return this.timeout;\n  }\n  unrelated() { return 0; }\n}\n"
+        b"function outer() {\n  const captured = 1;\n"
+        b"  function nestedTarget() {\n    return captured;\n  }\n}\n"
+    )
+    selected = discover_candidates(root, tmp_path / "state", "refreshToken")[0]
+    assert selected.unit.bindings == ["refreshToken"]
+    assert {unit.text for unit in selected.support} == {
+        "class Service {\n",
+        "  timeout = 20;\n",
+    }
+    nested = discover_candidates(root, tmp_path / "state", "nestedTarget")[0]
+    assert nested.unit.bindings == ["nestedTarget"]
+    assert {unit.text for unit in nested.support} == {
+        "function outer() {\n",
+        "  const captured = 1;\n",
+    }
