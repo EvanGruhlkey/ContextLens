@@ -225,6 +225,8 @@ def main() -> int:
                             "-m",
                             "contextlens.pruning_cli",
                             "mcp",
+                            "--profile",
+                            "legacy",
                             "--root",
                             str(workspace),
                             "--state",

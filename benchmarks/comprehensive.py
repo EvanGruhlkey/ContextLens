@@ -72,6 +72,8 @@ def command_for(
                     "-m",
                     "contextlens.pruning_cli",
                     "mcp",
+                    "--profile",
+                    "legacy",
                     "--root",
                     str(workspace),
                     "--state",

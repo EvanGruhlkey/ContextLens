@@ -29,6 +29,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
+    find = commands.add_parser("find", help="find repository locations on demand")
+    find.add_argument("--query", required=True)
+    find.add_argument("--focus", default="")
+    find.add_argument("--root", type=Path, default=Path.cwd())
+    find.add_argument("--state", type=Path, default=Path(".contextlens"))
+    find.add_argument("--encoding", default="estimate")
+    find.add_argument("--budget", type=int, default=1200)
+    find.add_argument("--limit", type=int, default=5)
+
+    read = commands.add_parser("read", help="read compact exact current evidence")
+    read.add_argument("--path")
+    read.add_argument("--handle")
+    read.add_argument("--start-line", type=int)
+    read.add_argument("--end-line", type=int)
+    read.add_argument("--root", type=Path, default=Path.cwd())
+    read.add_argument("--state", type=Path, default=Path(".contextlens"))
+    read.add_argument("--encoding", default="estimate")
+    read.add_argument("--budget", type=int, default=3000)
+    read.add_argument("--snapshot", action="store_true")
+
     retrieve = commands.add_parser(
         "retrieve", help="retrieve versioned source evidence without model inference"
     )
@@ -51,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     mcp.add_argument("--root", type=Path, default=Path.cwd())
     mcp.add_argument("--state", type=Path, default=Path(".contextlens"))
     mcp.add_argument("--encoding", default="estimate")
+    mcp.add_argument("--profile", choices=("compact", "legacy"), default="compact")
     mcp.add_argument("--backend", choices=("none", "local", "http"), default="none")
     mcp.add_argument("--backend-url", default="http://127.0.0.1:8000/prune")
     mcp.add_argument("--model", default=DEFAULT_SWE_PRUNER_MODEL)
@@ -149,7 +170,43 @@ def main(
 ) -> int:
     arguments = build_parser().parse_args(argv)
     try:
+        if arguments.command in {"find", "read"}:
+            from contextlens.context_tools import RepositoryContext
+
+            context = RepositoryContext(
+                arguments.root, arguments.state, encoding=arguments.encoding
+            )
+            if arguments.command == "find":
+                payload = {
+                    "query": arguments.query,
+                    "focus": arguments.focus,
+                    "limit": arguments.limit,
+                    "budget": arguments.budget,
+                }
+                operation = "find"
+            else:
+                payload = {
+                    key: value
+                    for key, value in vars(arguments).items()
+                    if key in {"path", "handle", "start_line", "end_line", "budget"}
+                    and value is not None
+                }
+                operation = "expand" if arguments.snapshot else "read"
+            print(context.call(operation, payload))
+            return 0
         if arguments.command == "mcp":
+            if arguments.profile == "compact":
+                from contextlens.context_mcp import serve_stdio as serve_context
+                from contextlens.context_tools import RepositoryContext
+
+                if arguments.backend != "none":
+                    raise ValueError("neural backends require --profile legacy")
+                serve_context(
+                    RepositoryContext(
+                        arguments.root, arguments.state, encoding=arguments.encoding
+                    )
+                )
+                return 0
             from contextlens.evidence_mcp import serve_stdio
             from contextlens.evidence_session import EvidenceSession
 
