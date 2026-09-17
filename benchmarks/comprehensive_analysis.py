@@ -102,6 +102,12 @@ def analyze(report: dict[str, Any]) -> dict[str, Any]:
                 r["status"] not in {"completed", "timeout"} for r in selected
             ),
             "total_provider_tokens": total_tokens(selected),
+            "input_tokens": sum(r["input_tokens"] for r in selected)
+            if input_known
+            else None,
+            "output_tokens": sum(r["output_tokens"] for r in selected)
+            if selected and all(r.get("output_tokens") is not None for r in selected)
+            else None,
             "cached_input_tokens": sum(r["cached_input_tokens"] for r in selected)
             if cached_known
             else None,
@@ -143,8 +149,9 @@ def readme_table(analysis: dict[str, Any]) -> str:
         "dependency": "Dependency compression",
     }
     lines = [
-        "| Policy | Passed / attempted | Total model tokens | Median time | Invalid |",
-        "| --- | --- | ---: | ---: | ---: |",
+        "| Policy | Passed / attempted | Total model tokens | Median time | "
+        "Invalid | Timeouts |",
+        "| --- | --- | ---: | ---: | ---: | ---: |",
     ]
     for policy, c in analysis["conditions"].items():
         tokens = c["total_provider_tokens"]
@@ -154,6 +161,6 @@ def readme_table(analysis: dict[str, Any]) -> str:
             + (f"{tokens:,}" if tokens is not None else "Unknown")
             + " | "
             + (f"{timing:.1f}s" if timing is not None else "Unknown")
-            + f" | {c['invalid']} |"
+            + f" | {c['invalid']} | {c['timeouts']} |"
         )
     return "\n".join(lines)

@@ -90,7 +90,8 @@ def benchmark_section(report: dict[str, Any], analysis: dict[str, Any]) -> str:
         "run is not a pass; timeouts are also counted as unsuccessful attempts. "
         "Every unmodified checkout failed its checks before agent execution.",
         (
-            f"{protocol_invalid} attempts failed the required successful evidence "
+            f"{protocol_invalid} {'attempt' if protocol_invalid == 1 else 'attempts'} "
+            "failed the required successful evidence "
             f"verification/read workflow; {invalid_correct} of those patches "
             "passed the code checks. They remain invalid in the table and are "
             "excluded from matched comparisons; their reported tokens remain "
@@ -228,6 +229,40 @@ def main() -> int:
             f"95% interval {c['task_cluster_bootstrap_95_interval']}.\n"
         )
     details += "\n" + analysis["interval_caveat"] + "\n"
+    details += (
+        "\n## Token and tool accounting\n\n"
+        "| Policy | Input | Cached input subset | Uncached input | Output | "
+        "Live evidence calls | Expansion requests |\n"
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n"
+    )
+    for policy, condition in analysis["conditions"].items():
+        metrics = [
+            condition[key]
+            for key in (
+                "input_tokens",
+                "cached_input_tokens",
+                "uncached_input_tokens",
+                "output_tokens",
+                "live_evidence_calls",
+                "snapshot_expansions",
+            )
+        ]
+        details += (
+            "| "
+            + policy
+            + " | "
+            + " | ".join(
+                f"{value:,}" if value is not None else "Unknown" for value in metrics
+            )
+            + " |\n"
+        )
+    details += (
+        "\nCached input is included in input, not added again. Tool-call counts "
+        "include failed requests; expansion requests count calls to the snapshot "
+        "expansion tool, not verified recovery successes. Provider token counts "
+        "include repeated "
+        "conversation context across model turns, not just unique source text.\n"
+    )
     details += (
         "\nProduction source SHA-256: `" + report["protocol"]["source_sha256"] + "`.\n"
     )
