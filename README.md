@@ -6,7 +6,7 @@ The default path runs locally without an inference service. Optional neural
 observation pruning uses the released SWE-Pruner 0.6B model.
 
 ```bash
-contextlens retrieve --root . --task "Fix the refresh-token timeout" --budget 3000
+contextlens retrieve --root . --task "Fix the refresh-token timeout" --policy dependency --budget 3000
 contextlens mcp --root . --state .contextlens --encoding o200k_base
 ```
 
@@ -14,6 +14,9 @@ The MCP server exposes retrieval, current-source reads, snapshot expansion,
 hash verification, and bounded external memory. See
 [the evidence guide](docs/evidence-retrieval.md) for configuration and limits.
 The neural architecture described below is an optional second stage.
+The dependency example is experimental: the completed pilot observed a quality
+regression, so full-file retrieval remains the default. See the
+[live benchmark report](docs/evidence-benchmark.md).
 
 ## See it
 

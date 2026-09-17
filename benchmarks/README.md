@@ -99,3 +99,7 @@ Timeouts, sandbox failures and unexercised tools invalidate the run. The paired
 analysis refuses a deployment recommendation after observed quality regressions
 or incomplete runs. A small pilot cannot establish quality non-inferiority,
 repository-level generalization, provider tokenizer equivalence or dollar savings.
+
+Completed results: [live agent pilot](../docs/evidence-benchmark.md). The quality
+gate rejected dependency compression for default deployment despite lower total
+tokens. Production entry points default to full-file retrieval.

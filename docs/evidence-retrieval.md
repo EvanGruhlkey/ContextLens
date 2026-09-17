@@ -6,7 +6,7 @@ lower-ranked matches. No inference service is required for this path.
 
 ```sh
 uv pip install -e ".[dev,evidence]"
-contextlens retrieve --root . --task "fix refresh-token timeout" --budget 3000
+contextlens retrieve --root . --task "fix refresh-token timeout" --policy dependency --budget 3000
 contextlens mcp --root . --state .contextlens --encoding o200k_base
 ```
 
@@ -69,3 +69,8 @@ are supported. Change the cache namespace when checkpoint/runtime settings chang
 No newly trained CoACT or LaMR model is included. Training a replacement requires
 separate data, compute and evaluation; published methods are research directions,
 not implemented performance claims.
+
+The completed live pilot observed one paired quality regression (8/9 versus
+9/9). CLI, MCP and library defaults therefore use full-file retrieval with a
+30,000-token source budget. Dependency compression requires explicit opt-in;
+the example above is experimental. Savings alone do not pass the quality gate.

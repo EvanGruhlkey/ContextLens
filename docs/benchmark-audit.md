@@ -112,3 +112,11 @@ separately. No inference was rerun to revise grading.
 The older `evals/` harness evaluates repository context policies, not this
 observation middleware. It cannot establish current pruner quality unchanged.
 General claims require a new integration into real agent read/recover tools.
+
+## Subsequent evidence pipeline pilot
+
+The newer local CPU/MCP evidence pipeline is implemented and evaluated separately
+from the neural T4 observation experiments above. Its real-agent pilot completed
+18 runs and observed one paired quality regression; dependency compression is
+experimental and full-file retrieval is the default. See
+[the complete results and limits](evidence-benchmark.md).

@@ -53,3 +53,7 @@ or observed paired quality regressions prevent a favorable policy decision.
 Repeated trials of three tasks are a pilot, not a proof of quality preservation.
 The separate CPU lexical ablation measures retrieval overhead and serialization,
 not task completion. No new custom CoACT/LaMR model has been trained or claimed.
+
+The completed pilot observed 8/9 dependency successes versus 9/9 full-file, so
+full-file is now the production default. Dependency and lexical policies require
+explicit opt-in. See [the measured results](evidence-benchmark.md).
