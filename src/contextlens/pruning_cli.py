@@ -51,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
     mcp.add_argument("--root", type=Path, default=Path.cwd())
     mcp.add_argument("--state", type=Path, default=Path(".contextlens"))
     mcp.add_argument("--encoding", default="estimate")
+    mcp.add_argument("--backend", choices=("none", "local", "http"), default="none")
+    mcp.add_argument("--backend-url", default="http://127.0.0.1:8000/prune")
+    mcp.add_argument("--model", default=DEFAULT_SWE_PRUNER_MODEL)
+    mcp.add_argument("--allow-cpu", action="store_true")
+    mcp.add_argument("--checkpoint-namespace")
     mcp.add_argument(
         "--policy", choices=("dependency", "lexical", "full"), default="dependency"
     )
@@ -148,12 +153,23 @@ def main(
             from contextlens.evidence_mcp import serve_stdio
             from contextlens.evidence_session import EvidenceSession
 
+            active_scorer = None
+            if arguments.backend != "none":
+                active_scorer = _configured_scorer(arguments)
+                if arguments.checkpoint_namespace:
+                    from contextlens.pruning.cache import CachedSemanticScorer
+
+                    active_scorer = CachedSemanticScorer(
+                        active_scorer, arguments.checkpoint_namespace
+                    )
+
             serve_stdio(
                 EvidenceSession(
                     arguments.root,
                     arguments.state,
                     encoding=arguments.encoding,
                     policy=arguments.policy,
+                    scorer=active_scorer,
                 )
             )
             return 0
