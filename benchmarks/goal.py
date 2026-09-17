@@ -67,12 +67,18 @@ def command_for(
         "--json",
         "--ignore-user-config",
         "--ignore-rules",
+        "--disable",
+        "plugins",
+        "--enable",
+        "skip_host_skill_discovery",
         "--sandbox",
         "workspace-write",
         "--model",
         model,
         "-c",
         'model_reasoning_effort="low"',
+        "-c",
+        "project_doc_max_bytes=0",
     ]
     if policy == "compact":
         command += [
@@ -115,9 +121,12 @@ def prompt(task: str, policy: str) -> str:
     )
     if policy == "compact":
         text += (
-            "\n\nPrefer ContextLens context_find/context_read for repository discovery "
-            "and code reads when useful. Read known paths directly; discover only "
-            "when needed. Normal shell tools remain available."
+            "\n\nUse the ContextLens MCP context_find/context_read tools for "
+            "repository discovery and source reads. Discover these tools through "
+            "tool search if needed. Read known paths directly; find only when "
+            "needed. Use normal tools for edits and tests, and unsupported reads. "
+            "If ContextLens cannot provide needed context, recover or fall back "
+            "and explain why. Do not skip ContextLens entirely."
         )
     return text
 
@@ -170,6 +179,9 @@ def attempt(
     shutil.copytree(base, workspace, ignore=shutil.ignore_patterns("__pycache__"))
     environment = isolated_agent_environment()
     environment["PYTHONPATH"] = str(output / "snapshot" / "src")
+    environment["PATH"] = (
+        str(Path(sys.executable).parent) + os.pathsep + environment.get("PATH", "")
+    )
     text = prompt(manifest.task, policy)
     (run_dir / "prompt.txt").write_text(text, encoding="utf-8")
     started = time.perf_counter()
@@ -233,12 +245,21 @@ def attempt(
         if calls_path.exists()
         else []
     )
+    exact_reads = sum(
+        call["operation"] == "read"
+        and call["response"].startswith("Exact current source;")
+        and "\n" in call["response"]
+        for call in calls
+    )
+    if policy == "compact" and status == "completed" and not exact_reads:
+        status = "invalid_contextlens_not_used"
     row = {
         "case": manifest.case_id,
         "trial": trial,
         "policy": policy,
         "status": status,
         "verified_success": status == "completed" and verification["success"],
+        "patch_checks_passed": verification["success"],
         "verification": verification,
         "returncode": returncode,
         **usage(
@@ -247,7 +268,7 @@ def attempt(
         "agent_seconds": agent_seconds,
         "verification_seconds": verification_seconds,
         "contextlens_calls": len(calls),
-        "contextlens_read_calls": sum(call["operation"] == "read" for call in calls),
+        "contextlens_read_calls": exact_reads,
         "contextlens_returned_tokens": sum(call["response_tokens"] for call in calls),
         "shell_calls": len(parsed.command_events),
         "patch_sha256": hashlib.sha256(diff).hexdigest(),
@@ -449,7 +470,11 @@ def main() -> int:
                     report["status"] = "subscription_limit_reached"
                     dump(output / "report.json", report)
                     return 1
-    report["status"] = "completed"
+    report["status"] = (
+        "completed"
+        if all(row["status"] == "completed" for row in report["rows"])
+        else "completed_with_invalid_attempts"
+    )
     report["completed_at"] = datetime.now(UTC).isoformat()
     dump(output / "report.json", report)
     return 0

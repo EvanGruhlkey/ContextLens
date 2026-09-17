@@ -89,7 +89,8 @@ def test_compact_configuration_is_on_demand_without_eager_evidence(tmp_path):
     text = prompt("Repair the bug", "compact")
     assert "Initial repository evidence" not in text
     assert "evidence_verify" not in text
-    assert "when useful" in text
+    assert "Do not skip ContextLens entirely" in text
+    assert "plugins" in normal and "skip_host_skill_discovery" in normal
 
 
 def test_grading_replays_new_files_without_changing_base(tmp_path):
@@ -129,7 +130,8 @@ def test_grading_replays_new_files_without_changing_base(tmp_path):
                         [
                             sys.executable,
                             "-c",
-                            "import module,helper;assert module.value == 2;assert helper.ready",
+                            "import module,helper;assert module.value == 2;"
+                            "assert helper.ready",
                         ]
                     ]
                 },
