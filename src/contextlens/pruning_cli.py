@@ -25,9 +25,18 @@ from contextlens.pruning import (
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="contextlens",
-        description="Task-conditioned, structure-aware observation pruning",
+        description="Jev-powered repository context selection through Vercel Gateway",
     )
     commands = parser.add_subparsers(dest="command", required=True)
+
+    select = commands.add_parser("select", help="select exact task evidence with Jev")
+    select.add_argument("--task", required=True)
+    select.add_argument("--focus", default="")
+    select.add_argument("--root", type=Path, default=Path.cwd())
+    select.add_argument("--state", type=Path, default=Path(".contextlens"))
+    select.add_argument("--encoding", default="o200k_base")
+    select.add_argument("--budget", type=int, default=3000)
+    select.add_argument("--limit", type=int, default=12)
 
     find = commands.add_parser("find", help="find repository locations on demand")
     find.add_argument("--query", required=True)
@@ -70,8 +79,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     mcp.add_argument("--root", type=Path, default=Path.cwd())
     mcp.add_argument("--state", type=Path, default=Path(".contextlens"))
-    mcp.add_argument("--encoding", default="estimate")
-    mcp.add_argument("--profile", choices=("compact", "legacy"), default="compact")
+    mcp.add_argument("--encoding", default="o200k_base")
+    mcp.add_argument("--profile", choices=("jev", "compact", "legacy"), default="jev")
     mcp.add_argument("--backend", choices=("none", "local", "http"), default="none")
     mcp.add_argument("--backend-url", default="http://127.0.0.1:8000/prune")
     mcp.add_argument("--model", default=DEFAULT_SWE_PRUNER_MODEL)
@@ -170,6 +179,24 @@ def main(
 ) -> int:
     arguments = build_parser().parse_args(argv)
     try:
+        if arguments.command == "select":
+            from contextlens.jev_context import JevRepositoryContext
+
+            selection = JevRepositoryContext(
+                arguments.root, arguments.state, encoding=arguments.encoding
+            )
+            print(
+                selection.call(
+                    "select",
+                    {
+                        "task": arguments.task,
+                        "focus": arguments.focus,
+                        "budget": arguments.budget,
+                        "limit": arguments.limit,
+                    },
+                )
+            )
+            return 0
         if arguments.command in {"find", "read"}:
             from contextlens.context_tools import RepositoryContext
 
@@ -195,14 +222,20 @@ def main(
             print(context.call(operation, payload))
             return 0
         if arguments.command == "mcp":
-            if arguments.profile == "compact":
+            if arguments.profile in {"jev", "compact"}:
                 from contextlens.context_mcp import serve_stdio as serve_context
                 from contextlens.context_tools import RepositoryContext
+                from contextlens.jev_context import JevRepositoryContext
 
                 if arguments.backend != "none":
                     raise ValueError("neural backends require --profile legacy")
+                context_type = (
+                    JevRepositoryContext
+                    if arguments.profile == "jev"
+                    else RepositoryContext
+                )
                 serve_context(
-                    RepositoryContext(
+                    context_type(
                         arguments.root, arguments.state, encoding=arguments.encoding
                     )
                 )

@@ -93,7 +93,7 @@ class ContextAdapter:
         self.receipts = receipts
         self.session = session
         self.tools = dict(tools or {})
-        if set(self.tools) & {"find", "read", "expand"}:
+        if set(self.tools) & {"select", "find", "read", "expand"}:
             raise ValueError("repository operation names are reserved")
         if session is None and any(tool.prune for tool in self.tools.values()):
             raise ValueError("pruned host tools require a PruningSession")
@@ -137,7 +137,7 @@ class ContextAdapter:
             self.history.append(
                 Message("tool", self._execute(action.name, arguments), action.name)
             )
-            if action.name in {"find", "read", "expand"}:
+            if action.name in {"select", "find", "read", "expand"}:
                 acknowledge = getattr(self.repository, "acknowledge", None)
                 if callable(acknowledge):
                     try:
@@ -155,7 +155,7 @@ class ContextAdapter:
     def _execute(self, name: str, arguments: Mapping[str, Any]) -> str:
         receipt_id = None
         try:
-            if name in {"find", "read", "expand"}:
+            if name in {"select", "find", "read", "expand"}:
                 raw = self.repository.call(name, arguments)
                 prune = False
             else:

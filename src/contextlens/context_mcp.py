@@ -10,7 +10,7 @@ from contextlens.context_tools import RepositoryContext
 from contextlens.evidence_mcp import PROTOCOLS
 
 
-def tool_definitions() -> list[dict[str, Any]]:
+def tool_definitions(*, selection: bool = False) -> list[dict[str, Any]]:
     string = {"type": "string"}
     integer = {"type": "integer", "minimum": 1}
     budget = {"type": "integer", "minimum": 128, "maximum": 16000}
@@ -48,6 +48,20 @@ def tool_definitions() -> list[dict[str, Any]]:
             ["handle"],
         ),
     ]
+    if selection:
+        definitions[0] = (
+            "select",
+            "Select and return exact repository evidence for a task in one call. "
+            "Sends task and candidate source to Jev through Vercel Gateway. "
+            "Use focus for the immediate question; read known paths directly.",
+            {
+                "task": string,
+                "focus": string,
+                "budget": budget,
+                "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+            },
+            ["task"],
+        )
     return [
         {
             "name": "context_" + name,
@@ -79,6 +93,7 @@ def dispatch(session: RepositoryContext, message: Any) -> dict[str, Any] | None:
         response["error"] = {"code": -32602, "message": "params must be an object"}
         return response
     method = message.get("method")
+    selection = bool(getattr(session, "selection_enabled", False))
     if method == "initialize":
         version = params.get("protocolVersion")
         response["result"] = {
@@ -87,16 +102,23 @@ def dispatch(session: RepositoryContext, message: Any) -> dict[str, Any] | None:
             else "2025-11-25",
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "contextlens", "version": "0.1.0"},
-            "instructions": "Use context_find when location is unknown. "
-            "Read exact source on demand. Handles check freshness; "
+            "instructions": (
+                "Use context_select for task evidence chosen by Jev through Vercel. "
+                "Supply task and optional immediate focus. "
+                if selection
+                else "Use context_find when location is unknown. "
+            )
+            + "Read known paths directly. Handles check freshness; "
             "snapshots are historical.",
         }
     elif method == "ping":
         response["result"] = {}
     elif method == "tools/list":
-        response["result"] = {"tools": tool_definitions()}
+        response["result"] = {"tools": tool_definitions(selection=selection)}
     elif method == "tools/call":
-        definitions = {tool["name"]: tool for tool in tool_definitions()}
+        definitions = {
+            tool["name"]: tool for tool in tool_definitions(selection=selection)
+        }
         name = params.get("name")
         args = params.get("arguments", {})
         try:
