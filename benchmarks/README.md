@@ -14,6 +14,17 @@ It fails when required anchors are absent or fixture noise is returned. This is 
 component diagnostic, not a coding-agent accuracy or whole-system savings result.
 See the [measured September 20 run](../docs/jev-benchmark-2026-09-20.md).
 
+Compare the historical full-source decision with descriptor-first selection:
+
+```powershell
+python -m benchmarks.jev_selection_comparison `
+  --root . `
+  --output benchmarks/results/jev-selection-comparison.json
+```
+
+The comparison includes both descriptor and exact-source provider usage. See the
+[measured descriptor comparison](../docs/jev-descriptor-benchmark-2026-09-20.md).
+
 ## Goal evaluation: verified patches and agent input tokens
 
 The README goal is lower input-token usage with enough repository context to
