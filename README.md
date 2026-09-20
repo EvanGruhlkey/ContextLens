@@ -1,26 +1,30 @@
 # ContextLens
 
-Jev decides which repository code a coding agent should see.
+Jev decides what evidence and capability a coding agent should use next.
 
-ContextLens finds compact code candidates locally, asks TypeSafe AI's Jev which
-ones matter for the task, and returns exact source with handles for anything the
-agent may need later. Jev runs through the Vercel AI Gateway.
+ContextLens is a context and action controller for coding agents. It combines
+local repository structure with TypeSafe AI's Jev to choose repository evidence,
+select one bounded next capability, and keep useful observations active. Jev runs
+through the Vercel AI Gateway.
 
 ## How it works
 
 1. **Discover.** A local structural index finds functions, methods, declarations,
    tests, and configuration related to the task. Whole files stay out of the
    request unless they are the smallest useful unit.
-2. **Decide.** Jev receives typed primary and support candidates and assigns a
-   relevance probability to each one.
+2. **Decide.** Jev ranks compact evidence descriptors, evaluates a smaller exact
+   source shortlist, and chooses only among typed actions supplied by the host.
 3. **Read.** ContextLens returns exact source for selected implementations.
    Structural support such as class headers and referenced constants follows the
    selected primary code while the response remains inside its token budget.
-4. **Recover.** Deferred evidence remains available through stable handles.
-   Freshness checks stop changed source from being presented as current.
+4. **Continue.** Results enter a recoverable working set. Jev can retain or defer
+   compact observation descriptors before choosing the next capability again.
+5. **Recover.** Deferred source and observations remain available through stable
+   handles. Freshness checks stop changed source from being presented as current.
 
-The coding model still owns the edit. ContextLens only controls the repository
-evidence delivered through its tools.
+The coding model still owns reasoning, command arguments, edits, and execution.
+ContextLens makes bounded context and capability decisions; local code validates
+identifiers, source, budgets, and recovery.
 
 ## System design
 
@@ -32,6 +36,10 @@ flowchart LR
     C --> J["Jev through Vercel AI Gateway"]
     J --> P["Relevance probabilities"]
     P --> E["Exact source within budget"]
+    A --> S["Observation working set"]
+    S --> J
+    J --> N["Bounded next capability"]
+    N --> A
     C --> H["Deferred recovery handles"]
     H --> E
     E --> A["Coding agent"]
@@ -39,7 +47,7 @@ flowchart LR
 ```
 
 Local code owns source identity, exact ranges, budgets, freshness, and recovery.
-Jev owns the context decision. Vercel Pro and Enterprise users can require
+Jev owns relevance, retention, and bounded-choice judgments. Vercel Pro and Enterprise users can require
 zero-data-retention routing with `CONTEXTLENS_VERCEL_ZDR=1`; Vercel rejects that
 option on Hobby plans.
 
@@ -84,9 +92,17 @@ architecture; it is not a result for the current selector.
 - **Recovery instead of silent truncation.** Bounded deferred handles make omitted
   evidence explicit and readable without repeating every candidate.
 
-The benchmark also identified the next target: Jev's candidate representation and
-candidate count. Compressing the final source again would not address the larger
-decision input.
+Descriptor-first selection subsequently reduced Jev decision input by 28.6% on
+the same five evidence cases while preserving 5/5 evidence passes. The bounded
+action benchmark selected the known useful action in 6/6 fixed cases. The
+integrated working-set loop selected 3/3 known next actions across eight Jev
+calls, using 4,179 input and 437 output tokens with no provider fallback. These
+are component results; a paired coding-agent run is still required before making
+a whole-trajectory savings or patch-quality claim.
+
+[descriptor benchmark](docs/jev-descriptor-benchmark-2026-09-20.md) ·
+[action benchmark](docs/action-selection-benchmark-2026-09-20.md) ·
+[controller loop benchmark](docs/controller-loop-benchmark-2026-09-20.md)
 
 ## Run it
 
@@ -106,11 +122,15 @@ contextlens read --root . --handle h_REPLACE_WITH_RETURNED_HANDLE
 contextlens read --root . --path src/auth.py --start-line 20 --end-line 60
 ```
 
-Expose the same workflow to an MCP-compatible coding agent:
+Expose selection, bounded next-action routing, and recoverable working sets to an
+MCP-compatible coding agent:
 
 ```powershell
 contextlens mcp --root . --state .contextlens --encoding o200k_base
 ```
+
+The Jev profile exposes `context_select`, exact source reads, `context_next`, and
+observation tools for saving, listing, and recalling the active working set.
 
 Run the live component benchmark:
 
