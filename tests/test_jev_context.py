@@ -76,6 +76,22 @@ def test_large_support_does_not_refuse_small_implementation(repo, tmp_path):
     assert service.count(response) <= 200
 
 
+def test_selected_primary_brings_its_structural_support(repo, tmp_path):
+    (repo / "auth.py").write_text(
+        "class Client:\n    TIMEOUT = 20\n"
+        "    def refresh_token(self):\n        return self.TIMEOUT\n"
+    )
+    service = context(
+        repo,
+        tmp_path,
+        Judge(lambda unit: 0.9 if "def refresh_token" in unit["source"] else 0.1),
+    )
+    response = service.call("select", {"task": "Client refresh_token timeout"})
+    assert "class Client:" in response
+    assert "TIMEOUT = 20" in response
+    assert "def refresh_token" in response
+
+
 def test_selection_can_abstain_and_deferred_source_is_recoverable(repo, tmp_path):
     service = context(repo, tmp_path, Judge(lambda unit: 0.1))
     response = service.call("select", {"task": "refresh_token"})

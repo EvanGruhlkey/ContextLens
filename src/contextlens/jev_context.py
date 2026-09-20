@@ -31,6 +31,7 @@ class EvidenceOption:
     handle: str
     content_hash: str
     role: str
+    owners: tuple[str, ...]
 
     def state(self) -> dict[str, Any]:
         return {
@@ -119,8 +120,18 @@ class JevRepositoryContext(RepositoryContext):
                 )
         ranked = sorted(
             admitted,
-            key=lambda name: (-evaluation.probabilities[name], int(name[1:])),
+            key=lambda name: (
+                admitted[name].role != "primary",
+                -evaluation.probabilities[name],
+                int(name[1:]),
+            ),
         )
+        relevant_primaries = {
+            option.unit.key
+            for name, option in admitted.items()
+            if option.role == "primary"
+            and evaluation.probabilities[name] >= SELECTION_THRESHOLD
+        }
         chunks = ["Jev-selected exact source; freshness checked after selection."]
         notice = (
             "Deferred evidence may be needed. Read handles or known paths to expand. "
@@ -131,7 +142,11 @@ class JevRepositoryContext(RepositoryContext):
         for name in ranked:
             option = admitted[name]
             unit = option.unit
-            if evaluation.probabilities[name] < SELECTION_THRESHOLD:
+            required_support = bool(set(option.owners) & relevant_primaries)
+            if (
+                evaluation.probabilities[name] < SELECTION_THRESHOLD
+                and not required_support
+            ):
                 deferred.append(option)
                 continue
             if any(
@@ -221,26 +236,41 @@ class JevRepositoryContext(RepositoryContext):
             )
         ]
         # Primary matches first, then support round-robin across those matches.
-        units = [(candidate.unit, "primary") for candidate in candidates]
+        units = [
+            (candidate.unit, "primary", candidate.unit.key)
+            for candidate in candidates
+        ]
         for index in range(max((len(c.support) for c in candidates), default=0)):
             units.extend(
-                (candidate.support[index], "support")
+                (candidate.support[index], "support", candidate.unit.key)
                 for candidate in candidates
                 if index < len(candidate.support)
             )
-        seen: set[str] = set()
+        combined: dict[str, tuple[Unit, str, set[str]]] = {}
+        for unit, role, owner in units:
+            if unit.key not in combined:
+                combined[unit.key] = (unit, role, {owner})
+            else:
+                previous, previous_role, owners = combined[unit.key]
+                owners.add(owner)
+                combined[unit.key] = (previous, previous_role, owners)
         options: list[EvidenceOption] = []
-        for unit, role in units:
-            if unit.key in seen or (self.root / unit.path).resolve().is_relative_to(
-                self.state
-            ):
+        for unit, role, owners in combined.values():
+            if (self.root / unit.path).resolve().is_relative_to(self.state):
                 continue
-            seen.add(unit.key)
             span = self._capture(
                 unit.path, unit.start_line, unit.end_line, expected_text=unit.text
             )
             handle = self._save({"spans": [span], "unresolved": []})
-            options.append(EvidenceOption(unit, handle, span["content_hash"], role))
+            options.append(
+                EvidenceOption(
+                    unit,
+                    handle,
+                    span["content_hash"],
+                    role,
+                    tuple(sorted(owners)),
+                )
+            )
             if len(options) == MAX_CANDIDATES:
                 break
         unresolved = sorted({item for c in candidates for item in c.unresolved})
