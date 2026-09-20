@@ -38,6 +38,19 @@ python -m benchmarks.action_selection `
 It reports top-1 accuracy, top-3 recall, provider usage, latency, and fallbacks.
 See the [measured action-selection run](../docs/action-selection-benchmark-2026-09-20.md).
 
+## Integrated controller loop benchmark
+
+Exercise retention, capability filtering, and action routing across repeated
+observations:
+
+```powershell
+python -m benchmarks.controller_loop `
+  --output benchmarks/results/controller-loop.json
+```
+
+This includes every Jev call made by the controller cycle. It does not execute a
+coding model. See the [measured controller run](../docs/controller-loop-benchmark-2026-09-20.md).
+
 ## Goal evaluation: verified patches and agent input tokens
 
 The README goal is lower input-token usage with enough repository context to

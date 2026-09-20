@@ -1,0 +1,100 @@
+{
+  "benchmark": "live_integrated_controller_loop",
+  "created_at": "2026-09-20T22:11:59.294701+00:00",
+  "summary": {
+    "top_1": {
+      "correct": 3,
+      "total": 3,
+      "rate": 1.0
+    },
+    "fallbacks": 0,
+    "jev_calls": 8,
+    "input_tokens": 4179,
+    "output_tokens": 437,
+    "latency_ms": 2922.750299971085,
+    "cost": "0",
+    "deferred_observations": 0
+  },
+  "rows": [
+    {
+      "case": 0,
+      "step": 1,
+      "expected": "search",
+      "selected": "search",
+      "fallback": null,
+      "calls": 2,
+      "input_tokens": 974,
+      "output_tokens": 104,
+      "latency_ms": 840.9624000196345,
+      "cost": "0",
+      "deferred": 0,
+      "action_probabilities": {
+        "search": 0.87,
+        "read": 0.15
+      },
+      "capability_probabilities": {
+        "search": 0.88,
+        "read": 0.27,
+        "edit": 0.16,
+        "stop": 0.13
+      },
+      "retention_probabilities": {}
+    },
+    {
+      "case": 0,
+      "step": 2,
+      "expected": "read",
+      "selected": "read",
+      "fallback": null,
+      "calls": 3,
+      "input_tokens": 1623,
+      "output_tokens": 176,
+      "latency_ms": 1062.9222999850754,
+      "cost": "0",
+      "deferred": 0,
+      "action_probabilities": {
+        "read": 0.88,
+        "search": 0.19,
+        "edit": 0.09,
+        "stop": 0.06
+      },
+      "capability_probabilities": {
+        "read": 0.67,
+        "search": 0.38,
+        "edit": 0.29,
+        "stop": 0.2
+      },
+      "retention_probabilities": {
+        "obs_5e799ff3d345807318d6": 0.89
+      }
+    },
+    {
+      "case": 1,
+      "step": 1,
+      "expected": "failure",
+      "selected": "failure",
+      "fallback": null,
+      "calls": 3,
+      "input_tokens": 1582,
+      "output_tokens": 157,
+      "latency_ms": 1018.8655999663752,
+      "cost": "0",
+      "deferred": 0,
+      "action_probabilities": {
+        "failure": 0.72,
+        "test": 0.25,
+        "diff": 0.26
+      },
+      "capability_probabilities": {
+        "failure": 0.8,
+        "test": 0.51,
+        "diff": 0.59,
+        "edit": 0.19
+      },
+      "retention_probabilities": {
+        "obs_b8d73470ab45d48eebbd": 0.95
+      }
+    }
+  ],
+  "limits": "Fixed controller states measure retention, filtering, and routing. They do not execute a coding model or establish patch quality or whole-trajectory token savings."
+}
