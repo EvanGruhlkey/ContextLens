@@ -47,6 +47,8 @@ def measure_case(case: Case, state: Path, judge: Judge | None = None) -> dict[st
     evaluation = audit["evaluation"]
     required_found = sum(anchor in response for anchor in case.required)
     forbidden_found = sum(anchor in response for anchor in case.forbidden)
+    missing_required = [anchor for anchor in case.required if anchor not in response]
+    present_forbidden = [anchor for anchor in case.forbidden if anchor in response]
     response_tokens = service.count(response)
     full_tokens = service.count(full)
     passed = required_found == len(case.required) and forbidden_found == 0
@@ -56,8 +58,10 @@ def measure_case(case: Case, state: Path, judge: Judge | None = None) -> dict[st
         "task": case.task,
         "required_anchors": list(case.required),
         "required_anchors_found": required_found,
+        "missing_required_anchors": missing_required,
         "forbidden_anchors": list(case.forbidden),
         "forbidden_anchors_found": forbidden_found,
+        "present_forbidden_anchors": present_forbidden,
         "evidence_check": "passed" if passed else "failed",
         "full_read_tokens": full_tokens,
         "selection_response_tokens": response_tokens,

@@ -48,7 +48,9 @@ def test_measure_case_reports_evidence_and_total_selection_cost(tmp_path: Path):
     row = measure_case(case, tmp_path / "state", RelevantJudge())
     assert row["evidence_check"] == "passed", row
     assert row["required_anchors_found"] == 2
+    assert row["missing_required_anchors"] == []
     assert row["forbidden_anchors_found"] == 0
+    assert row["present_forbidden_anchors"] == []
     assert row["selection_response_tokens"] < row["full_read_tokens"]
     assert row["gateway_input_tokens"] == 100
     assert row["gateway_output_tokens"] == 10
