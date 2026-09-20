@@ -57,6 +57,7 @@ def test_gateway_uses_vercel_evaluation_contract(monkeypatch):
     assert body["model"] == "typesafe-ai/jev"
     assert body["state"] == {"task": "fix timeout"}
     assert body["providerOptions"]["gateway"]["only"] == ["typesafe-ai"]
+    assert body["providerOptions"]["gateway"]["zeroDataRetention"] is True
     assert result.probabilities == {"c0": 0.9}
     assert result.input_tokens == 123
     assert result.cost == "0.0001"

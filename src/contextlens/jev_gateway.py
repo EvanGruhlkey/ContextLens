@@ -53,7 +53,12 @@ class JevGateway:
             "model": MODEL,
             "state": state,
             "questions": questions,
-            "providerOptions": {"gateway": {"only": ["typesafe-ai"]}},
+            "providerOptions": {
+                "gateway": {
+                    "only": ["typesafe-ai"],
+                    "zeroDataRetention": True,
+                }
+            },
         }
         request = urllib.request.Request(
             ENDPOINT,
