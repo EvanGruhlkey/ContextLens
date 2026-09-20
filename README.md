@@ -64,6 +64,9 @@ the local parsers and tokenizer used by this workflow; the older neural stack is
 available with `.[neural]`. Legacy retrieval and MCP tools remain available through
 `retrieve` and `mcp --profile legacy`.
 
+Vercel Pro and Enterprise users can require zero-data-retention routing by setting
+`CONTEXTLENS_VERCEL_ZDR=1`. It is opt-in because Vercel rejects that option on Hobby.
+
 See the [architecture and controlled adapter guide](docs/evidence-architecture.md)
 for integration, and the [legacy usage guide](docs/evidence-retrieval.md) for older tools.
 

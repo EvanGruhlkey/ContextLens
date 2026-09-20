@@ -37,6 +37,19 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def gateway_options() -> dict[str, Any]:
+    """Build provider routing options, with paid-plan ZDR as an explicit opt-in."""
+    options: dict[str, Any] = {"only": ["typesafe-ai"]}
+    if os.environ.get("CONTEXTLENS_VERCEL_ZDR", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        options["zeroDataRetention"] = True
+    return options
+
+
 class JevGateway:
     """One bounded evaluation request; credentials come only from the host."""
 
@@ -53,12 +66,7 @@ class JevGateway:
             "model": MODEL,
             "state": state,
             "questions": questions,
-            "providerOptions": {
-                "gateway": {
-                    "only": ["typesafe-ai"],
-                    "zeroDataRetention": True,
-                }
-            },
+            "providerOptions": {"gateway": gateway_options()},
         }
         request = urllib.request.Request(
             ENDPOINT,

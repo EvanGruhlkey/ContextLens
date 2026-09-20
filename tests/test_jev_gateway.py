@@ -39,6 +39,7 @@ def test_gateway_uses_vercel_evaluation_contract(monkeypatch):
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
     monkeypatch.setenv("AI_GATEWAY_API_KEY", "test-key")
+    monkeypatch.setenv("CONTEXTLENS_VERCEL_ZDR", "1")
     monkeypatch.setattr(
         jev_gateway, "ENDPOINT", f"http://127.0.0.1:{server.server_port}/v1/evaluate"
     )
@@ -61,6 +62,14 @@ def test_gateway_uses_vercel_evaluation_contract(monkeypatch):
     assert result.probabilities == {"c0": 0.9}
     assert result.input_tokens == 123
     assert result.cost == "0.0001"
+
+
+def test_zero_data_retention_is_opt_in(monkeypatch):
+    monkeypatch.delenv("CONTEXTLENS_VERCEL_ZDR", raising=False)
+    assert jev_gateway.gateway_options() == {"only": ["typesafe-ai"]}
+
+    monkeypatch.setenv("CONTEXTLENS_VERCEL_ZDR", "true")
+    assert jev_gateway.gateway_options()["zeroDataRetention"] is True
 
 
 @pytest.mark.parametrize(
