@@ -33,6 +33,11 @@ The small benchmarks below measure evidence delivery only.
 MCP controls its own responses; a controlled adapter is required to replace other
 tool observations before they enter history.
 
+The first [Jev primary-first component benchmark](docs/jev-benchmark-2026-09-20.md)
+passed 5/5 fixed evidence checks and reduced delivered exact source by 68.7% versus
+full-file reads. Jev's decision requests used more input than that baseline, so this
+is evidence-quality validation rather than a whole-system token-savings result.
+
 ## Quick start
 
 Requires Git and Python 3.12+. From the cloned repository:

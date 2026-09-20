@@ -1,0 +1,153 @@
+{
+  "benchmark": "jev_primary_first_exact_evidence",
+  "repository_revision": "aa362883dd20139a19ab26cb0a5fb0574307b9a5",
+  "python": "3.13.2",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "encoding": "o200k_base",
+  "limits": "Component benchmark with fixed development cases; measures evidence anchors and context costs, not coding-agent patch quality.",
+  "summary": {
+    "cases": 5,
+    "evidence_passes": 5,
+    "full_read_tokens": 12204,
+    "selection_response_tokens": 3818,
+    "gateway_input_tokens": 34405,
+    "gateway_output_tokens": 1560,
+    "gateway_cost": "0"
+  },
+  "rows": [
+    {
+      "case": "fixture-function-support",
+      "path": "auth.py",
+      "task": "find the refresh token timeout implementation and its value",
+      "required_anchors": [
+        "def refresh_token",
+        "TIMEOUT = 30"
+      ],
+      "required_anchors_found": 2,
+      "missing_required_anchors": [],
+      "forbidden_anchors": [
+        "UNRELATED_"
+      ],
+      "forbidden_anchors_found": 0,
+      "present_forbidden_anchors": [],
+      "evidence_check": "passed",
+      "full_read_tokens": 3041,
+      "selection_response_tokens": 220,
+      "returned_text_reduction_percent": 92.8,
+      "selected_candidates": 5,
+      "deferred_candidates": 3,
+      "gateway_model": "typesafe-ai/jev",
+      "gateway_input_tokens": 1575,
+      "gateway_output_tokens": 140,
+      "gateway_cost": "0",
+      "gateway_latency_ms": 546.8152000103146
+    },
+    {
+      "case": "fixture-method-support",
+      "path": "service.py",
+      "task": "find the client refresh token timeout behavior",
+      "required_anchors": [
+        "class Client:",
+        "def refresh_token",
+        "TIMEOUT = 20"
+      ],
+      "required_anchors_found": 3,
+      "missing_required_anchors": [],
+      "forbidden_anchors": [
+        "def unrelated_"
+      ],
+      "forbidden_anchors_found": 0,
+      "present_forbidden_anchors": [],
+      "evidence_check": "passed",
+      "full_read_tokens": 1250,
+      "selection_response_tokens": 209,
+      "returned_text_reduction_percent": 83.3,
+      "selected_candidates": 3,
+      "deferred_candidates": 5,
+      "gateway_model": "typesafe-ai/jev",
+      "gateway_input_tokens": 1573,
+      "gateway_output_tokens": 140,
+      "gateway_cost": "0",
+      "gateway_latency_ms": 379.8477000091225
+    },
+    {
+      "case": "fixture-transitive-support",
+      "path": "helpers.py",
+      "task": "find refresh_token and the helper values that determine its result",
+      "required_anchors": [
+        "def refresh_token",
+        "def helper",
+        "LIMIT = 30"
+      ],
+      "required_anchors_found": 3,
+      "missing_required_anchors": [],
+      "forbidden_anchors": [
+        "UNRELATED_"
+      ],
+      "forbidden_anchors_found": 0,
+      "present_forbidden_anchors": [],
+      "evidence_check": "passed",
+      "full_read_tokens": 3047,
+      "selection_response_tokens": 218,
+      "returned_text_reduction_percent": 92.8,
+      "selected_candidates": 5,
+      "deferred_candidates": 3,
+      "gateway_model": "typesafe-ai/jev",
+      "gateway_input_tokens": 1578,
+      "gateway_output_tokens": 140,
+      "gateway_cost": "0",
+      "gateway_latency_ms": 311.00029998924583
+    },
+    {
+      "case": "repository-gateway-validation",
+      "path": "src/contextlens/jev_gateway.py",
+      "task": "find the code that validates Jev gateway evaluation responses",
+      "required_anchors": [
+        "def parse_evaluation",
+        "invalid probability"
+      ],
+      "required_anchors_found": 2,
+      "missing_required_anchors": [],
+      "forbidden_anchors": [],
+      "forbidden_anchors_found": 0,
+      "present_forbidden_anchors": [],
+      "evidence_check": "passed",
+      "full_read_tokens": 1140,
+      "selection_response_tokens": 1945,
+      "returned_text_reduction_percent": -70.6,
+      "selected_candidates": 16,
+      "deferred_candidates": 16,
+      "gateway_model": "typesafe-ai/jev",
+      "gateway_input_tokens": 13406,
+      "gateway_output_tokens": 570,
+      "gateway_cost": "0",
+      "gateway_latency_ms": 431.8751999817323
+    },
+    {
+      "case": "repository-scope-analysis",
+      "path": "src/contextlens/context_index.py",
+      "task": "find how ContextLens distinguishes global and nonlocal declarations",
+      "required_anchors": [
+        "def _scope_declarations",
+        "ast.Global",
+        "ast.Nonlocal"
+      ],
+      "required_anchors_found": 3,
+      "missing_required_anchors": [],
+      "forbidden_anchors": [],
+      "forbidden_anchors_found": 0,
+      "present_forbidden_anchors": [],
+      "evidence_check": "passed",
+      "full_read_tokens": 3726,
+      "selection_response_tokens": 1226,
+      "returned_text_reduction_percent": 67.1,
+      "selected_candidates": 6,
+      "deferred_candidates": 26,
+      "gateway_model": "typesafe-ai/jev",
+      "gateway_input_tokens": 16273,
+      "gateway_output_tokens": 570,
+      "gateway_cost": "0",
+      "gateway_latency_ms": 501.61130001652054
+    }
+  ]
+}
