@@ -24,6 +24,22 @@ _CODE_TOOLS = frozenset(
     }
 )
 _SEARCH_TOOLS = frozenset({"find", "grep", "rg", "search", "search_code"})
+_TEST_TOOLS = frozenset(
+    {
+        "pytest",
+        "unittest",
+        "tox",
+        "nox",
+        "cargo_test",
+        "go_test",
+        "npm_test",
+        "run_tests",
+        "test",
+    }
+)
+_LOG_TOOLS = frozenset(
+    {"bash", "shell", "exec", "exec_command", "run_terminal_cmd", "command"}
+)
 _CODE_SUFFIXES = frozenset(
     {
         ".c",
@@ -222,6 +238,10 @@ def classify_observation(
     tool = observation.tool.lower()
     if tool in _SEARCH_TOOLS:
         return ObservationKind.SEARCH, None
+    if tool in _TEST_TOOLS:
+        return ObservationKind.TEST, None
+    if tool in _LOG_TOOLS:
+        return ObservationKind.LOG, None
     if tool not in _CODE_TOOLS:
         return ObservationKind.TEXT, None
     raw_path = observation.arguments.get("path")

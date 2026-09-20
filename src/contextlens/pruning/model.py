@@ -16,6 +16,7 @@ class ObservationKind(StrEnum):
 
     CODE = "code"
     SEARCH = "search"
+    TEST = "test"
     LOG = "log"
     JSON = "json"
     TEXT = "text"

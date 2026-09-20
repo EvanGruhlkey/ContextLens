@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Made transparent observation filtering the default product: Jev scores
+  already-discovered source, search, test, and log candidates; AST expansion
+  stays local; omitted exact text remains recoverable.
+- Replaced the default MCP surface with `context_filter`, `context_read`,
+  `context_recover`, `context_pin`, and `context_list`.
+- Moved mandatory `context_next` controller routing to `--profile controller`
+  after the paired pilot increased agent input and turns.
+- Added configurable bypass thresholds and a local three-condition filter
+  evaluation that reports injected tool-output tokens separately from Jev.
+
 - Made the released SWE-Pruner 0.6B checkpoint the default line scorer, added
   self-contained per-observation goal generation, and retained an explicit HTTP
   backend for remote model serving.

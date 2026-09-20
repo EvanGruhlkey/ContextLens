@@ -81,7 +81,7 @@ def test_classifier_is_conservative() -> None:
     ) == (ObservationKind.TEXT, None)
     assert classify_observation(
         ToolObservation("ok", "shell", {"command": "test"})
-    ) == (ObservationKind.TEXT, None)
+    ) == (ObservationKind.LOG, None)
 
 
 def test_explicit_kind_overrides_inference() -> None:

@@ -102,8 +102,11 @@ class ObservationStore:
             record.get("source"),
             state["status"],
             state["age_steps"],
-            record["pinned"],
+            bool(record["pinned"] or state["status"] == "pin"),
         )
+
+    def pin(self, handle: str) -> Observation:
+        return self._set_status(handle, "pin")
 
     def defer(self, handle: str) -> Observation:
         current = self.read(handle)

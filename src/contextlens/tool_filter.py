@@ -1,4 +1,8 @@
-"""Select a relevant capability subset while preserving recovery paths."""
+"""Experimental capability filter for the controller profile.
+
+This is not observation filtering. The default product scores tool *results*,
+not which action the coding agent should take next.
+"""
 
 from __future__ import annotations
 

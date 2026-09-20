@@ -1,4 +1,4 @@
-"""Bounded action candidates offered to the ContextLens controller."""
+"""Bounded action candidates for the experimental controller profile."""
 
 from __future__ import annotations
 

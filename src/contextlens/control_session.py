@@ -1,4 +1,7 @@
-"""Iterative observe, retain, filter, and decide controller session."""
+"""Experimental observe/retain/filter/decide controller session.
+
+This is not the default product. Serve it with ``contextlens mcp --profile controller``.
+"""
 
 from __future__ import annotations
 

@@ -1,3 +1,3 @@
-"""ContextLens measures the value of context supplied to AI agents."""
+"""ContextLens reduces the context coding agents have to read."""
 
 __version__ = "0.1.0"

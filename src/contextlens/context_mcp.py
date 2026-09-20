@@ -12,9 +12,25 @@ from contextlens.evidence_mcp import PROTOCOLS
 from contextlens.observations import OBSERVATION_KINDS
 
 
+def session_profile(session: RepositoryContext) -> str:
+    explicit = getattr(session, "mcp_profile", None)
+    if isinstance(explicit, str) and explicit:
+        return explicit
+    if getattr(session, "selection_enabled", False) or getattr(
+        session, "action_enabled", False
+    ):
+        return "jev"
+    return "compact"
+
+
 def tool_definitions(
-    *, selection: bool = False, actions: bool = False
+    *,
+    selection: bool = False,
+    actions: bool = False,
+    profile: str | None = None,
 ) -> list[dict[str, Any]]:
+    if profile == "filter":
+        return _filter_tools()
     string = {"type": "string"}
     integer = {"type": "integer", "minimum": 1}
     budget = {"type": "integer", "minimum": 128, "maximum": 16000}
@@ -143,10 +159,111 @@ def tool_definitions(
                 "required": required,
                 "additionalProperties": False,
             },
-            "annotations": {"readOnlyHint": name not in {"next", "observe", "recall"}},
+            "annotations": {
+                "readOnlyHint": name
+                not in {"next", "observe", "recall", "filter", "pin", "recover"}
+            },
         }
         for name, description, properties, required in definitions
     ]
+
+
+def _filter_tools() -> list[dict[str, Any]]:
+    string = {"type": "string"}
+    integer = {"type": "integer", "minimum": 1}
+    budget = {"type": "integer", "minimum": 128, "maximum": 16000}
+    definitions = [
+        (
+            "filter",
+            "Filter a raw tool observation before the coding model reads it. "
+            "Jev scores relevance; omitted exact text stays recoverable.",
+            {
+                "task": string,
+                "content": string,
+                "focus": string,
+                "kind": string,
+                "tool": string,
+                "path": string,
+                "start_line": integer,
+                "end_line": integer,
+                "symbol": string,
+                "pin": {"type": "boolean"},
+            },
+            ["task", "content"],
+        ),
+        (
+            "read",
+            "Read exact current source by handle or path. Large files are "
+            "filtered when a task is known. Explicit ranges pass through.",
+            {
+                "handle": string,
+                "path": string,
+                "start_line": integer,
+                "end_line": integer,
+                "budget": budget,
+                "task": string,
+                "reread": {"type": "boolean"},
+            },
+            [],
+        ),
+        (
+            "recover",
+            "Recover omitted or deferred exact text by receipt, observation, "
+            "or source handle.",
+            {
+                "handle": string,
+                "start_line": integer,
+                "end_line": integer,
+            },
+            ["handle"],
+        ),
+        (
+            "pin",
+            "Pin an observation so garbage collection cannot drop it.",
+            {
+                "handle": string,
+                "type": {
+                    "type": "string",
+                    "enum": sorted(OBSERVATION_KINDS),
+                },
+                "summary": string,
+                "content": string,
+                "source": string,
+            },
+            [],
+        ),
+        (
+            "list",
+            "List active, pinned, and deferred observation descriptors.",
+            {},
+            [],
+        ),
+    ]
+    return [
+        {
+            "name": "context_" + name,
+            "description": description,
+            "inputSchema": {
+                "type": "object",
+                "properties": properties,
+                "required": required,
+                "additionalProperties": False,
+            },
+            "annotations": {
+                "readOnlyHint": name not in {"filter", "pin", "recover"}
+            },
+        }
+        for name, description, properties, required in definitions
+    ]
+
+
+def _session_tools(session: RepositoryContext) -> list[dict[str, Any]]:
+    profile = session_profile(session)
+    if profile == "filter":
+        return tool_definitions(profile="filter")
+    selection = bool(getattr(session, "selection_enabled", False))
+    actions = bool(getattr(session, "action_enabled", False))
+    return tool_definitions(selection=selection, actions=actions)
 
 
 def dispatch(session: RepositoryContext, message: Any) -> dict[str, Any] | None:
@@ -164,36 +281,45 @@ def dispatch(session: RepositoryContext, message: Any) -> dict[str, Any] | None:
         response["error"] = {"code": -32602, "message": "params must be an object"}
         return response
     method = message.get("method")
-    selection = bool(getattr(session, "selection_enabled", False))
-    actions = bool(getattr(session, "action_enabled", False))
+    tools = _session_tools(session)
+    profile = session_profile(session)
     if method == "initialize":
         version = params.get("protocolVersion")
+        if profile == "filter":
+            instructions = (
+                "ContextLens filters large tool outputs and source reads before "
+                "they reach the coding model. Use context_filter on large "
+                "observations, context_read for exact source, and "
+                "context_recover for omitted spans. Jev scores relevance; it "
+                "does not choose the next action."
+            )
+        elif getattr(session, "selection_enabled", False):
+            instructions = (
+                "Experimental controller profile. Use context_select for task "
+                "evidence chosen by Jev through Vercel. Supply task and optional "
+                "immediate focus. Read known paths directly. Handles check "
+                "freshness; snapshots are historical."
+            )
+        else:
+            instructions = (
+                "Use context_find when location is unknown. "
+                "Read known paths directly. Handles check freshness; "
+                "snapshots are historical."
+            )
         response["result"] = {
             "protocolVersion": version
             if isinstance(version, str) and version in PROTOCOLS
             else "2025-11-25",
             "capabilities": {"tools": {}},
             "serverInfo": {"name": "contextlens", "version": "0.1.0"},
-            "instructions": (
-                "Use context_select for task evidence chosen by Jev through Vercel. "
-                "Supply task and optional immediate focus. "
-                if selection
-                else "Use context_find when location is unknown. "
-            )
-            + "Read known paths directly. Handles check freshness; "
-            "snapshots are historical.",
+            "instructions": instructions,
         }
     elif method == "ping":
         response["result"] = {}
     elif method == "tools/list":
-        response["result"] = {
-            "tools": tool_definitions(selection=selection, actions=actions)
-        }
+        response["result"] = {"tools": tools}
     elif method == "tools/call":
-        definitions = {
-            tool["name"]: tool
-            for tool in tool_definitions(selection=selection, actions=actions)
-        }
+        definitions = {tool["name"]: tool for tool in tools}
         name = params.get("name")
         args = params.get("arguments", {})
         try:
