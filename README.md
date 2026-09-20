@@ -1,46 +1,96 @@
 # ContextLens
 
-**ContextLens uses Jev to decide which repository code a coding agent needs for a
-task.** Jev runs through Vercel AI Gateway, evaluates compact local candidates,
-and returns probabilities that ContextLens turns into exact, recoverable source.
+Jev decides which repository code a coding agent should see.
 
-For example, a task like “fix the refresh-token timeout” may only need a few
-functions and their dependencies. ContextLens finds that code, records where it
-came from, and lets the agent recover more of the original source when needed.
-It provides context tools for an agent; it does not generate the fix itself.
+ContextLens finds compact code candidates locally, asks TypeSafe AI's Jev which
+ones matter for the task, and returns exact source with handles for anything the
+agent may need later. Jev runs through the Vercel AI Gateway.
 
 ## How it works
 
-1. **Build candidates locally:** structural search produces compact functions and
-   code regions without sending whole files.
-2. **Let Jev decide:** one typed evaluation scores every candidate against the
-   task and optional focus.
-3. **Return exact evidence:** selected handles resolve to original source plus
-   statically identified support, with a complete returned-text token budget.
-4. **Recover safely:** source stays available through handles, and freshness
-   checks prevent changed code from being presented as current.
+1. **Discover.** A local structural index finds functions, methods, declarations,
+   tests, and configuration related to the task. Whole files stay out of the
+   request unless they are the smallest useful unit.
+2. **Decide.** Jev receives typed primary and support candidates and assigns a
+   relevance probability to each one.
+3. **Read.** ContextLens returns exact source for selected implementations.
+   Structural support such as class headers and referenced constants follows the
+   selected primary code while the response remains inside its token budget.
+4. **Recover.** Deferred evidence remains available through stable handles.
+   Freshness checks stop changed source from being presented as current.
 
-Python methods and nested functions are indexed individually. Optional JavaScript
-and TypeScript parsing provides similar granularity. Support resolution is bounded
-and static; unresolved dependencies are reported. Oversized evidence groups are
-refused rather than silently truncated. Budgets include the complete returned text.
+The coding model still owns the edit. ContextLens only controls the repository
+evidence delivered through its tools.
 
-**Current status:** experimental. A [whole-agent pilot](benchmarks/results/goal-e2e-2026-09-18/README.md)
-completed nine matched comparisons: ContextLens used **24.12% more input**,
-with **7/9 correct fixes in both conditions** and one paired quality regression.
-This small development sample does not establish accuracy preservation or token savings.
-The small benchmarks below measure evidence delivery only.
-MCP controls its own responses; a controlled adapter is required to replace other
-tool observations before they enter history.
+## System design
 
-The first [Jev primary-first component benchmark](docs/jev-benchmark-2026-09-20.md)
-passed 5/5 fixed evidence checks and reduced delivered exact source by 68.7% versus
-full-file reads. Jev's decision requests used more input than that baseline, so this
-is evidence-quality validation rather than a whole-system token-savings result.
+```mermaid
+flowchart LR
+    T["Repository task"] --> D["Local typed discovery"]
+    R["Repository source"] --> D
+    D --> C["Primary and support candidates"]
+    C --> J["Jev through Vercel AI Gateway"]
+    J --> P["Relevance probabilities"]
+    P --> E["Exact source within budget"]
+    C --> H["Deferred recovery handles"]
+    H --> E
+    E --> A["Coding agent"]
+    R -. "freshness check" .-> E
+```
 
-## Quick start
+Local code owns source identity, exact ranges, budgets, freshness, and recovery.
+Jev owns the context decision. Vercel Pro and Enterprise users can require
+zero-data-retention routing with `CONTEXTLENS_VERCEL_ZDR=1`; Vercel rejects that
+option on Hobby plans.
 
-Requires Git and Python 3.12+. From the cloned repository:
+## Results
+
+Five fixed component cases test functions, methods, transitive support, gateway
+validation, and scope analysis. Every required source anchor was present and none
+of the fixture noise anchors appeared.
+
+| Case | Evidence | Full file | Selected source | Reduction |
+| --- | --- | ---: | ---: | ---: |
+| Function with constant support | Passed | 3,041 | 220 | 92.8% |
+| Method with class support | Passed | 1,250 | 209 | 83.3% |
+| Function with transitive support | Passed | 3,047 | 218 | 92.8% |
+| Gateway response validation | Passed | 1,140 | 1,945 | -70.6% |
+| Scope declaration analysis | Passed | 3,726 | 1,226 | 67.1% |
+| **Total** | **5/5 passed** | **12,204** | **3,818** | **68.7%** |
+
+Jev used 34,405 input tokens and 1,560 output tokens to make those decisions.
+Vercel reported `$0` total cost; mean gateway latency was 434 ms. The selected
+source is smaller, but the complete system used more input than the full-file
+baseline. This is evidence-quality validation, not a whole-system savings claim.
+
+An earlier nine-pair coding-agent pilot used the older compact search/read flow.
+Both conditions produced 7/9 correct fixes, while ContextLens used 24.12% more
+input and had one paired quality regression. That result motivated the Jev-first
+architecture; it is not a result for the current selector.
+
+[Jev benchmark analysis](docs/jev-benchmark-2026-09-20.md) ·
+[raw Jev results](benchmarks/results/jev-selection-2026-09-20.json) ·
+[older whole-agent pilot](benchmarks/results/goal-e2e-2026-09-18/README.md)
+
+## What made it work
+
+- **Primary code before support.** A large dependency group cannot crowd a small
+  answer-bearing implementation out of the response.
+- **Precise spans before broad parents.** If both a method and its class are
+  relevant, ContextLens prefers the method and adds only needed class structure.
+- **A model decision with local guardrails.** Jev judges relevance; deterministic
+  code still enforces exact source, response budgets, provider validation, and
+  freshness.
+- **Recovery instead of silent truncation.** Bounded deferred handles make omitted
+  evidence explicit and readable without repeating every candidate.
+
+The benchmark also identified the next target: Jev's candidate representation and
+candidate count. Compressing the final source again would not address the larger
+decision input.
+
+## Run it
+
+Requires Git, Python 3.12+, and a Vercel AI Gateway key.
 
 ```powershell
 python -m pip install -e .
@@ -48,72 +98,52 @@ $env:AI_GATEWAY_API_KEY = "your-vercel-ai-gateway-key"
 contextlens select --root . --task "fix the refresh-token timeout"
 ```
 
-If you already know the location, read it directly:
+The response contains exact source and deferred handles. Read a handle or known
+range directly when more context is needed:
 
-```bash
-contextlens read --root . --path src/auth.py --start-line 20 --end-line 60 --encoding o200k_base
+```powershell
+contextlens read --root . --handle h_REPLACE_WITH_RETURNED_HANDLE
+contextlens read --root . --path src/auth.py --start-line 20 --end-line 60
 ```
 
-The selection response includes exact source and deferred handles for evidence
-that did not fit the budget. Read or expand those handles when the task needs it.
+Expose the same workflow to an MCP-compatible coding agent:
 
-To expose the Jev context tools to an MCP-compatible agent:
-
-```bash
+```powershell
 contextlens mcp --root . --state .contextlens --encoding o200k_base
 ```
 
-Selection defaults to 3,000 returned-text tokens and 12 local candidates. Use
-`--budget`, `--limit`, and `--focus` to tune a request. The default install contains
-the local parsers and tokenizer used by this workflow; the older neural stack is
-available with `.[neural]`. Legacy retrieval and MCP tools remain available through
-`retrieve` and `mcp --profile legacy`.
+Run the live component benchmark:
 
-Vercel Pro and Enterprise users can require zero-data-retention routing by setting
-`CONTEXTLENS_VERCEL_ZDR=1`. It is opt-in because Vercel rejects that option on Hobby.
+```powershell
+python -m benchmarks.jev_selection `
+  --root . `
+  --output benchmarks/results/jev-selection.json
+```
 
-See the [architecture and controlled adapter guide](docs/evidence-architecture.md)
-for integration, and the [legacy usage guide](docs/evidence-retrieval.md) for older tools.
+The default install contains the parsers and tokenizer used by the Jev workflow.
+Install `.[neural]` only for the older neural experiments. Legacy retrieval and MCP
+tools remain available through `retrieve` and `mcp --profile legacy`.
 
-## Small local benchmarks
+## Develop it
 
-Five cases, three runs each: **all required evidence checks passed**. Three are
-synthetic fixtures; two are named functions in this repository. No model, GPU,
-network calls or subscription capacity were used.
-
-| Case | Full read tokens | Find + read tokens | Less returned text | Warm median |
-| --- | ---: | ---: | ---: | ---: |
-| Timeout function (fixture) | 3,645 | 88 | 97.6% | 0.25s |
-| Large-class method (fixture) | 1,247 | 117 | 90.6% | 0.25s |
-| Helper chain (fixture) | 3,651 | 111 | 97.0% | 0.26s |
-| ContextLens interval helper | 2,884 | 167 | 94.2% | 2.44s |
-| ContextLens scope analysis | 3,667 | 255 | 93.0% | 2.47s |
-
-Tokens use `o200k_base` and include the complete returned text: locations, source,
-support and notices. The comparison is a full-file read versus discovery plus a
-grouped read. Warm latency covers discovery and reading after the first run.
-These cases use known symbol names; they do not test broad task interpretation.
-
-**This measures smaller evidence delivery, not total coding-agent token savings
-or fix accuracy.** Source-anchor checks do not establish that an agent will make
-a correct patch. Runtime is machine-dependent; repository discovery still takes
-about 2.5 seconds warm on this Windows machine. Handle token counts can vary
-slightly across runs. Old published benchmark results have been removed.
-
-[Raw results](benchmarks/results/compact.json) · [Methods and reproduction](benchmarks/README.md)
-
-## Development
-
-The implementation is checked with automated tests, lint, and strict type checks.
-
-```bash
+```powershell
 python -m pip install -e ".[dev]"
 python -m pytest -q
 ruff check src tests
 mypy
 ```
 
-For more detail, see the [architecture](docs/evidence-architecture.md) and
-[research notes](docs/research-context-efficiency-2026-09.md).
+| Folder | What's in it |
+| --- | --- |
+| [`src/contextlens/`](src/contextlens/) | Jev gateway, selection policy, exact-source tools, MCP server, and legacy experiments |
+| [`tests/`](tests/) | Unit and integration coverage for selection, recovery, freshness, and provider validation |
+| [`benchmarks/`](benchmarks/) | Reproducible component and coding-agent evaluation harnesses |
+| [`docs/`](docs/) | Architecture, research assessment, protocols, and measured reports |
+| [`schemas/`](schemas/) | Context policy and evaluation report schemas |
+| [`examples/`](examples/) | Example policies and integrations |
 
-Released under the [MIT License](LICENSE).
+## Credits
+
+Jev is built by [TypeSafe AI](https://www.typesafe.ai/) and accessed through the
+[Vercel AI Gateway](https://vercel.com/ai). ContextLens is released under the
+[MIT License](LICENSE).
