@@ -137,10 +137,34 @@ def test_invalid_selection_arguments_do_not_call_provider(repo, tmp_path, argume
 def test_overlapping_candidates_are_not_duplicated(repo, tmp_path):
     (repo / "auth.py").write_text(
         "class Refresh:\n    def refresh_token(self):\n        return 42\n"
+        "    def unrelated(self):\n        return 'noise'\n"
     )
-    service = context(repo, tmp_path, Judge())
+    judge = Judge(
+        lambda unit: 0.99
+        if "return 'noise'" in unit["source"] and "refresh_token" in unit["source"]
+        else 0.1
+        if "return 'noise'" in unit["source"]
+        else 0.9
+    )
+    service = context(repo, tmp_path, judge)
     response = service.call("select", {"task": "Refresh refresh_token"})
     assert response.count("return 42") == 1
+    assert "return 'noise'" not in response
+    assert not any(
+        "refresh_token" in candidate["source"]
+        and "return 'noise'" in candidate["source"]
+        for candidate in judge.requests[0][0]["candidates"].values()
+    )
+
+
+def test_deferred_handle_index_is_bounded(repo, tmp_path):
+    (repo / "auth.py").write_text(
+        "".join(f"def refresh_{index}():\n    return {index}\n" for index in range(40))
+    )
+    service = context(repo, tmp_path, Judge(lambda unit: 0.1))
+    response = service.call("select", {"task": "refresh", "limit": 20})
+    assert response.count("Deferred:") <= 8
+    assert "additional deferred handles omitted" in response
 
 
 def test_no_candidates_does_not_spend_a_provider_call(repo, tmp_path):

@@ -15,6 +15,7 @@ from contextlens.jev_gateway import Evaluation, JevGateway
 
 MAX_INPUT_TOKENS = 20000
 MAX_CANDIDATES = 32
+MAX_DEFERRED_HANDLES = 8
 SELECTION_THRESHOLD = 0.5
 
 
@@ -134,6 +135,17 @@ class JevRepositoryContext(RepositoryContext):
                 deferred.append(option)
                 continue
             if any(
+                other.unit.path == unit.path
+                and unit.start_line <= other.unit.start_line
+                and other.unit.end_line <= unit.end_line
+                and (other.unit.start_line, other.unit.end_line)
+                != (unit.start_line, unit.end_line)
+                and evaluation.probabilities[other_name] >= SELECTION_THRESHOLD
+                for other_name, other in admitted.items()
+            ):
+                deferred.append(option)
+                continue
+            if any(
                 path == unit.path and start <= unit.end_line and unit.start_line <= end
                 for path, _, start, end in delivered
             ):
@@ -152,10 +164,20 @@ class JevRepositoryContext(RepositoryContext):
         if not selected:
             chunks = ["No source selected within the relevance and response budgets."]
         chunks.append(notice)
-        for option in deferred:
+        listed = 0
+        for option in deferred[:MAX_DEFERRED_HANDLES]:
             unit = option.unit
             location = f"{unit.path}:{unit.start_line}-{unit.end_line}"
             row = f"Deferred: {option.handle} {location}"
+            if self.count("\n".join([*chunks, row])) <= budget:
+                chunks.append(row)
+                listed += 1
+        omitted = len(deferred) - listed
+        if omitted:
+            row = (
+                f"{omitted} additional deferred handles omitted; "
+                "run select or find to recover."
+            )
             if self.count("\n".join([*chunks, row])) <= budget:
                 chunks.append(row)
         response = "\n".join(chunks)
@@ -186,6 +208,18 @@ class JevRepositoryContext(RepositoryContext):
         candidates = discover_candidates(
             self.root, self.state, task, focus, limit=limit
         )
+        candidates = [
+            candidate
+            for candidate in candidates
+            if not any(
+                other.unit.path == candidate.unit.path
+                and candidate.unit.start_line <= other.unit.start_line
+                and other.unit.end_line <= candidate.unit.end_line
+                and (candidate.unit.start_line, candidate.unit.end_line)
+                != (other.unit.start_line, other.unit.end_line)
+                for other in candidates
+            )
+        ]
         # Primary matches first, then support round-robin across those matches.
         units = [(candidate.unit, "primary") for candidate in candidates]
         for index in range(max((len(c.support) for c in candidates), default=0)):
