@@ -27,9 +27,19 @@ class Case:
     forbidden: tuple[str, ...] = ()
 
 
-def measure_case(case: Case, state: Path, judge: Judge | None = None) -> dict[str, Any]:
+def measure_case(
+    case: Case,
+    state: Path,
+    judge: Judge | None = None,
+    *,
+    selection_strategy: str = "full_source",
+) -> dict[str, Any]:
     service = JevRepositoryContext(
-        case.root, state, encoding="o200k_base", judge=judge
+        case.root,
+        state,
+        encoding="o200k_base",
+        judge=judge,
+        selection_strategy=selection_strategy,
     )
     full = service.call("read", {"path": case.path, "budget": 16000})
     if full.startswith("Evidence "):
@@ -45,6 +55,7 @@ def measure_case(case: Case, state: Path, judge: Judge | None = None) -> dict[st
     )
     audit = json.loads((state / "selections.jsonl").read_text().splitlines()[-1])
     evaluation = audit["evaluation"]
+    descriptor = audit.get("descriptor_evaluation") or {}
     required_found = sum(anchor in response for anchor in case.required)
     forbidden_found = sum(anchor in response for anchor in case.forbidden)
     missing_required = [anchor for anchor in case.required if anchor not in response]
@@ -54,6 +65,7 @@ def measure_case(case: Case, state: Path, judge: Judge | None = None) -> dict[st
     passed = required_found == len(case.required) and forbidden_found == 0
     return {
         "case": case.case_id,
+        "selection_strategy": selection_strategy,
         "path": case.path,
         "task": case.task,
         "required_anchors": list(case.required),
@@ -75,7 +87,48 @@ def measure_case(case: Case, state: Path, judge: Judge | None = None) -> dict[st
         "gateway_output_tokens": evaluation["output_tokens"],
         "gateway_cost": evaluation["cost"],
         "gateway_latency_ms": evaluation["latency_ms"],
+        "descriptor_input_tokens": descriptor.get("input_tokens"),
+        "descriptor_output_tokens": descriptor.get("output_tokens"),
+        "descriptor_cost": descriptor.get("cost"),
+        "descriptor_latency_ms": descriptor.get("latency_ms"),
+        "decision_input_tokens": _sum_usage(
+            descriptor.get("input_tokens"), evaluation["input_tokens"]
+        ),
+        "decision_output_tokens": _sum_usage(
+            descriptor.get("output_tokens"), evaluation["output_tokens"]
+        ),
+        "decision_cost": _sum_cost(descriptor.get("cost"), evaluation["cost"]),
+        "decision_latency_ms": round(
+            float(descriptor.get("latency_ms") or 0) + evaluation["latency_ms"],
+            3,
+        ),
     }
+
+
+def _sum_usage(first: int | None, second: int | None) -> int | None:
+    if second is None:
+        return None
+    return (first or 0) + second
+
+
+def _sum_cost(first: object, second: object) -> str | None:
+    values = [value for value in (first, second) if value is not None]
+    if not values:
+        return None
+    try:
+        return str(sum(Decimal(str(value)) for value in values))
+    except InvalidOperation:
+        return None
+
+
+def _sum_costs(values: Any) -> str | None:
+    costs: list[Decimal] = []
+    for value in values:
+        if value is None:
+            continue
+        with suppress(InvalidOperation, TypeError):
+            costs.append(Decimal(str(value)))
+    return str(sum(costs)) if costs else None
 
 
 def _fixture(root: Path) -> None:
@@ -151,13 +204,23 @@ def _cases(project: Path, fixture: Path) -> list[Case]:
     ]
 
 
-def run(project: Path, judge: Judge | None = None) -> dict[str, Any]:
+def run(
+    project: Path,
+    judge: Judge | None = None,
+    *,
+    selection_strategy: str = "full_source",
+) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="contextlens-jev-benchmark-") as temp:
         workspace = Path(temp)
         fixture = workspace / "fixture"
         _fixture(fixture)
         rows = [
-            measure_case(case, workspace / f"state-{index}", judge)
+            measure_case(
+                case,
+                workspace / f"state-{index}",
+                judge,
+                selection_strategy=selection_strategy,
+            )
             for index, case in enumerate(_cases(project, fixture))
         ]
     known_costs: list[Decimal] = []
@@ -166,6 +229,7 @@ def run(project: Path, judge: Judge | None = None) -> dict[str, Any]:
             known_costs.append(Decimal(str(row["gateway_cost"])))
     return {
         "benchmark": "jev_primary_first_exact_evidence",
+        "selection_strategy": selection_strategy,
         "repository_revision": subprocess.check_output(
             ["git", "-C", str(project), "rev-parse", "HEAD"], text=True
         ).strip(),
@@ -192,6 +256,13 @@ def run(project: Path, judge: Judge | None = None) -> dict[str, Any]:
                 row["gateway_output_tokens"] or 0 for row in rows
             ),
             "gateway_cost": str(sum(known_costs)) if known_costs else None,
+            "decision_input_tokens": sum(
+                row["decision_input_tokens"] or 0 for row in rows
+            ),
+            "decision_output_tokens": sum(
+                row["decision_output_tokens"] or 0 for row in rows
+            ),
+            "decision_cost": _sum_costs(row["decision_cost"] for row in rows),
         },
         "rows": rows,
     }
