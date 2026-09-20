@@ -287,9 +287,24 @@ class JevRepositoryContext(RepositoryContext):
         }:
             raise ValueError("unknown next-action argument")
         raw_actions = arguments.get("actions")
-        observations = arguments.get("observations", [])
-        if not isinstance(raw_actions, list) or not isinstance(observations, list):
+        raw_observations = arguments.get("observations", [])
+        if not isinstance(raw_actions, list) or not isinstance(raw_observations, list):
             raise ValueError("actions and observations must be arrays")
+        observations: list[dict[str, Any]] = []
+        for index, item in enumerate(raw_observations):
+            if isinstance(item, str) and 1 <= len(item) <= 1000:
+                observations.append(
+                    {
+                        "id": f"external_{index}",
+                        "type": "tool_result",
+                        "summary": item,
+                        "age_steps": 0,
+                    }
+                )
+            elif isinstance(item, dict):
+                observations.append(item)
+            else:
+                raise ValueError("invalid observation descriptor")
         candidates: list[CandidateAction] = []
         for item in raw_actions:
             if not isinstance(item, dict) or set(item) - {
@@ -306,7 +321,9 @@ class JevRepositoryContext(RepositoryContext):
                         action_id=item["id"],
                         kind=ActionKind(item["kind"]),
                         description=item["description"],
-                        tool=item.get("tool"),
+                        # MCP choices are capability-only. Advisory tool names are
+                        # never executed or trusted at this boundary.
+                        tool=None,
                         arguments=item.get("arguments"),
                     )
                 )

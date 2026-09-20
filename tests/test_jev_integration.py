@@ -132,6 +132,35 @@ def test_mcp_rejects_unbounded_next_action(service):
     assert result["isError"]
 
 
+def test_mcp_treats_action_tools_as_advisory_and_normalizes_summaries(service):
+    result = dispatch(
+        service,
+        message(
+            "tools/call",
+            name="context_next",
+            arguments={
+                "task": "finish verification",
+                "observations": ["focused tests passed"],
+                "actions": [
+                    {
+                        "id": "diff",
+                        "kind": "inspect_diff",
+                        "description": "Inspect the patch",
+                        "tool": "context_select",
+                    },
+                    {
+                        "id": "stop",
+                        "kind": "stop",
+                        "description": "Stop after verification",
+                        "tool": "context_select",
+                    },
+                ],
+            },
+        ),
+    )["result"]
+    assert not result["isError"]
+
+
 def test_mcp_observations_can_be_listed_and_recalled(service):
     observed = dispatch(
         service,
