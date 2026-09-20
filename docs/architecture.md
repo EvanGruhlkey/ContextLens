@@ -2,13 +2,62 @@
 
 ## Product boundary
 
-ContextLens is task-conditioned observation pruning for coding agents. It
-intercepts source returned by read tools, creates a goal question, uses the
-released SWE-Pruner 0.6B model to select evidence, restores structural support,
-and returns a smaller observation.
+ContextLens is a transparent context-reduction layer for coding agents. It
+sits between a coding agent's tools and the coding model, reducing tool output
+and source that would otherwise be injected into the expensive model.
 
-It prunes environment observations, not conversation history. It is not a
-security filter or a replacement for tests.
+Jev is a cheap semantic filter over already-discovered candidates. It is not
+the reasoning engine and must not consume extra coding-model turns to decide
+what to keep.
+
+```text
+Coding agent
+    ↓
+tool call
+    ↓
+raw tool result
+    ↓
+ContextLens
+    ↓
+smaller exact/recoverable result
+    ↓
+coding agent
+```
+
+It filters environment observations, not conversation history. It is not a
+security filter, an agent controller, or a replacement for tests.
+
+## Default runtime
+
+`FilterSession` holds the task and optional focus. Each tool observation is
+classified, maybe bypassed, then reduced:
+
+1. Local structural or lexical discovery builds a shortlist.
+2. One batched Jev request scores KEEP/DROP on that shortlist.
+3. Deterministic AST closure adds imports, headers, and referenced locals.
+4. Exact original source is returned. Omitted spans keep a receipt handle.
+
+Small results, explicit narrow ranges, and known-symbol reads pass through.
+Pinned observations are never garbage-collected automatically.
+
+The default MCP surface is `context_filter`, `context_read`,
+`context_recover`, `context_pin`, and `context_list`.
+
+## Experimental paths
+
+`--profile controller` (also `--profile jev`) restores the older
+observe/retain/`context_next` loop. That design increased agent input and
+turns in the paired pilot and is not the default.
+
+The neural SWE-Pruner scorer and `PruningSession` remain behind
+`contextlens prune` and `--profile legacy`. They are research runtimes, not
+the shipping product described above.
+
+## Experimental neural scorer
+
+The optional SWE-Pruner runtime lazy-loads `ayanami-kitasan/code-pruner`, a
+released 0.6B checkpoint based on Qwen3-Reranker-0.6B. It is not the default
+Jev filter.
 
 ## Runtime loop
 
@@ -139,12 +188,10 @@ task trajectory.
 
 ## Current limits
 
-The structural path supports Python source. Search output, logs, JSON, other
-languages, and plain text currently pass through. The released model requires
-Python 3.12+, PyTorch, CUDA for practical use, and 1,345,835,359 bytes of
-checkpoint storage. ContextLens installs `hf-xet` for the checkpoint's Xet
-transport; accelerator performance follows the upstream SWE-Pruner runtime.
+The default filter path supports Python source structure plus search, test,
+and log block filtering. JavaScript/TypeScript units can be shortlisted, but
+AST expansion is Python-only. The neural SWE-Pruner path remains optional and
+still requires Python 3.12+, PyTorch, and CUDA for practical use.
 
-The repository still contains earlier context-evaluation modules for
-compatibility and research, but the installed `contextlens` command exposes
-the pruning runtime described here.
+Controller, compact-find, and legacy evidence MCP profiles are kept for
+reproducing earlier benchmarks. They are not the default product.
