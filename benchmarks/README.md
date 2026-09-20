@@ -25,6 +25,19 @@ python -m benchmarks.jev_selection_comparison `
 The comparison includes both descriptor and exact-source provider usage. See the
 [measured descriptor comparison](../docs/jev-descriptor-benchmark-2026-09-20.md).
 
+## Bounded next-action benchmark
+
+The action benchmark offers Jev six typed capabilities without executing them:
+
+```powershell
+python -m benchmarks.action_selection `
+  --root . `
+  --output benchmarks/results/action-selection.json
+```
+
+It reports top-1 accuracy, top-3 recall, provider usage, latency, and fallbacks.
+See the [measured action-selection run](../docs/action-selection-benchmark-2026-09-20.md).
+
 ## Goal evaluation: verified patches and agent input tokens
 
 The README goal is lower input-token usage with enough repository context to

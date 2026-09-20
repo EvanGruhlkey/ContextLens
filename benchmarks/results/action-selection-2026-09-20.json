@@ -1,0 +1,158 @@
+{
+  "benchmark": "bounded_next_action_selection",
+  "repository_revision": "373f545c20624e3f145f17e2c2f02640c0bb8b63",
+  "python": "3.13.2",
+  "summary": {
+    "cases": 6,
+    "top_1_correct": 5,
+    "top_1_accuracy": 0.8333333333333334,
+    "top_3_correct": 5,
+    "top_3_recall": 0.8333333333333334,
+    "input_tokens": 4294
+  },
+  "rows": [
+    {
+      "case": "unknown-location",
+      "gold": "search",
+      "selected": "search",
+      "ranking": [
+        "search",
+        "test",
+        "failure",
+        "read",
+        "edit",
+        "stop"
+      ],
+      "probabilities": {
+        "search": 0.94,
+        "read": 0.06,
+        "test": 0.1,
+        "failure": 0.1,
+        "edit": 0.04,
+        "stop": 0.03
+      },
+      "input_tokens": 804,
+      "output_tokens": 100,
+      "latency_ms": 538.3201999939047,
+      "cost": "0",
+      "fallback_reason": null
+    },
+    {
+      "case": "known-handle",
+      "gold": "read",
+      "selected": "read",
+      "ranking": [
+        "read",
+        "test",
+        "failure",
+        "search",
+        "edit",
+        "stop"
+      ],
+      "probabilities": {
+        "search": 0.15,
+        "read": 0.87,
+        "test": 0.16,
+        "failure": 0.16,
+        "edit": 0.08,
+        "stop": 0.04
+      },
+      "input_tokens": 841,
+      "output_tokens": 100,
+      "latency_ms": 346.7316000023857,
+      "cost": "0",
+      "fallback_reason": null
+    },
+    {
+      "case": "need-reproduction",
+      "gold": "test",
+      "selected": null,
+      "ranking": [],
+      "probabilities": {},
+      "input_tokens": null,
+      "output_tokens": null,
+      "latency_ms": null,
+      "cost": null,
+      "fallback_reason": "gateway_unavailable"
+    },
+    {
+      "case": "failure-after-edit",
+      "gold": "failure",
+      "selected": "failure",
+      "ranking": [
+        "failure",
+        "search",
+        "read",
+        "test",
+        "edit",
+        "stop"
+      ],
+      "probabilities": {
+        "search": 0.35,
+        "read": 0.26,
+        "test": 0.25,
+        "failure": 0.75,
+        "edit": 0.13,
+        "stop": 0.04
+      },
+      "input_tokens": 859,
+      "output_tokens": 100,
+      "latency_ms": 723.0278000060935,
+      "cost": "0",
+      "fallback_reason": null
+    },
+    {
+      "case": "enough-evidence",
+      "gold": "edit",
+      "selected": "edit",
+      "ranking": [
+        "edit",
+        "test",
+        "read",
+        "search",
+        "failure",
+        "stop"
+      ],
+      "probabilities": {
+        "search": 0.26,
+        "read": 0.28,
+        "test": 0.3,
+        "failure": 0.18,
+        "edit": 0.57,
+        "stop": 0.08
+      },
+      "input_tokens": 947,
+      "output_tokens": 100,
+      "latency_ms": 351.71280000940897,
+      "cost": "0",
+      "fallback_reason": null
+    },
+    {
+      "case": "completed-task",
+      "gold": "stop",
+      "selected": "stop",
+      "ranking": [
+        "stop",
+        "edit",
+        "test",
+        "search",
+        "read",
+        "failure"
+      ],
+      "probabilities": {
+        "search": 0.21,
+        "read": 0.18,
+        "test": 0.26,
+        "failure": 0.1,
+        "edit": 0.27,
+        "stop": 0.61
+      },
+      "input_tokens": 843,
+      "output_tokens": 100,
+      "latency_ms": 304.0335000259802,
+      "cost": "0",
+      "fallback_reason": null
+    }
+  ],
+  "limits": "Fixed development cases with hand-authored gold capabilities; no tools are executed and no coding-task success is measured."
+}
