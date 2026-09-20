@@ -21,9 +21,11 @@ and TypeScript parsing provides similar granularity. Support resolution is bound
 and static; unresolved dependencies are reported. Oversized evidence groups are
 refused rather than silently truncated. Budgets include the complete returned text.
 
-**Current status:** experimental. The new on-demand architecture passes local
-correctness checks; its end-to-end token savings and task accuracy have not been
-measured. The small benchmarks below measure evidence delivery only.
+**Current status:** experimental. A [whole-agent pilot](benchmarks/results/goal-e2e-2026-09-18/README.md)
+completed nine matched comparisons: ContextLens used **24.12% more input**,
+with **7/9 correct fixes in both conditions** and one paired quality regression.
+This small development sample does not establish accuracy preservation or token savings.
+The small benchmarks below measure evidence delivery only.
 MCP controls its own responses; a controlled adapter is required to replace other
 tool observations before they enter history.
 
