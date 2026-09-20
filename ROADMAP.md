@@ -1,8 +1,8 @@
 # ContextLens roadmap
 
-ContextLens is an experimental context and action controller for coding tasks.
-The primary outcome remains lower end-to-end input volume without reducing task
-success. The September 20 controller pilot did not meet that gate.
+ContextLens helps coding agents find the repository code they need for a task.
+The goal is lower end-to-end input volume without reducing task success. The
+current compact, Jev, and controller pilots have not met that gate.
 
 ## Product rules
 
