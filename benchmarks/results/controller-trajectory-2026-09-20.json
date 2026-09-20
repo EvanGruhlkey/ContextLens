@@ -1,0 +1,544 @@
+{
+  "benchmark": "paired_control_mcp_agent_pilot",
+  "started_at": "2026-09-20T22:42:00.073044+00:00",
+  "implementation_sha256": "96d593406f9d4d62cbff3053104bb382261a6abdc44e6ced6fbbae4f2be2cb8a",
+  "implementation_revision": "01d95d3b809571a3c3cdf879d03f67de888ad631",
+  "model": "gpt-5.6-luna",
+  "reasoning": "low",
+  "trials": 1,
+  "order_seed": 731,
+  "integration": "control MCP; native tools available; callback adapter not used",
+  "usage_definition": "input includes cached input; uncached=input-cached; total=input+output",
+  "api_spend_initiated": false,
+  "manifests": [
+    {
+      "case_id": "click-empty-default",
+      "suite": "comprehensive",
+      "repo": "pallets/click",
+      "commit": "c021f05c838c1d0401ebc340d1de9b663c7fb578",
+      "task": "Click omits an explicitly empty string default from option help. When show_default is enabled, display that empty default clearly. Preserve help for nonempty strings, numeric defaults, omitted defaults and boolean flags.",
+      "setup": [],
+      "verification_commands": 1,
+      "category": "bug_fix",
+      "manifest_sha256": "4390b142f46f66db8ab1f9365eaddd6034b61b1d4cf4bc90786a20f42a84220e"
+    },
+    {
+      "case_id": "microsoft-tslib-spread-array",
+      "suite": "smoke",
+      "repo": "microsoft/tslib",
+      "commit": "0b9301459c223140c9a01b4215cbbc1639a396ca",
+      "task": "Fix __spreadArray when the source is array-like but explicitly non-concat-spreadable. It should append the source elements rather than the source object itself. Keep the CommonJS and ES module helper implementations consistent.",
+      "setup": [],
+      "verification_commands": 1,
+      "category": "bug_fix",
+      "manifest_sha256": "d7c260f212fd2ecee5645771c8a1898d48fea2640fd6bcd14ad013344fdbb735"
+    },
+    {
+      "case_id": "spotify-luigi-bool-default",
+      "suite": "smoke",
+      "repo": "spotify/luigi",
+      "commit": "5f4322cd479a120e4237a341770468637bad4986",
+      "task": "BoolParameter instances ignore a globally configured parsing mode because construction always forces implicit parsing. Make an omitted per-instance parsing option inherit the class-level mode, while an explicit option still overrides it and the normal default remains implicit.",
+      "setup": [],
+      "verification_commands": 1,
+      "category": "bug_fix",
+      "manifest_sha256": "e827ee4b5ca97a634287d31e64810f86e0de381f64a102fdefdd6eb215f7ffb5"
+    }
+  ],
+  "preflights": [
+    {
+      "case": "click-empty-default",
+      "before": {
+        "success": false,
+        "commands": [
+          {
+            "command": [
+              "uv",
+              "run",
+              "--no-project",
+              "--isolated",
+              "--with",
+              "colorama",
+              "python",
+              "-c",
+              "import sys;sys.path.insert(0,'src');import click;ctx=click.Context(click.Command('cli'));h=lambda **kw:click.Option(['--limit'],**kw).get_help_record(ctx)[1];assert any(marker in h(default='',show_default=True) for marker in ('[default: \"\"]', \"[default: '']\", '[default: (empty)]', '[default: (empty string)]'));assert '[default: text]' in h(default='text',show_default=True);assert '[default: 3]' in h(default=3,show_default=True);assert '[default:' not in h(show_default=True);assert '[default:' not in h(default='',show_default=False);assert '[default:' not in h(is_flag=True,default=False,show_default=True);assert '[default: True]' in h(is_flag=True,default=True,show_default=True);assert '[default: (custom)]' in h(default='',show_default='custom')"
+            ],
+            "returncode": 1,
+            "stdout": "",
+            "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import sys;sys.path.insert(0,'src');import click;ctx=click.Context(click.Command('cli'));h=lambda **kw:click.Option(['--limit'],**kw).get_help_record(ctx)[1];assert any(marker in h(default='',show_default=True) for marker in ('[default: \"\"]', \"[default: '']\", '[default: (empty)]', '[default: (empty string)]'));assert '[default: text]' in h(default='text',show_default=True);assert '[default: 3]' in h(default=3,show_default=True);assert '[default:' not in h(show_default=True);assert '[default:' not in h(default='',show_default=False);assert '[default:' not in h(is_flag=True,default=False,show_default=True);assert '[default: True]' in h(is_flag=True,default=True,show_default=True);assert '[default: (custom)]' in h(default='',show_default='custom')\n                                                                                                                                                                         ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+          }
+        ]
+      },
+      "known_fix": {
+        "success": true,
+        "commands": [
+          {
+            "command": [
+              "uv",
+              "run",
+              "--no-project",
+              "--isolated",
+              "--with",
+              "colorama",
+              "python",
+              "-c",
+              "import sys;sys.path.insert(0,'src');import click;ctx=click.Context(click.Command('cli'));h=lambda **kw:click.Option(['--limit'],**kw).get_help_record(ctx)[1];assert any(marker in h(default='',show_default=True) for marker in ('[default: \"\"]', \"[default: '']\", '[default: (empty)]', '[default: (empty string)]'));assert '[default: text]' in h(default='text',show_default=True);assert '[default: 3]' in h(default=3,show_default=True);assert '[default:' not in h(show_default=True);assert '[default:' not in h(default='',show_default=False);assert '[default:' not in h(is_flag=True,default=False,show_default=True);assert '[default: True]' in h(is_flag=True,default=True,show_default=True);assert '[default: (custom)]' in h(default='',show_default='custom')"
+            ],
+            "returncode": 0,
+            "stdout": "",
+            "stderr": ""
+          }
+        ]
+      },
+      "known_fix_sha256": "2e7b10956ff723753428cf151737fee275cb63bebb06e54dc056bf7a5486069e"
+    },
+    {
+      "case": "microsoft-tslib-spread-array",
+      "before": {
+        "success": false,
+        "commands": [
+          {
+            "command": [
+              "node",
+              "-e",
+              "const assert=require('assert'),fs=require('fs'); async function main(){const modules=[require('./tslib.js'),await import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync('tslib.es6.js','utf8')).toString('base64'))]; for(const t of modules){const source={0:'a',1:'b',length:2,[Symbol.isConcatSpreadable]:false}; for (const pack of [false,true]) {assert.deepStrictEqual(t.__spreadArray([],source,pack),['a','b']);const array=['a','b'];array[Symbol.isConcatSpreadable]=false;assert.deepStrictEqual(t.__spreadArray(['z'],array,pack),['z','a','b']);assert.deepStrictEqual(t.__spreadArray([],{length:0,[Symbol.isConcatSpreadable]:false},pack),[]);} assert.deepStrictEqual(t.__spreadArray(['z'],[1,2],false),['z',1,2]); assert.deepStrictEqual(t.__spreadArray([],[],true),[]); const sparse=[]; sparse.length=2; const packed=t.__spreadArray([],sparse,true); assert.strictEqual(packed.length,2); assert(0 in packed && 1 in packed);}} main().catch(e=>{console.error(e);process.exit(1)});"
+            ],
+            "returncode": 1,
+            "stdout": "",
+            "stderr": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   {\n+     '0': 'a',\n+     '1': 'b',\n+     Symbol(Symbol.isConcatSpreadable): false,\n+     length: 2\n+   }\n-   'a',\n-   'b'\n  ]\n\n    at main ([eval]:1:363) {\n  generatedMessage: true,\n  code: 'ERR_ASSERTION',\n  actual: [Array],\n  expected: [Array],\n  operator: 'deepStrictEqual'\n}\n"
+          }
+        ]
+      },
+      "known_fix": {
+        "success": true,
+        "commands": [
+          {
+            "command": [
+              "node",
+              "-e",
+              "const assert=require('assert'),fs=require('fs'); async function main(){const modules=[require('./tslib.js'),await import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync('tslib.es6.js','utf8')).toString('base64'))]; for(const t of modules){const source={0:'a',1:'b',length:2,[Symbol.isConcatSpreadable]:false}; for (const pack of [false,true]) {assert.deepStrictEqual(t.__spreadArray([],source,pack),['a','b']);const array=['a','b'];array[Symbol.isConcatSpreadable]=false;assert.deepStrictEqual(t.__spreadArray(['z'],array,pack),['z','a','b']);assert.deepStrictEqual(t.__spreadArray([],{length:0,[Symbol.isConcatSpreadable]:false},pack),[]);} assert.deepStrictEqual(t.__spreadArray(['z'],[1,2],false),['z',1,2]); assert.deepStrictEqual(t.__spreadArray([],[],true),[]); const sparse=[]; sparse.length=2; const packed=t.__spreadArray([],sparse,true); assert.strictEqual(packed.length,2); assert(0 in packed && 1 in packed);}} main().catch(e=>{console.error(e);process.exit(1)});"
+            ],
+            "returncode": 0,
+            "stdout": "",
+            "stderr": ""
+          }
+        ]
+      },
+      "known_fix_sha256": "898082a1880469d8d9e21a196eb80429542624736a01b0f8127abce8d100c96f"
+    },
+    {
+      "case": "spotify-luigi-bool-default",
+      "before": {
+        "success": false,
+        "commands": [
+          {
+            "command": [
+              "uv",
+              "run",
+              "--no-project",
+              "--isolated",
+              "--with",
+              "python-dateutil",
+              "--with",
+              "tornado",
+              "--with",
+              "tenacity",
+              "--with",
+              "typing-extensions",
+              "python",
+              "-c",
+              "import luigi; B=luigi.BoolParameter; old=B.parsing;\ntry:\n B.parsing=B.EXPLICIT_PARSING; assert B().parsing == B.EXPLICIT_PARSING; assert B(parsing=B.IMPLICIT_PARSING).parsing == B.IMPLICIT_PARSING\nfinally: B.parsing=old\nassert B().parsing == B.IMPLICIT_PARSING\nfor mode in (B.IMPLICIT_PARSING,B.EXPLICIT_PARSING):\n B.parsing=mode\n try:\n  class Child(B): pass\n  assert Child().parsing == mode\n  assert B(parsing=B.EXPLICIT_PARSING).parsing == B.EXPLICIT_PARSING\n  assert B(default=True)._default is True\n  assert B(default=False)._default is False\n finally: B.parsing=old\nassert B().parse('true') is True; assert B().parse('false') is False"
+            ],
+            "returncode": 1,
+            "stdout": "",
+            "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 3, in <module>\n    B.parsing=B.EXPLICIT_PARSING; assert B().parsing == B.EXPLICIT_PARSING; assert B(parsing=B.IMPLICIT_PARSING).parsing == B.IMPLICIT_PARSING\n                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+          }
+        ]
+      },
+      "known_fix": {
+        "success": true,
+        "commands": [
+          {
+            "command": [
+              "uv",
+              "run",
+              "--no-project",
+              "--isolated",
+              "--with",
+              "python-dateutil",
+              "--with",
+              "tornado",
+              "--with",
+              "tenacity",
+              "--with",
+              "typing-extensions",
+              "python",
+              "-c",
+              "import luigi; B=luigi.BoolParameter; old=B.parsing;\ntry:\n B.parsing=B.EXPLICIT_PARSING; assert B().parsing == B.EXPLICIT_PARSING; assert B(parsing=B.IMPLICIT_PARSING).parsing == B.IMPLICIT_PARSING\nfinally: B.parsing=old\nassert B().parsing == B.IMPLICIT_PARSING\nfor mode in (B.IMPLICIT_PARSING,B.EXPLICIT_PARSING):\n B.parsing=mode\n try:\n  class Child(B): pass\n  assert Child().parsing == mode\n  assert B(parsing=B.EXPLICIT_PARSING).parsing == B.EXPLICIT_PARSING\n  assert B(default=True)._default is True\n  assert B(default=False)._default is False\n finally: B.parsing=old\nassert B().parse('true') is True; assert B().parse('false') is False"
+            ],
+            "returncode": 0,
+            "stdout": "",
+            "stderr": ""
+          }
+        ]
+      },
+      "known_fix_sha256": "68ca52c5a268e8b84b83c898e202d91d7930401f4f0bab010b076132f91c58ce"
+    }
+  ],
+  "rows": [
+    {
+      "case": "click-empty-default",
+      "trial": 0,
+      "policy": "control",
+      "status": "completed",
+      "verified_success": true,
+      "patch_checks_passed": true,
+      "verification": {
+        "success": true,
+        "commands": [
+          {
+            "command": [
+              "uv",
+              "run",
+              "--no-project",
+              "--isolated",
+              "--with",
+              "colorama",
+              "python",
+              "-c",
+              "import sys;sys.path.insert(0,'src');import click;ctx=click.Context(click.Command('cli'));h=lambda **kw:click.Option(['--limit'],**kw).get_help_record(ctx)[1];assert any(marker in h(default='',show_default=True) for marker in ('[default: \"\"]', \"[default: '']\", '[default: (empty)]', '[default: (empty string)]'));assert '[default: text]' in h(default='text',show_default=True);assert '[default: 3]' in h(default=3,show_default=True);assert '[default:' not in h(show_default=True);assert '[default:' not in h(default='',show_default=False);assert '[default:' not in h(is_flag=True,default=False,show_default=True);assert '[default: True]' in h(is_flag=True,default=True,show_default=True);assert '[default: (custom)]' in h(default='',show_default='custom')"
+            ],
+            "returncode": 0,
+            "stdout": "",
+            "stderr": ""
+          }
+        ]
+      },
+      "returncode": 0,
+      "input_tokens": 749830,
+      "cached_input_tokens": 690688,
+      "output_tokens": 4814,
+      "uncached_input_tokens": 59142,
+      "total_tokens": 754644,
+      "agent_seconds": 147.7866855999746,
+      "verification_seconds": 0.8736042999953497,
+      "contextlens_calls": 2,
+      "contextlens_read_calls": 2,
+      "contextlens_returned_tokens": 912,
+      "controller_calls": 8,
+      "jev_input_tokens": 16850,
+      "jev_output_tokens": 1690,
+      "shell_calls": 9,
+      "patch_sha256": "b28cfb2c2af4359840bf4007221acf234304e6decf87de05d6b2874feb5e7bc1",
+      "agent_errors": [
+        "null",
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)"
+      ],
+      "parse_errors": []
+    },
+    {
+      "case": "click-empty-default",
+      "trial": 0,
+      "policy": "normal",
+      "status": "completed",
+      "verified_success": false,
+      "patch_checks_passed": false,
+      "verification": {
+        "success": false,
+        "commands": [
+          {
+            "command": [
+              "uv",
+              "run",
+              "--no-project",
+              "--isolated",
+              "--with",
+              "colorama",
+              "python",
+              "-c",
+              "import sys;sys.path.insert(0,'src');import click;ctx=click.Context(click.Command('cli'));h=lambda **kw:click.Option(['--limit'],**kw).get_help_record(ctx)[1];assert any(marker in h(default='',show_default=True) for marker in ('[default: \"\"]', \"[default: '']\", '[default: (empty)]', '[default: (empty string)]'));assert '[default: text]' in h(default='text',show_default=True);assert '[default: 3]' in h(default=3,show_default=True);assert '[default:' not in h(show_default=True);assert '[default:' not in h(default='',show_default=False);assert '[default:' not in h(is_flag=True,default=False,show_default=True);assert '[default: True]' in h(is_flag=True,default=True,show_default=True);assert '[default: (custom)]' in h(default='',show_default='custom')"
+            ],
+            "returncode": 1,
+            "stdout": "",
+            "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import sys;sys.path.insert(0,'src');import click;ctx=click.Context(click.Command('cli'));h=lambda **kw:click.Option(['--limit'],**kw).get_help_record(ctx)[1];assert any(marker in h(default='',show_default=True) for marker in ('[default: \"\"]', \"[default: '']\", '[default: (empty)]', '[default: (empty string)]'));assert '[default: text]' in h(default='text',show_default=True);assert '[default: 3]' in h(default=3,show_default=True);assert '[default:' not in h(show_default=True);assert '[default:' not in h(default='',show_default=False);assert '[default:' not in h(is_flag=True,default=False,show_default=True);assert '[default: True]' in h(is_flag=True,default=True,show_default=True);assert '[default: (custom)]' in h(default='',show_default='custom')\n                                                                                                                                                                         ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+          }
+        ]
+      },
+      "returncode": 0,
+      "input_tokens": 288070,
+      "cached_input_tokens": 226816,
+      "output_tokens": 2145,
+      "uncached_input_tokens": 61254,
+      "total_tokens": 290215,
+      "agent_seconds": 86.71526530000847,
+      "verification_seconds": 0.8780214000144042,
+      "contextlens_calls": 0,
+      "contextlens_read_calls": 0,
+      "contextlens_returned_tokens": 0,
+      "controller_calls": 0,
+      "jev_input_tokens": 0,
+      "jev_output_tokens": 0,
+      "shell_calls": 8,
+      "patch_sha256": "0eabda54806350eaa316bf1199d6660b5ffcc47aff534bb7db2f79d8561ae3c0",
+      "agent_errors": [
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)"
+      ],
+      "parse_errors": []
+    },
+    {
+      "case": "microsoft-tslib-spread-array",
+      "trial": 0,
+      "policy": "control",
+      "status": "completed",
+      "verified_success": true,
+      "patch_checks_passed": true,
+      "verification": {
+        "success": true,
+        "commands": [
+          {
+            "command": [
+              "node",
+              "-e",
+              "const assert=require('assert'),fs=require('fs'); async function main(){const modules=[require('./tslib.js'),await import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync('tslib.es6.js','utf8')).toString('base64'))]; for(const t of modules){const source={0:'a',1:'b',length:2,[Symbol.isConcatSpreadable]:false}; for (const pack of [false,true]) {assert.deepStrictEqual(t.__spreadArray([],source,pack),['a','b']);const array=['a','b'];array[Symbol.isConcatSpreadable]=false;assert.deepStrictEqual(t.__spreadArray(['z'],array,pack),['z','a','b']);assert.deepStrictEqual(t.__spreadArray([],{length:0,[Symbol.isConcatSpreadable]:false},pack),[]);} assert.deepStrictEqual(t.__spreadArray(['z'],[1,2],false),['z',1,2]); assert.deepStrictEqual(t.__spreadArray([],[],true),[]); const sparse=[]; sparse.length=2; const packed=t.__spreadArray([],sparse,true); assert.strictEqual(packed.length,2); assert(0 in packed && 1 in packed);}} main().catch(e=>{console.error(e);process.exit(1)});"
+            ],
+            "returncode": 0,
+            "stdout": "",
+            "stderr": ""
+          }
+        ]
+      },
+      "returncode": 0,
+      "input_tokens": 422024,
+      "cached_input_tokens": 383744,
+      "output_tokens": 3764,
+      "uncached_input_tokens": 38280,
+      "total_tokens": 425788,
+      "agent_seconds": 107.20744900000864,
+      "verification_seconds": 0.24501639997470193,
+      "contextlens_calls": 6,
+      "contextlens_read_calls": 4,
+      "contextlens_returned_tokens": 1111,
+      "controller_calls": 5,
+      "jev_input_tokens": 9010,
+      "jev_output_tokens": 909,
+      "shell_calls": 6,
+      "patch_sha256": "7d34a9237d69df91967221afdce8d421fdabcb3d21140edc328c154167fcbac8",
+      "agent_errors": [
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)"
+      ],
+      "parse_errors": []
+    },
+    {
+      "case": "microsoft-tslib-spread-array",
+      "trial": 0,
+      "policy": "normal",
+      "status": "completed",
+      "verified_success": true,
+      "patch_checks_passed": true,
+      "verification": {
+        "success": true,
+        "commands": [
+          {
+            "command": [
+              "node",
+              "-e",
+              "const assert=require('assert'),fs=require('fs'); async function main(){const modules=[require('./tslib.js'),await import('data:text/javascript;base64,'+Buffer.from(fs.readFileSync('tslib.es6.js','utf8')).toString('base64'))]; for(const t of modules){const source={0:'a',1:'b',length:2,[Symbol.isConcatSpreadable]:false}; for (const pack of [false,true]) {assert.deepStrictEqual(t.__spreadArray([],source,pack),['a','b']);const array=['a','b'];array[Symbol.isConcatSpreadable]=false;assert.deepStrictEqual(t.__spreadArray(['z'],array,pack),['z','a','b']);assert.deepStrictEqual(t.__spreadArray([],{length:0,[Symbol.isConcatSpreadable]:false},pack),[]);} assert.deepStrictEqual(t.__spreadArray(['z'],[1,2],false),['z',1,2]); assert.deepStrictEqual(t.__spreadArray([],[],true),[]); const sparse=[]; sparse.length=2; const packed=t.__spreadArray([],sparse,true); assert.strictEqual(packed.length,2); assert(0 in packed && 1 in packed);}} main().catch(e=>{console.error(e);process.exit(1)});"
+            ],
+            "returncode": 0,
+            "stdout": "",
+            "stderr": ""
+          }
+        ]
+      },
+      "returncode": 0,
+      "input_tokens": 179400,
+      "cached_input_tokens": 140288,
+      "output_tokens": 2931,
+      "uncached_input_tokens": 39112,
+      "total_tokens": 182331,
+      "agent_seconds": 77.70901600000798,
+      "verification_seconds": 0.2460799999826122,
+      "contextlens_calls": 0,
+      "contextlens_read_calls": 0,
+      "contextlens_returned_tokens": 0,
+      "controller_calls": 0,
+      "jev_input_tokens": 0,
+      "jev_output_tokens": 0,
+      "shell_calls": 6,
+      "patch_sha256": "0ccf5e58ccbc007359db5a4450b8eba384bbe228cc13b63d7ff562bf44f24780",
+      "agent_errors": [
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)"
+      ],
+      "parse_errors": []
+    },
+    {
+      "case": "spotify-luigi-bool-default",
+      "trial": 0,
+      "policy": "control",
+      "status": "timeout",
+      "verified_success": false,
+      "patch_checks_passed": false,
+      "verification": {
+        "success": false,
+        "commands": [
+          {
+            "command": [
+              "uv",
+              "run",
+              "--no-project",
+              "--isolated",
+              "--with",
+              "python-dateutil",
+              "--with",
+              "tornado",
+              "--with",
+              "tenacity",
+              "--with",
+              "typing-extensions",
+              "python",
+              "-c",
+              "import luigi; B=luigi.BoolParameter; old=B.parsing;\ntry:\n B.parsing=B.EXPLICIT_PARSING; assert B().parsing == B.EXPLICIT_PARSING; assert B(parsing=B.IMPLICIT_PARSING).parsing == B.IMPLICIT_PARSING\nfinally: B.parsing=old\nassert B().parsing == B.IMPLICIT_PARSING\nfor mode in (B.IMPLICIT_PARSING,B.EXPLICIT_PARSING):\n B.parsing=mode\n try:\n  class Child(B): pass\n  assert Child().parsing == mode\n  assert B(parsing=B.EXPLICIT_PARSING).parsing == B.EXPLICIT_PARSING\n  assert B(default=True)._default is True\n  assert B(default=False)._default is False\n finally: B.parsing=old\nassert B().parse('true') is True; assert B().parse('false') is False"
+            ],
+            "returncode": 1,
+            "stdout": "",
+            "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 3, in <module>\n    B.parsing=B.EXPLICIT_PARSING; assert B().parsing == B.EXPLICIT_PARSING; assert B(parsing=B.IMPLICIT_PARSING).parsing == B.IMPLICIT_PARSING\n                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError\n"
+          }
+        ]
+      },
+      "returncode": null,
+      "input_tokens": null,
+      "cached_input_tokens": null,
+      "output_tokens": null,
+      "uncached_input_tokens": null,
+      "total_tokens": null,
+      "agent_seconds": 240.26016239999444,
+      "verification_seconds": 1.3689952999993693,
+      "contextlens_calls": 1,
+      "contextlens_read_calls": 1,
+      "contextlens_returned_tokens": 782,
+      "controller_calls": 3,
+      "jev_input_tokens": 4226,
+      "jev_output_tokens": 445,
+      "shell_calls": 0,
+      "patch_sha256": "41a1c5e2095e6d421fe4d17fef9fd8b3f80c2d12031a4581f34f874a1486b57f",
+      "agent_errors": [],
+      "parse_errors": []
+    },
+    {
+      "case": "spotify-luigi-bool-default",
+      "trial": 0,
+      "policy": "normal",
+      "status": "completed",
+      "verified_success": true,
+      "patch_checks_passed": true,
+      "verification": {
+        "success": true,
+        "commands": [
+          {
+            "command": [
+              "uv",
+              "run",
+              "--no-project",
+              "--isolated",
+              "--with",
+              "python-dateutil",
+              "--with",
+              "tornado",
+              "--with",
+              "tenacity",
+              "--with",
+              "typing-extensions",
+              "python",
+              "-c",
+              "import luigi; B=luigi.BoolParameter; old=B.parsing;\ntry:\n B.parsing=B.EXPLICIT_PARSING; assert B().parsing == B.EXPLICIT_PARSING; assert B(parsing=B.IMPLICIT_PARSING).parsing == B.IMPLICIT_PARSING\nfinally: B.parsing=old\nassert B().parsing == B.IMPLICIT_PARSING\nfor mode in (B.IMPLICIT_PARSING,B.EXPLICIT_PARSING):\n B.parsing=mode\n try:\n  class Child(B): pass\n  assert Child().parsing == mode\n  assert B(parsing=B.EXPLICIT_PARSING).parsing == B.EXPLICIT_PARSING\n  assert B(default=True)._default is True\n  assert B(default=False)._default is False\n finally: B.parsing=old\nassert B().parse('true') is True; assert B().parse('false') is False"
+            ],
+            "returncode": 0,
+            "stdout": "",
+            "stderr": ""
+          }
+        ]
+      },
+      "returncode": 0,
+      "input_tokens": 274883,
+      "cached_input_tokens": 234240,
+      "output_tokens": 1918,
+      "uncached_input_tokens": 40643,
+      "total_tokens": 276801,
+      "agent_seconds": 78.59444600000279,
+      "verification_seconds": 1.236381299997447,
+      "contextlens_calls": 0,
+      "contextlens_read_calls": 0,
+      "contextlens_returned_tokens": 0,
+      "controller_calls": 0,
+      "jev_input_tokens": 0,
+      "jev_output_tokens": 0,
+      "shell_calls": 8,
+      "patch_sha256": "26b5a408e6044d271d069747a10c99c395fdc226aa519838a8cc31780e1f1608",
+      "agent_errors": [
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)",
+        "Codex event reported failure (item.completed)"
+      ],
+      "parse_errors": []
+    }
+  ],
+  "status": "completed_with_invalid_attempts",
+  "analysis": {
+    "conditions": {
+      "normal": {
+        "attempts": 3,
+        "passed": 2,
+        "input_tokens": 742353,
+        "cached_input_tokens": 601344,
+        "uncached_input_tokens": 141009,
+        "output_tokens": 6994,
+        "total_tokens": 749347,
+        "median_agent_seconds": 78.59444600000279,
+        "contextlens_calls": 0,
+        "runs_with_contextlens_reads": 0,
+        "incomplete_or_invalid": 0,
+        "controller_calls": 0,
+        "jev_input_tokens": 0,
+        "jev_output_tokens": 0
+      },
+      "control": {
+        "attempts": 3,
+        "passed": 2,
+        "input_tokens": null,
+        "cached_input_tokens": null,
+        "uncached_input_tokens": null,
+        "output_tokens": null,
+        "total_tokens": null,
+        "median_agent_seconds": 147.7866855999746,
+        "contextlens_calls": 9,
+        "runs_with_contextlens_reads": 3,
+        "incomplete_or_invalid": 1,
+        "controller_calls": 16,
+        "jev_input_tokens": 30086,
+        "jev_output_tokens": 3044
+      }
+    },
+    "complete_pairs": 2,
+    "expected_pairs": 3,
+    "paired_gross_input_reduction_percent": -150.68,
+    "paired_complete_input_reduction_percent": -156.21,
+    "observed_quality_regressions": [],
+    "all_candidate_runs_used_contextlens_reads": true,
+    "all_candidate_runs_used_controller": true,
+    "observed_sample_meets_goal": null,
+    "statistical_quality_preservation_claim": null,
+    "dollar_cost_usd": null
+  },
+  "completed_at": "2026-09-20T22:54:36.383885+00:00"
+}

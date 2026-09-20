@@ -76,8 +76,16 @@ Both conditions produced 7/9 correct fixes, while ContextLens used 24.12% more
 input and had one paired quality regression. That result motivated the Jev-first
 architecture; it is not a result for the current selector.
 
+The completed controller was also tested in a three-task paired coding pilot.
+Baseline and control each produced 2/3 verified fixes, but one control attempt
+timed out. Across the two complete pairs, control used **156.21% more input**
+after including 25,860 Jev decision tokens. This fails the end-to-end savings
+gate. The bounded controller remains experimental and should not be forced before
+every tool operation.
+
 [Jev benchmark analysis](docs/jev-benchmark-2026-09-20.md) ·
 [raw Jev results](benchmarks/results/jev-selection-2026-09-20.json) ·
+[controller trajectory analysis](docs/controller-trajectory-benchmark-2026-09-20.md) ·
 [older whole-agent pilot](benchmarks/results/goal-e2e-2026-09-18/README.md)
 
 ## What made it work

@@ -51,6 +51,20 @@ python -m benchmarks.controller_loop `
 This includes every Jev call made by the controller cycle. It does not execute a
 coding model. See the [measured controller run](../docs/controller-loop-benchmark-2026-09-20.md).
 
+Run the paired coding-agent pilot with controller usage and complete Jev token
+accounting:
+
+```powershell
+python -m benchmarks.goal `
+  --candidate-policy control `
+  --output evals/artifacts/controller-trajectory `
+  --trials 1 `
+  --timeout 240
+```
+
+The first measured run did not meet the savings gate. See the
+[controller trajectory analysis](../docs/controller-trajectory-benchmark-2026-09-20.md).
+
 ## Goal evaluation: verified patches and agent input tokens
 
 The README goal is lower input-token usage with enough repository context to

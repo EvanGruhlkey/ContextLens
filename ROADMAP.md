@@ -1,7 +1,8 @@
 # ContextLens roadmap
 
-ContextLens is becoming a runtime observation pruner for coding tasks. The
-primary outcome is lower end-to-end input volume without reducing task success.
+ContextLens is an experimental context and action controller for coding tasks.
+The primary outcome remains lower end-to-end input volume without reducing task
+success. The September 20 controller pilot did not meet that gate.
 
 ## Product rules
 
@@ -22,8 +23,28 @@ primary outcome is lower end-to-end input volume without reducing task success.
 - Content-addressed local receipts and exact range recovery.
 - Command-line and local HTTP entry points.
 - Reduction, latency, backend, bypass, and kept-line telemetry.
+- Descriptor-first Jev evidence ranking with exact-source verification.
+- Typed bounded action selection exposed through MCP.
+- Recoverable active and deferred observation working sets.
+- Jev-assisted retention and capability filtering with deterministic fallback.
+- Iterative controller sessions and complete controller-usage telemetry.
+- Paired whole-trajectory accounting that includes Jev overhead.
 
-## Next: adaptive retention
+## Current decision
+
+Keep the controller experimental. The three-task paired pilot produced 2/3
+verified fixes in both conditions, one control timeout, and 156.21% higher total
+input across the two complete pairs. Mandatory decisions before each major tool
+operation are not the shipping policy.
+
+## Next: sparse controller invocation
+
+- Trigger decisions only at measurable uncertainty or phase boundaries.
+- Reuse one decision across related reads or verification operations.
+- Compare optional routing against evidence selection without action routing.
+- Require a complete paired run with no timeout before considering a default.
+
+## Later: adaptive retention
 
 - Replace the fixed semantic threshold with a query-adaptive gate.
 - Calibrate semantic evidence and dependency support independently.
@@ -31,7 +52,7 @@ primary outcome is lower end-to-end input volume without reducing task success.
 - Distinguish complete definition retention from lightweight interface views.
 - Add explicit confidence and repair-cost fields to every decision.
 
-## Next: more observation shapes
+## Later: more observation shapes
 
 - Search results: retain matching hits plus file, symbol, and result-group headers.
 - Tracebacks and logs: retain causal chains, exception boundaries, and local time
@@ -41,11 +62,11 @@ primary outcome is lower end-to-end input volume without reducing task success.
 - Plain text: use semantic spans with headings, list boundaries, and local windows.
 - Add JavaScript and TypeScript parsing after Python behavior is calibrated.
 
-## Next: runtime integration
+## Implemented runtime integration
 
-- Add a middleware adapter around file reads and search observations.
-- Carry one task goal across a run while allowing a narrower focus per call.
-- Expose receipt-range recovery as a first-class tool.
+- A middleware adapter handles repository reads and observations.
+- One task goal persists while focus changes between decisions.
+- Source and observation recovery are first-class MCP tools.
 - Add deterministic caching keyed by task, focus, content, and configuration.
 - Add concurrency limits and backend health/circuit-breaker behavior.
 
