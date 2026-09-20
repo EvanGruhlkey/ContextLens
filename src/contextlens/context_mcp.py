@@ -6,8 +6,10 @@ import json
 import sys
 from typing import Any, TextIO
 
+from contextlens.action_models import ActionKind
 from contextlens.context_tools import RepositoryContext
 from contextlens.evidence_mcp import PROTOCOLS
+from contextlens.observations import OBSERVATION_KINDS
 
 
 def tool_definitions(
@@ -74,7 +76,26 @@ def tool_definitions(
                     "task": string,
                     "focus": string,
                     "observations": {"type": "array", "maxItems": 20},
-                    "actions": {"type": "array", "minItems": 2, "maxItems": 12},
+                    "actions": {
+                        "type": "array",
+                        "minItems": 2,
+                        "maxItems": 12,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": string,
+                                "kind": {
+                                    "type": "string",
+                                    "enum": [kind.value for kind in ActionKind],
+                                },
+                                "description": string,
+                                "tool": string,
+                                "arguments": {"type": "object"},
+                            },
+                            "required": ["id", "kind", "description"],
+                            "additionalProperties": False,
+                        },
+                    },
                     "repository_revision": string,
                 },
                 ["task", "actions"],
@@ -87,7 +108,10 @@ def tool_definitions(
                     "observe",
                     "Save a recoverable observation in the active working set.",
                     {
-                        "type": string,
+                        "type": {
+                            "type": "string",
+                            "enum": sorted(OBSERVATION_KINDS),
+                        },
                         "summary": string,
                         "content": string,
                         "source": string,
@@ -119,9 +143,7 @@ def tool_definitions(
                 "required": required,
                 "additionalProperties": False,
             },
-            "annotations": {
-                "readOnlyHint": name not in {"next", "observe", "recall"}
-            },
+            "annotations": {"readOnlyHint": name not in {"next", "observe", "recall"}},
         }
         for name, description, properties, required in definitions
     ]

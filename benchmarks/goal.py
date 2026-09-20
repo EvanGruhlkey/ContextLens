@@ -106,6 +106,11 @@ def command_for(
             "-c",
             'mcp_servers.contextlens.default_tools_approval_mode="approve"',
         ]
+        if policy == "control":
+            command += [
+                "-c",
+                'mcp_servers.contextlens.env_vars=["AI_GATEWAY_API_KEY"]',
+            ]
     elif policy != "normal":
         raise ValueError("unknown benchmark policy")
     if os.name == "nt":
@@ -133,9 +138,14 @@ def prompt(task: str, policy: str) -> str:
             "\n\nUse the ContextLens MCP tools throughout the investigation. "
             "Call context_next with two to twelve concrete candidate actions "
             "before each major search, read, test, edit, or stop decision, then "
-            "follow the selected capability. Save concise search, test, diff, and "
+            "follow the selected capability. Actions are objects such as "
+            '{"id":"search","kind":"search_repository","description":'
+            '"Search for the symbol","tool":"context_select"}; never pass '
+            "plain strings. Save concise search, test, diff, and "
             "failure results with context_observe so the next decision uses the "
-            "current working set. Use context_select/context_read for repository "
+            "current working set. Observation types are source, search_result, "
+            "test_output, traceback, diff, tool_result, configuration, and "
+            "user_constraint. Use context_select/context_read for repository "
             "evidence and context_recall when deferred evidence is needed. Normal "
             "tools still own edits, command arguments, and execution."
         )

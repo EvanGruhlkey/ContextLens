@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-_KINDS = frozenset(
+OBSERVATION_KINDS = frozenset(
     {
         "source",
         "search_result",
@@ -60,7 +60,7 @@ class ObservationStore:
         source: str | None = None,
         pinned: bool = False,
     ) -> Observation:
-        if kind not in _KINDS:
+        if kind not in OBSERVATION_KINDS:
             raise ValueError("unsupported observation type")
         if not 1 <= len(summary.strip()) <= 1000 or len(content) > 1024 * 1024:
             raise ValueError("observation content is not bounded")

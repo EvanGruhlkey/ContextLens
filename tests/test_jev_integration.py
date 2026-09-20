@@ -79,6 +79,11 @@ def test_mcp_exposes_selection_and_exact_recovery(service):
     assert annotations["context_observe"]["readOnlyHint"] is False
     assert annotations["context_recall"]["readOnlyHint"] is False
     assert annotations["context_next"]["readOnlyHint"] is False
+    schemas = {tool["name"]: tool["inputSchema"] for tool in tools}
+    action_items = schemas["context_next"]["properties"]["actions"]["items"]
+    assert action_items["required"] == ["id", "kind", "description"]
+    assert "ready_to_edit" in action_items["properties"]["kind"]["enum"]
+    assert "test_output" in schemas["context_observe"]["properties"]["type"]["enum"]
 
 
 def test_mcp_exposes_bounded_next_action(service):

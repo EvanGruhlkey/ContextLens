@@ -112,9 +112,11 @@ def test_compact_configuration_is_on_demand_without_eager_evidence(tmp_path):
 def test_control_configuration_uses_the_jev_profile(tmp_path):
     control = command_for(tmp_path, tmp_path / "state", "control", "model", "codex")
     assert any('"jev"' in arg and '"mcp"' in arg for arg in control)
+    assert 'mcp_servers.contextlens.env_vars=["AI_GATEWAY_API_KEY"]' in control
     text = prompt("Repair the bug", "control")
     assert "context_next" in text
     assert "context_observe" in text
+    assert '"kind":"search_repository"' in text
 
 
 def test_grading_replays_new_files_without_changing_base(tmp_path):
