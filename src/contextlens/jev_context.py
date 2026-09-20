@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from contextlens.action_controller import ActionController
+from contextlens.action_models import ActionKind, CandidateAction
 from contextlens.context_index import discover_candidates
 from contextlens.context_tools import RepositoryContext, _digest, _integer, _string
 from contextlens.evidence_descriptors import describe_unit
@@ -64,6 +66,7 @@ class JevRepositoryContext(RepositoryContext):
     """
 
     selection_enabled = True
+    action_enabled = True
 
     def __init__(
         self,
@@ -79,8 +82,13 @@ class JevRepositoryContext(RepositoryContext):
             raise ValueError("unknown Jev selection strategy")
         self.judge = judge if judge is not None else JevGateway()
         self.selection_strategy = selection_strategy
+        self.action_controller = ActionController(
+            judge=self.judge, telemetry_path=self.state / "actions.jsonl"
+        )
 
     def call(self, operation: str, arguments: Mapping[str, Any]) -> str:
+        if operation == "next":
+            return self._next(arguments)
         if operation != "select":
             return super().call(operation, arguments)
         if set(arguments) - {"task", "focus", "budget", "limit"}:
@@ -248,6 +256,56 @@ class JevRepositoryContext(RepositoryContext):
         with (self.state / "selections.jsonl").open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(audit, ensure_ascii=False) + "\n")
         return response
+
+    def _next(self, arguments: Mapping[str, Any]) -> str:
+        if set(arguments) - {"task", "focus", "observations", "actions", "repository_revision"}:
+            raise ValueError("unknown next-action argument")
+        raw_actions = arguments.get("actions")
+        observations = arguments.get("observations", [])
+        if not isinstance(raw_actions, list) or not isinstance(observations, list):
+            raise ValueError("actions and observations must be arrays")
+        candidates: list[CandidateAction] = []
+        for item in raw_actions:
+            if not isinstance(item, dict) or set(item) - {
+                "id", "kind", "description", "tool", "arguments"
+            }:
+                raise ValueError("invalid candidate action")
+            try:
+                candidates.append(
+                    CandidateAction(
+                        action_id=item["id"],
+                        kind=ActionKind(item["kind"]),
+                        description=item["description"],
+                        tool=item.get("tool"),
+                        arguments=item.get("arguments"),
+                    )
+                )
+            except (KeyError, TypeError) as error:
+                raise ValueError("invalid candidate action") from error
+        revision = arguments.get("repository_revision")
+        if revision is not None and not isinstance(revision, str):
+            raise ValueError("repository_revision must be a string")
+        decision = self.action_controller.choose_next_action(
+            task=_string(arguments, "task"),
+            focus=_string(arguments, "focus", ""),
+            observations=observations,
+            candidates=candidates,
+            repository_revision=revision,
+        )
+        return json.dumps(
+            {
+                "selected": decision.selected.action_id if decision.selected else None,
+                "probabilities": decision.probabilities,
+                "available_actions": list(decision.available_action_ids),
+                "fallback_reason": decision.fallback_reason,
+                "model": decision.model,
+                "input_tokens": decision.input_tokens,
+                "output_tokens": decision.output_tokens,
+                "cost": decision.cost,
+                "latency_ms": decision.latency_ms,
+            },
+            ensure_ascii=False,
+        )
 
     def _evaluate(
         self,

@@ -60,6 +60,7 @@ def test_mcp_exposes_selection_and_exact_recovery(service):
         "context_select",
         "context_read",
         "context_expand",
+        "context_next",
     ]
     result = dispatch(
         service,
@@ -70,6 +71,52 @@ def test_mcp_exposes_selection_and_exact_recovery(service):
     instructions = dispatch(service, message("initialize"))["result"]["instructions"]
     assert "context_select" in instructions
     assert "Vercel" in tools[0]["description"]
+
+
+def test_mcp_exposes_bounded_next_action(service):
+    result = dispatch(
+        service,
+        message(
+            "tools/call",
+            name="context_next",
+            arguments={
+                "task": "fix refresh expiry",
+                "focus": "locate the TTL",
+                "observations": [],
+                "actions": [
+                    {
+                        "id": "search",
+                        "kind": "search_repository",
+                        "description": "Search for TTL",
+                        "tool": "context_select",
+                        "arguments": {"focus": "TTL"},
+                    },
+                    {
+                        "id": "edit",
+                        "kind": "ready_to_edit",
+                        "description": "Start the patch",
+                    },
+                ],
+            },
+        ),
+    )["result"]
+
+    assert not result["isError"]
+    decision = __import__("json").loads(result["content"][0]["text"])
+    assert decision["selected"] in {"search", "edit"}
+    assert set(decision["probabilities"]) == {"search", "edit"}
+
+
+def test_mcp_rejects_unbounded_next_action(service):
+    result = dispatch(
+        service,
+        message(
+            "tools/call",
+            name="context_next",
+            arguments={"task": "task", "observations": [], "actions": []},
+        ),
+    )["result"]
+    assert result["isError"]
 
 
 def test_mcp_rejects_invalid_select_arguments(service):

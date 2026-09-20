@@ -10,7 +10,7 @@ from contextlens.context_tools import RepositoryContext
 from contextlens.evidence_mcp import PROTOCOLS
 
 
-def tool_definitions(*, selection: bool = False) -> list[dict[str, Any]]:
+def tool_definitions(*, selection: bool = False, actions: bool = False) -> list[dict[str, Any]]:
     string = {"type": "string"}
     integer = {"type": "integer", "minimum": 1}
     budget = {"type": "integer", "minimum": 128, "maximum": 16000}
@@ -62,6 +62,21 @@ def tool_definitions(*, selection: bool = False) -> list[dict[str, Any]]:
             },
             ["task"],
         )
+    if actions:
+        definitions.append(
+            (
+                "next",
+                "Choose one offered next capability using Jev. The tool validates bounded actions and never executes them.",
+                {
+                    "task": string,
+                    "focus": string,
+                    "observations": {"type": "array", "maxItems": 20},
+                    "actions": {"type": "array", "minItems": 2, "maxItems": 12},
+                    "repository_revision": string,
+                },
+                ["task", "actions"],
+            )
+        )
     return [
         {
             "name": "context_" + name,
@@ -94,6 +109,7 @@ def dispatch(session: RepositoryContext, message: Any) -> dict[str, Any] | None:
         return response
     method = message.get("method")
     selection = bool(getattr(session, "selection_enabled", False))
+    actions = bool(getattr(session, "action_enabled", False))
     if method == "initialize":
         version = params.get("protocolVersion")
         response["result"] = {
@@ -114,10 +130,10 @@ def dispatch(session: RepositoryContext, message: Any) -> dict[str, Any] | None:
     elif method == "ping":
         response["result"] = {}
     elif method == "tools/list":
-        response["result"] = {"tools": tool_definitions(selection=selection)}
+        response["result"] = {"tools": tool_definitions(selection=selection, actions=actions)}
     elif method == "tools/call":
         definitions = {
-            tool["name"]: tool for tool in tool_definitions(selection=selection)
+            tool["name"]: tool for tool in tool_definitions(selection=selection, actions=actions)
         }
         name = params.get("name")
         args = params.get("arguments", {})
@@ -144,6 +160,12 @@ def dispatch(session: RepositoryContext, message: Any) -> dict[str, Any] | None:
                     or not isinstance(value, int)
                     or value < expected["minimum"]
                     or value > expected.get("maximum", 2**31)
+                ):
+                    raise ValueError(f"invalid {key}")
+                if expected["type"] == "array" and (
+                    not isinstance(value, list)
+                    or len(value) < expected.get("minItems", 0)
+                    or len(value) > expected.get("maxItems", 2**31)
                 ):
                     raise ValueError(f"invalid {key}")
             result = session.call(name.removeprefix("context_"), args)
