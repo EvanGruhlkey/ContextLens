@@ -21,6 +21,26 @@ def test_candidate_action_has_bounded_typed_state():
     }
 
 
+def test_capabilities_can_leave_arguments_to_the_host():
+    read = CandidateAction("read", ActionKind.READ_SOURCE, "Read the implementation")
+    test = CandidateAction(
+        "test", ActionKind.RUN_TARGETED_TEST, "Run the focused test", "exec_command"
+    )
+    assert read.tool is None
+    assert test.arguments is None
+
+
+def test_open_ended_capability_cannot_include_a_command():
+    with pytest.raises(ValueError, match="unsupported arguments"):
+        CandidateAction(
+            "test",
+            ActionKind.RUN_TARGETED_TEST,
+            "Run the focused test",
+            "exec_command",
+            {"command": "pytest"},
+        )
+
+
 @pytest.mark.parametrize(
     "changes",
     [

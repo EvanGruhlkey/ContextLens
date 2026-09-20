@@ -23,12 +23,14 @@ class ActionKind(StrEnum):
 
 
 _TOOLS: dict[ActionKind, frozenset[str | None]] = {
-    ActionKind.SEARCH_REPOSITORY: frozenset({"context_select"}),
-    ActionKind.READ_SOURCE: frozenset({"context_read"}),
-    ActionKind.READ_DEFERRED: frozenset({"context_read", "context_expand"}),
-    ActionKind.RUN_TARGETED_TEST: frozenset({None}),
-    ActionKind.INSPECT_DIFF: frozenset({None}),
-    ActionKind.INSPECT_FAILURE: frozenset({None}),
+    ActionKind.SEARCH_REPOSITORY: frozenset({None, "context_select"}),
+    ActionKind.READ_SOURCE: frozenset({None, "context_read"}),
+    ActionKind.READ_DEFERRED: frozenset(
+        {None, "context_read", "context_expand", "context_recall"}
+    ),
+    ActionKind.RUN_TARGETED_TEST: frozenset({None, "exec_command"}),
+    ActionKind.INSPECT_DIFF: frozenset({None, "exec_command"}),
+    ActionKind.INSPECT_FAILURE: frozenset({None, "exec_command"}),
     ActionKind.CONTINUE_INVESTIGATION: frozenset({None}),
     ActionKind.READY_TO_EDIT: frozenset({None}),
     ActionKind.STOP: frozenset({None}),
