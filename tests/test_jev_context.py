@@ -236,6 +236,10 @@ def test_two_stage_selection_ranks_descriptors_before_exact_source(repo, tmp_pat
     source_state = judge.requests[1][0]
     assert all("source" not in item for item in descriptor_state["candidates"].values())
     assert all("signature" in item for item in descriptor_state["candidates"].values())
+    assert "selection_policy" in descriptor_state
+    assert all(
+        "criteria" not in question for question in judge.requests[0][1].values()
+    )
     assert all("source" in item for item in source_state["candidates"].values())
     assert len(source_state["candidates"]) <= 8
     audit = json.loads(

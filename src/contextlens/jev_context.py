@@ -259,6 +259,12 @@ class JevRepositoryContext(RepositoryContext):
         max_tokens: int,
     ) -> tuple[dict[str, EvidenceOption], list[EvidenceOption], Evaluation]:
         state: dict[str, Any] = {"task": task, "focus": focus, "candidates": {}}
+        if descriptors:
+            state["selection_policy"] = (
+                "Relevant evidence implements requested behavior, defines a needed "
+                "binding, specifies a relevant test or configuration, or contradicts "
+                "the task assumptions. A lexical match alone is insufficient."
+            )
         questions: dict[str, Any] = {}
         admitted: dict[str, EvidenceOption] = {}
         deferred: list[EvidenceOption] = []
@@ -364,6 +370,11 @@ class JevRepositoryContext(RepositoryContext):
 
 def _question(name: str, field: str = "source") -> dict[str, Any]:
     target = f"candidates.{name}"
+    if field == "descriptor":
+        return {
+            "type": "boolean",
+            "instructions": f"Is {target} relevant under selection_policy?",
+        }
     material = "metadata" if field == "descriptor" else "source"
     return {
         "type": "boolean",
