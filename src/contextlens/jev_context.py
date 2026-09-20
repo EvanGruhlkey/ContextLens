@@ -315,10 +315,14 @@ class JevRepositoryContext(RepositoryContext):
         offered = list(capability_decision.candidates)
         if len(offered) < 2:
             offered = candidates
-        combined_observations = [
-            *self.observations.descriptors(),
-            *observations,
-        ][-20:]
+        stored = self.observations.bounded_descriptors(20)
+        pinned_ids = {item.handle for item in self.observations.active() if item.pinned}
+        pinned = [item for item in stored if item["id"] in pinned_ids]
+        stored_other = [item for item in stored if item["id"] not in pinned_ids]
+        remaining = 20 - len(pinned)
+        external = observations[-remaining:] if remaining else []
+        remaining -= len(external)
+        combined_observations = [*pinned, *external, *stored_other[:remaining]]
         decision = self.action_controller.choose_next_action(
             task=task,
             focus=focus,

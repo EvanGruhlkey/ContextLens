@@ -132,6 +132,17 @@ class ObservationStore:
         )
         return [item.descriptor() for item in observations]
 
+    def bounded_descriptors(self, limit: int = 20) -> list[dict[str, Any]]:
+        if limit < 1:
+            raise ValueError("descriptor limit must be positive")
+        active = self.active()
+        pinned = [item for item in active if item.pinned]
+        if len(pinned) > limit:
+            raise ValueError("pinned observations exceed the descriptor limit")
+        other = [item for item in active if not item.pinned]
+        selected = [*pinned, *other[: limit - len(pinned)]]
+        return [item.descriptor() for item in selected]
+
     def _matching(self, statuses: set[str]) -> list[Observation]:
         index = self._index()
         return [

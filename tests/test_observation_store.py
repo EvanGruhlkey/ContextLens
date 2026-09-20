@@ -60,3 +60,20 @@ def test_descriptors_age_without_exposing_content(tmp_path):
         "age_steps": 1,
     }
     assert "secret raw body" not in str(descriptor)
+
+
+def test_bounded_descriptors_never_drop_pinned_constraints(tmp_path):
+    store = ObservationStore(tmp_path)
+    pins = [
+        store.add(
+            kind="user_constraint", summary=f"constraint {index}", content=str(index)
+        )
+        for index in range(3)
+    ]
+    for index in range(20):
+        store.add(kind="tool_result", summary=f"result {index}", content=str(index))
+
+    descriptors = store.bounded_descriptors(20)
+
+    assert len(descriptors) == 20
+    assert {item.handle for item in pins} <= {item["id"] for item in descriptors}

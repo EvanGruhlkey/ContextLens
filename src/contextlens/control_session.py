@@ -68,10 +68,7 @@ class ControlSession:
         offered = list(tools.candidates)
         if len(offered) < 2:
             offered = candidates
-        observations = self.store.descriptors()
-        pinned = [item.descriptor() for item in self.store.active() if item.pinned]
-        others = [item for item in observations if item not in pinned]
-        bounded_observations = [*pinned, *others][-20:]
+        bounded_observations = self.store.bounded_descriptors(20)
         action = self.actions.choose_next_action(
             task=self.task,
             focus=focus,
