@@ -171,14 +171,20 @@ def run(root: Path) -> dict[str, Any]:
 
 def summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
     count = len(rows)
-    top_one = sum(row["ranking"][:1] == [row["gold"]] for row in rows)
-    top_three = sum(row["gold"] in row["ranking"][:3] for row in rows)
+    valid = [row for row in rows if row["ranking"]]
+    valid_count = len(valid)
+    top_one = sum(row["ranking"][:1] == [row["gold"]] for row in valid)
+    top_three = sum(row["gold"] in row["ranking"][:3] for row in valid)
     return {
         "cases": count,
+        "valid_cases": valid_count,
+        "fallbacks": count - valid_count,
         "top_1_correct": top_one,
-        "top_1_accuracy": top_one / count if count else 0.0,
+        "top_1_accuracy": top_one / valid_count if valid_count else None,
+        "planned_top_1_accuracy": top_one / count if count else 0.0,
         "top_3_correct": top_three,
-        "top_3_recall": top_three / count if count else 0.0,
+        "top_3_recall": top_three / valid_count if valid_count else None,
+        "planned_top_3_recall": top_three / count if count else 0.0,
         "input_tokens": sum(row["input_tokens"] or 0 for row in rows),
     }
 
