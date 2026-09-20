@@ -75,6 +75,22 @@ def test_goal_requires_lower_input_correct_patch_and_actual_tool_use():
     assert incomplete["observed_sample_meets_goal"] is None
 
 
+def test_control_analysis_counts_controller_tokens_and_uptake():
+    baseline = row("normal", tokens=100)
+    control = row("control", tokens=60, reads=0)
+    control.update(
+        {
+            "controller_calls": 2,
+            "jev_input_tokens": 20,
+            "jev_output_tokens": 5,
+        }
+    )
+    result = analyze([baseline, control], 1, candidate_policy="control")
+    assert result["paired_complete_input_reduction_percent"] == 20
+    assert result["all_candidate_runs_used_controller"] is True
+    assert result["observed_sample_meets_goal"] is True
+
+
 def test_duplicate_attempt_is_rejected():
     with pytest.raises(ValueError, match="duplicate attempt"):
         analyze([row("normal"), row("normal")], 1)
@@ -91,6 +107,14 @@ def test_compact_configuration_is_on_demand_without_eager_evidence(tmp_path):
     assert "evidence_verify" not in text
     assert "Do not skip ContextLens entirely" in text
     assert "plugins" in normal and "skip_host_skill_discovery" in normal
+
+
+def test_control_configuration_uses_the_jev_profile(tmp_path):
+    control = command_for(tmp_path, tmp_path / "state", "control", "model", "codex")
+    assert any('"jev"' in arg and '"mcp"' in arg for arg in control)
+    text = prompt("Repair the bug", "control")
+    assert "context_next" in text
+    assert "context_observe" in text
 
 
 def test_grading_replays_new_files_without_changing_base(tmp_path):

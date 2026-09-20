@@ -80,7 +80,7 @@ def command_for(
         "-c",
         "project_doc_max_bytes=0",
     ]
-    if policy == "compact":
+    if policy in {"compact", "control"}:
         command += [
             "-c",
             "mcp_servers.contextlens.command=" + json.dumps(sys.executable),
@@ -92,7 +92,7 @@ def command_for(
                     "contextlens.pruning_cli",
                     "mcp",
                     "--profile",
-                    "compact",
+                    "jev" if policy == "control" else "compact",
                     "--root",
                     str(workspace),
                     "--state",
@@ -127,6 +127,17 @@ def prompt(task: str, policy: str) -> str:
             "needed. Use normal tools for edits and tests, and unsupported reads. "
             "If ContextLens cannot provide needed context, recover or fall back "
             "and explain why. Do not skip ContextLens entirely."
+        )
+    elif policy == "control":
+        text += (
+            "\n\nUse the ContextLens MCP tools throughout the investigation. "
+            "Call context_next with two to twelve concrete candidate actions "
+            "before each major search, read, test, edit, or stop decision, then "
+            "follow the selected capability. Save concise search, test, diff, and "
+            "failure results with context_observe so the next decision uses the "
+            "current working set. Use context_select/context_read for repository "
+            "evidence and context_recall when deferred evidence is needed. Normal "
+            "tools still own edits, command arguments, and execution."
         )
     return text
 
@@ -251,8 +262,21 @@ def attempt(
         and "\n" in call["response"]
         for call in calls
     )
+    controller_path = run_dir / "state" / "controller_calls.jsonl"
+    controller_calls = (
+        [
+            json.loads(line)
+            for line in controller_path.read_text(encoding="utf-8").splitlines()
+        ]
+        if controller_path.exists()
+        else []
+    )
     if policy == "compact" and status == "completed" and not exact_reads:
         status = "invalid_contextlens_not_used"
+    if policy == "control" and status == "completed" and not controller_calls:
+        status = "invalid_contextlens_not_used"
+    jev_input_tokens = sum(call.get("input_tokens") or 0 for call in controller_calls)
+    jev_output_tokens = sum(call.get("output_tokens") or 0 for call in controller_calls)
     row = {
         "case": manifest.case_id,
         "trial": trial,
@@ -270,6 +294,9 @@ def attempt(
         "contextlens_calls": len(calls),
         "contextlens_read_calls": exact_reads,
         "contextlens_returned_tokens": sum(call["response_tokens"] for call in calls),
+        "controller_calls": len(controller_calls),
+        "jev_input_tokens": jev_input_tokens,
+        "jev_output_tokens": jev_output_tokens,
         "shell_calls": len(parsed.command_events),
         "patch_sha256": hashlib.sha256(diff).hexdigest(),
         "agent_errors": parsed.errors,
@@ -279,7 +306,13 @@ def attempt(
     return row
 
 
-def analyze(rows: list[dict[str, Any]], expected_pairs: int) -> dict[str, Any]:
+def analyze(
+    rows: list[dict[str, Any]],
+    expected_pairs: int,
+    *,
+    candidate_policy: str = "compact",
+) -> dict[str, Any]:
+    policies = ("normal", candidate_policy)
     conditions = {}
     fields = (
         "input_tokens",
@@ -288,7 +321,7 @@ def analyze(rows: list[dict[str, Any]], expected_pairs: int) -> dict[str, Any]:
         "output_tokens",
         "total_tokens",
     )
-    for policy in POLICIES:
+    for policy in policies:
         selected = [row for row in rows if row["policy"] == policy]
         conditions[policy] = {
             "attempts": len(selected),
@@ -311,6 +344,11 @@ def analyze(rows: list[dict[str, Any]], expected_pairs: int) -> dict[str, Any]:
             "incomplete_or_invalid": sum(
                 row["status"] != "completed" for row in selected
             ),
+            "controller_calls": sum(row.get("controller_calls", 0) for row in selected),
+            "jev_input_tokens": sum(row.get("jev_input_tokens", 0) for row in selected),
+            "jev_output_tokens": sum(
+                row.get("jev_output_tokens", 0) for row in selected
+            ),
         }
     grouped: dict[tuple[str, int], dict[str, dict[str, Any]]] = {}
     for row in rows:
@@ -326,19 +364,32 @@ def analyze(rows: list[dict[str, Any]], expected_pairs: int) -> dict[str, Any]:
             policy in group
             and group[policy]["status"] == "completed"
             and group[policy].get("input_tokens") is not None
-            for policy in POLICIES
+            for policy in policies
         )
     ]
     first = sum(pair["normal"]["input_tokens"] for pair in pairs)
-    second = sum(pair["compact"]["input_tokens"] for pair in pairs)
+    second = sum(pair[candidate_policy]["input_tokens"] for pair in pairs)
+    complete_first = first + sum(
+        pair["normal"].get("jev_input_tokens", 0) for pair in pairs
+    )
+    complete_second = second + sum(
+        pair[candidate_policy].get("jev_input_tokens", 0) for pair in pairs
+    )
     regressions = [
         pair["normal"]["case"]
         for pair in pairs
         if pair["normal"]["verified_success"]
-        and not pair["compact"]["verified_success"]
+        and not pair[candidate_policy]["verified_success"]
     ]
     complete = len(pairs) == expected_pairs and len(rows) == expected_pairs * 2
-    uptake = all(pair["compact"]["contextlens_read_calls"] > 0 for pair in pairs)
+    uptake = all(
+        (
+            pair[candidate_policy].get("controller_calls", 0) > 0
+            if candidate_policy == "control"
+            else pair[candidate_policy]["contextlens_read_calls"] > 0
+        )
+        for pair in pairs
+    )
     return {
         "conditions": conditions,
         "complete_pairs": len(pairs),
@@ -346,10 +397,18 @@ def analyze(rows: list[dict[str, Any]], expected_pairs: int) -> dict[str, Any]:
         "paired_gross_input_reduction_percent": round((1 - second / first) * 100, 2)
         if first
         else None,
+        "paired_complete_input_reduction_percent": round(
+            (1 - complete_second / complete_first) * 100, 2
+        )
+        if complete_first
+        else None,
         "observed_quality_regressions": regressions,
         "all_candidate_runs_used_contextlens_reads": bool(pairs) and uptake,
-        "observed_sample_meets_goal": second < first
-        and all(pair["compact"]["verified_success"] for pair in pairs)
+        "all_candidate_runs_used_controller": bool(pairs)
+        and uptake
+        and candidate_policy == "control",
+        "observed_sample_meets_goal": complete_second < complete_first
+        and all(pair[candidate_policy]["verified_success"] for pair in pairs)
         and not regressions
         if complete and uptake
         else None,
@@ -365,6 +424,9 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--model", default="gpt-5.6-luna")
     parser.add_argument("--codex", default="codex")
+    parser.add_argument(
+        "--candidate-policy", choices=("compact", "control"), default="compact"
+    )
     args = parser.parse_args()
     if min(args.trials, args.timeout) < 1:
         parser.error("trials and timeout must be positive")
@@ -379,7 +441,7 @@ def main() -> int:
         ignore=shutil.ignore_patterns("__pycache__"),
     )
     report: dict[str, Any] = {
-        "benchmark": "paired_compact_mcp_agent_pilot",
+        "benchmark": f"paired_{args.candidate_policy}_mcp_agent_pilot",
         "started_at": datetime.now(UTC).isoformat(),
         "implementation_sha256": source_hash(project),
         "implementation_revision": subprocess.check_output(
@@ -389,7 +451,10 @@ def main() -> int:
         "reasoning": "low",
         "trials": args.trials,
         "order_seed": 731,
-        "integration": "compact MCP; native tools available; callback adapter not used",
+        "integration": (
+            f"{args.candidate_policy} MCP; native tools available; "
+            "callback adapter not used"
+        ),
         "usage_definition": (
             "input includes cached input; uncached=input-cached; total=input+output"
         ),
@@ -433,7 +498,7 @@ def main() -> int:
     dump(output / "report.json", report)
     for manifest in manifests:
         for trial in range(args.trials):
-            policies = list(POLICIES)
+            policies = ["normal", args.candidate_policy]
             rng.shuffle(policies)
             for policy in policies:
                 row = attempt(
@@ -448,7 +513,9 @@ def main() -> int:
                 )
                 report["rows"].append(row)
                 report["analysis"] = analyze(
-                    report["rows"], len(manifests) * args.trials
+                    report["rows"],
+                    len(manifests) * args.trials,
+                    candidate_policy=args.candidate_policy,
                 )
                 dump(output / "report.json", report)
                 print(
