@@ -188,3 +188,59 @@ def test_no_candidates_does_not_spend_a_provider_call(repo, tmp_path):
     service = context(repo, tmp_path, judge)
     assert "No matching" in service.call("select", {"task": "xyzzy987unknown"})
     assert not judge.requests
+
+
+def test_two_stage_selection_ranks_descriptors_before_exact_source(repo, tmp_path):
+    class TwoStageJudge:
+        def __init__(self):
+            self.requests = []
+
+        def evaluate(self, state, questions):
+            self.requests.append((state, questions))
+            descriptor_stage = "source" not in next(iter(state["candidates"].values()))
+            probabilities = {}
+            for name, candidate in state["candidates"].items():
+                if descriptor_stage:
+                    probabilities[name] = (
+                        0.95
+                        if candidate["symbol"] in {"refresh_token", "TIMEOUT"}
+                        else 0.1
+                    )
+                else:
+                    probabilities[name] = (
+                        0.95 if "UNRELATED" not in candidate["source"] else 0.1
+                    )
+            return Evaluation(
+                probabilities,
+                "typesafe-ai/jev",
+                100 if descriptor_stage else 40,
+                10,
+                "0",
+                5.0,
+            )
+
+    judge = TwoStageJudge()
+    service = JevRepositoryContext(
+        repo,
+        tmp_path / "state",
+        judge=judge,
+        encoding="o200k_base",
+        selection_strategy="two_stage",
+    )
+    response = service.call("select", {"task": "fix refresh_token timeout"})
+
+    assert "def refresh_token" in response
+    assert "TIMEOUT = 30" in response
+    assert len(judge.requests) == 2
+    descriptor_state = judge.requests[0][0]
+    source_state = judge.requests[1][0]
+    assert all("source" not in item for item in descriptor_state["candidates"].values())
+    assert all("signature" in item for item in descriptor_state["candidates"].values())
+    assert all("source" in item for item in source_state["candidates"].values())
+    assert len(source_state["candidates"]) <= 8
+    audit = json.loads(
+        (service.state / "selections.jsonl").read_text().splitlines()[-1]
+    )
+    assert audit["strategy"] == "two_stage"
+    assert audit["descriptor_evaluation"]["input_tokens"] == 100
+    assert audit["evaluation"]["input_tokens"] == 40
