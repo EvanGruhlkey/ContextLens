@@ -81,8 +81,13 @@ def cases() -> list[Case]:
         Case(
             "need-reproduction",
             "fix an intermittent refresh expiry regression",
-            "confirm the reported behavior before changing code",
-            [_obs("user_constraint", "No failing test or traceback is available")],
+            "reproduce the report before changing code; source and test are known",
+            [
+                _obs(
+                    "configuration",
+                    "Known target is tests/test_auth.py::test_refresh_expiry",
+                )
+            ],
             "test",
         ),
         Case(
