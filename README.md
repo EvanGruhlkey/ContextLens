@@ -1,8 +1,8 @@
 # ContextLens
 
-**ContextLens helps coding agents find the repository code they need for a task.**
-Its goal is to reduce input tokens and irrelevant context while keeping enough
-information for the agent to produce a correct result.
+**ContextLens uses Jev to decide which repository code a coding agent needs for a
+task.** Jev runs through Vercel AI Gateway, evaluates compact local candidates,
+and returns probabilities that ContextLens turns into exact, recoverable source.
 
 For example, a task like “fix the refresh-token timeout” may only need a few
 functions and their dependencies. ContextLens finds that code, records where it
@@ -11,10 +11,14 @@ It provides context tools for an agent; it does not generate the fix itself.
 
 ## How it works
 
-1. **Find locations:** search returns short handles and code locations, without eagerly adding file bodies.
-2. **Read evidence:** request a handle or a known path. Reads return exact code with its statically identified support and check freshness internally.
-3. **Recover safely:** original snapshots remain local. Historical expansion is clearly marked; changed source requires a fresh read.
-4. **Control what enters history:** the optional callback adapter transforms registered tool observations before sending them to the solver.
+1. **Build candidates locally:** structural search produces compact functions and
+   code regions without sending whole files.
+2. **Let Jev decide:** one typed evaluation scores every candidate against the
+   task and optional focus.
+3. **Return exact evidence:** selected handles resolve to original source plus
+   statically identified support, with a complete returned-text token budget.
+4. **Recover safely:** source stays available through handles, and freshness
+   checks prevent changed code from being presented as current.
 
 Python methods and nested functions are indexed individually. Optional JavaScript
 and TypeScript parsing provides similar granularity. Support resolution is bounded
@@ -33,10 +37,10 @@ tool observations before they enter history.
 
 Requires Git and Python 3.12+. From the cloned repository:
 
-```bash
-python -m pip install -e ".[evidence]"
-contextlens find --root . --query "refresh-token timeout" --encoding o200k_base
-contextlens read --root . --handle h_REPLACE_WITH_RETURNED_HANDLE --encoding o200k_base
+```powershell
+python -m pip install -e .
+$env:AI_GATEWAY_API_KEY = "your-vercel-ai-gateway-key"
+contextlens select --root . --task "fix the refresh-token timeout"
 ```
 
 If you already know the location, read it directly:
@@ -45,17 +49,19 @@ If you already know the location, read it directly:
 contextlens read --root . --path src/auth.py --start-line 20 --end-line 60 --encoding o200k_base
 ```
 
-To expose the three compact tools to an MCP-compatible agent:
+The selection response includes exact source and deferred handles for evidence
+that did not fit the budget. Read or expand those handles when the task needs it.
+
+To expose the Jev context tools to an MCP-compatible agent:
 
 ```bash
 contextlens mcp --root . --state .contextlens --encoding o200k_base
 ```
 
-Discovery defaults to 1,200 returned-text tokens; reads default to 3,000. Use
-`--budget` to change these limits. Exact token counting uses the selected encoding;
-`estimate` is an explicitly approximate fallback. Installation currently includes
-neural dependencies, although this workflow runs locally without loading a model
-or requiring a GPU. Legacy retrieval and neural MCP tools remain available through
+Selection defaults to 3,000 returned-text tokens and 12 local candidates. Use
+`--budget`, `--limit`, and `--focus` to tune a request. The default install contains
+the local parsers and tokenizer used by this workflow; the older neural stack is
+available with `.[neural]`. Legacy retrieval and MCP tools remain available through
 `retrieve` and `mcp --profile legacy`.
 
 See the [architecture and controlled adapter guide](docs/evidence-architecture.md)
@@ -90,10 +96,10 @@ slightly across runs. Old published benchmark results have been removed.
 
 ## Development
 
-The current implementation passes **267 automated tests**, lint, and strict type checks.
+The implementation is checked with automated tests, lint, and strict type checks.
 
 ```bash
-python -m pip install -e ".[dev,evidence]"
+python -m pip install -e ".[dev]"
 python -m pytest -q
 ruff check src tests
 mypy
