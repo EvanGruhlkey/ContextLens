@@ -10,7 +10,9 @@ from contextlens.context_tools import RepositoryContext
 from contextlens.evidence_mcp import PROTOCOLS
 
 
-def tool_definitions(*, selection: bool = False, actions: bool = False) -> list[dict[str, Any]]:
+def tool_definitions(
+    *, selection: bool = False, actions: bool = False
+) -> list[dict[str, Any]]:
     string = {"type": "string"}
     integer = {"type": "integer", "minimum": 1}
     budget = {"type": "integer", "minimum": 128, "maximum": 16000}
@@ -66,7 +68,8 @@ def tool_definitions(*, selection: bool = False, actions: bool = False) -> list[
         definitions.append(
             (
                 "next",
-                "Choose one offered next capability using Jev. The tool validates bounded actions and never executes them.",
+                "Choose one offered next capability using Jev. The tool validates "
+                "bounded actions and never executes them.",
                 {
                     "task": string,
                     "focus": string,
@@ -76,6 +79,35 @@ def tool_definitions(*, selection: bool = False, actions: bool = False) -> list[
                 },
                 ["task", "actions"],
             )
+        )
+    if actions:
+        definitions.extend(
+            [
+                (
+                    "observe",
+                    "Save a recoverable observation in the active working set.",
+                    {
+                        "type": string,
+                        "summary": string,
+                        "content": string,
+                        "source": string,
+                        "pinned": {"type": "boolean"},
+                    },
+                    ["type", "summary", "content"],
+                ),
+                (
+                    "working_set",
+                    "List compact active and deferred observation descriptors.",
+                    {},
+                    [],
+                ),
+                (
+                    "recall",
+                    "Restore and return an exact deferred observation by handle.",
+                    {"handle": string},
+                    ["handle"],
+                ),
+            ]
         )
     return [
         {
@@ -130,10 +162,13 @@ def dispatch(session: RepositoryContext, message: Any) -> dict[str, Any] | None:
     elif method == "ping":
         response["result"] = {}
     elif method == "tools/list":
-        response["result"] = {"tools": tool_definitions(selection=selection, actions=actions)}
+        response["result"] = {
+            "tools": tool_definitions(selection=selection, actions=actions)
+        }
     elif method == "tools/call":
         definitions = {
-            tool["name"]: tool for tool in tool_definitions(selection=selection, actions=actions)
+            tool["name"]: tool
+            for tool in tool_definitions(selection=selection, actions=actions)
         }
         name = params.get("name")
         args = params.get("arguments", {})

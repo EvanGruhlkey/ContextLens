@@ -15,6 +15,7 @@ from contextlens.context_tools import RepositoryContext, _digest, _integer, _str
 from contextlens.evidence_descriptors import describe_unit
 from contextlens.evidence_index import Unit
 from contextlens.jev_gateway import Evaluation, JevGateway
+from contextlens.observations import ObservationStore
 
 MAX_INPUT_TOKENS = 20000
 MAX_DESCRIPTOR_INPUT_TOKENS = 8000
@@ -67,6 +68,7 @@ class JevRepositoryContext(RepositoryContext):
 
     selection_enabled = True
     action_enabled = True
+    working_set_enabled = True
 
     def __init__(
         self,
@@ -85,8 +87,11 @@ class JevRepositoryContext(RepositoryContext):
         self.action_controller = ActionController(
             judge=self.judge, telemetry_path=self.state / "actions.jsonl"
         )
+        self.observations = ObservationStore(self.state / "observations")
 
     def call(self, operation: str, arguments: Mapping[str, Any]) -> str:
+        if operation in {"observe", "working_set", "recall"}:
+            return self._working_set(operation, arguments)
         if operation == "next":
             return self._next(arguments)
         if operation != "select":
@@ -258,7 +263,13 @@ class JevRepositoryContext(RepositoryContext):
         return response
 
     def _next(self, arguments: Mapping[str, Any]) -> str:
-        if set(arguments) - {"task", "focus", "observations", "actions", "repository_revision"}:
+        if set(arguments) - {
+            "task",
+            "focus",
+            "observations",
+            "actions",
+            "repository_revision",
+        }:
             raise ValueError("unknown next-action argument")
         raw_actions = arguments.get("actions")
         observations = arguments.get("observations", [])
@@ -267,7 +278,11 @@ class JevRepositoryContext(RepositoryContext):
         candidates: list[CandidateAction] = []
         for item in raw_actions:
             if not isinstance(item, dict) or set(item) - {
-                "id", "kind", "description", "tool", "arguments"
+                "id",
+                "kind",
+                "description",
+                "tool",
+                "arguments",
             }:
                 raise ValueError("invalid candidate action")
             try:
@@ -304,6 +319,42 @@ class JevRepositoryContext(RepositoryContext):
                 "cost": decision.cost,
                 "latency_ms": decision.latency_ms,
             },
+            ensure_ascii=False,
+        )
+
+    def _working_set(self, operation: str, arguments: Mapping[str, Any]) -> str:
+        if operation == "observe":
+            if set(arguments) - {"type", "summary", "content", "source", "pinned"}:
+                raise ValueError("unknown observation argument")
+            pinned = arguments.get("pinned", False)
+            if not isinstance(pinned, bool):
+                raise ValueError("pinned must be a boolean")
+            source = arguments.get("source")
+            item = self.observations.add(
+                kind=_string(arguments, "type"),
+                summary=_string(arguments, "summary"),
+                content=_string(arguments, "content"),
+                source=source if isinstance(source, str) else None,
+                pinned=pinned,
+            )
+            return json.dumps({"handle": item.handle, "status": item.status})
+        if operation == "working_set":
+            if arguments:
+                raise ValueError("working_set accepts no arguments")
+            return json.dumps(
+                {
+                    "active": self.observations.descriptors(),
+                    "deferred": [
+                        item.descriptor() for item in self.observations.deferred()
+                    ],
+                },
+                ensure_ascii=False,
+            )
+        if set(arguments) != {"handle"}:
+            raise ValueError("recall requires only a handle")
+        item = self.observations.restore(_string(arguments, "handle"))
+        return json.dumps(
+            {"handle": item.handle, "type": item.kind, "content": item.content},
             ensure_ascii=False,
         )
 

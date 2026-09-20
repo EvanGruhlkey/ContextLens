@@ -61,6 +61,9 @@ def test_mcp_exposes_selection_and_exact_recovery(service):
         "context_read",
         "context_expand",
         "context_next",
+        "context_observe",
+        "context_working_set",
+        "context_recall",
     ]
     result = dispatch(
         service,
@@ -117,6 +120,33 @@ def test_mcp_rejects_unbounded_next_action(service):
         ),
     )["result"]
     assert result["isError"]
+
+
+def test_mcp_observations_can_be_listed_and_recalled(service):
+    observed = dispatch(
+        service,
+        message(
+            "tools/call",
+            name="context_observe",
+            arguments={
+                "type": "test_output",
+                "summary": "refresh test failed",
+                "content": "expected 3600, got 900",
+                "source": "pytest",
+            },
+        ),
+    )["result"]
+    handle = __import__("json").loads(observed["content"][0]["text"])["handle"]
+    listing = dispatch(
+        service, message("tools/call", name="context_working_set", arguments={})
+    )["result"]
+    assert handle in listing["content"][0]["text"]
+    assert "expected 3600" not in listing["content"][0]["text"]
+    recalled = dispatch(
+        service,
+        message("tools/call", name="context_recall", arguments={"handle": handle}),
+    )["result"]
+    assert "expected 3600, got 900" in recalled["content"][0]["text"]
 
 
 def test_mcp_rejects_invalid_select_arguments(service):
