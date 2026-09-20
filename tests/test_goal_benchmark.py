@@ -88,6 +88,7 @@ def test_control_analysis_counts_controller_tokens_and_uptake():
     result = analyze([baseline, control], 1, candidate_policy="control")
     assert result["paired_complete_input_reduction_percent"] == 20
     assert result["all_candidate_runs_used_controller"] is True
+    assert result["all_candidate_runs_used_contextlens_reads"] is False
     assert result["observed_sample_meets_goal"] is True
 
 

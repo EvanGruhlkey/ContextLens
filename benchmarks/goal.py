@@ -392,14 +392,13 @@ def analyze(
         and not pair[candidate_policy]["verified_success"]
     ]
     complete = len(pairs) == expected_pairs and len(rows) == expected_pairs * 2
-    uptake = all(
-        (
-            pair[candidate_policy].get("controller_calls", 0) > 0
-            if candidate_policy == "control"
-            else pair[candidate_policy]["contextlens_read_calls"] > 0
-        )
-        for pair in pairs
+    read_uptake = all(
+        pair[candidate_policy]["contextlens_read_calls"] > 0 for pair in pairs
     )
+    controller_uptake = all(
+        pair[candidate_policy].get("controller_calls", 0) > 0 for pair in pairs
+    )
+    uptake = controller_uptake if candidate_policy == "control" else read_uptake
     return {
         "conditions": conditions,
         "complete_pairs": len(pairs),
@@ -413,9 +412,9 @@ def analyze(
         if complete_first
         else None,
         "observed_quality_regressions": regressions,
-        "all_candidate_runs_used_contextlens_reads": bool(pairs) and uptake,
+        "all_candidate_runs_used_contextlens_reads": bool(pairs) and read_uptake,
         "all_candidate_runs_used_controller": bool(pairs)
-        and uptake
+        and controller_uptake
         and candidate_policy == "control",
         "observed_sample_meets_goal": complete_second < complete_first
         and all(pair[candidate_policy]["verified_success"] for pair in pairs)
