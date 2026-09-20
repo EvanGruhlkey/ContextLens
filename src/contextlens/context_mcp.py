@@ -119,7 +119,9 @@ def tool_definitions(
                 "required": required,
                 "additionalProperties": False,
             },
-            "annotations": {"readOnlyHint": True},
+            "annotations": {
+                "readOnlyHint": name not in {"next", "observe", "recall"}
+            },
         }
         for name, description, properties, required in definitions
     ]

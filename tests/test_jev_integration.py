@@ -74,6 +74,11 @@ def test_mcp_exposes_selection_and_exact_recovery(service):
     instructions = dispatch(service, message("initialize"))["result"]["instructions"]
     assert "context_select" in instructions
     assert "Vercel" in tools[0]["description"]
+    annotations = {tool["name"]: tool["annotations"] for tool in tools}
+    assert annotations["context_working_set"]["readOnlyHint"] is True
+    assert annotations["context_observe"]["readOnlyHint"] is False
+    assert annotations["context_recall"]["readOnlyHint"] is False
+    assert annotations["context_next"]["readOnlyHint"] is False
 
 
 def test_mcp_exposes_bounded_next_action(service):
