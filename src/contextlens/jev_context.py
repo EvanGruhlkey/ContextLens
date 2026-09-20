@@ -72,7 +72,7 @@ class JevRepositoryContext(RepositoryContext):
         *,
         encoding: str = "o200k_base",
         judge: Judge | None = None,
-        selection_strategy: str = "full_source",
+        selection_strategy: str = "two_stage",
     ) -> None:
         super().__init__(root, state, encoding=encoding)
         if selection_strategy not in {"full_source", "two_stage"}:

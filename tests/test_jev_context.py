@@ -41,8 +41,17 @@ def repo(tmp_path):
 
 def context(repo, tmp_path, judge):
     return JevRepositoryContext(
-        repo, tmp_path / "state", judge=judge, encoding="o200k_base"
+        repo,
+        tmp_path / "state",
+        judge=judge,
+        encoding="o200k_base",
+        selection_strategy="full_source",
     )
+
+
+def test_two_stage_selection_is_the_default(repo, tmp_path):
+    service = JevRepositoryContext(repo, tmp_path / "state", judge=Judge())
+    assert service.selection_strategy == "two_stage"
 
 
 def test_jev_selects_exact_source_and_support_in_one_call(repo, tmp_path):
