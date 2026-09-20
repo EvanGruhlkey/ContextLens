@@ -149,6 +149,47 @@ def test_mcp_observations_can_be_listed_and_recalled(service):
     assert "expected 3600, got 900" in recalled["content"][0]["text"]
 
 
+def test_next_reports_working_set_and_capability_decisions(service):
+    dispatch(
+        service,
+        message(
+            "tools/call",
+            name="context_observe",
+            arguments={
+                "type": "search_result",
+                "summary": "TTL is in config.py",
+                "content": "config.py:12",
+            },
+        ),
+    )
+    result = dispatch(
+        service,
+        message(
+            "tools/call",
+            name="context_next",
+            arguments={
+                "task": "fix expiry",
+                "actions": [
+                    {
+                        "id": "read",
+                        "kind": "read_source",
+                        "description": "Read config",
+                        "tool": "context_read",
+                    },
+                    {
+                        "id": "edit",
+                        "kind": "ready_to_edit",
+                        "description": "Edit config",
+                    },
+                ],
+            },
+        ),
+    )["result"]
+    decision = __import__("json").loads(result["content"][0]["text"])
+    assert decision["retention"]["kept"]
+    assert set(decision["capability_probabilities"]) == {"read", "edit"}
+
+
 def test_mcp_rejects_invalid_select_arguments(service):
     for args in [
         {},

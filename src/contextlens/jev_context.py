@@ -16,6 +16,8 @@ from contextlens.evidence_descriptors import describe_unit
 from contextlens.evidence_index import Unit
 from contextlens.jev_gateway import Evaluation, JevGateway
 from contextlens.observations import ObservationStore
+from contextlens.retention import RetentionController
+from contextlens.tool_filter import ToolFilter
 
 MAX_INPUT_TOKENS = 20000
 MAX_DESCRIPTOR_INPUT_TOKENS = 8000
@@ -88,6 +90,8 @@ class JevRepositoryContext(RepositoryContext):
             judge=self.judge, telemetry_path=self.state / "actions.jsonl"
         )
         self.observations = ObservationStore(self.state / "observations")
+        self.retention_controller = RetentionController(judge=self.judge)
+        self.tool_filter = ToolFilter(judge=self.judge)
 
     def call(self, operation: str, arguments: Mapping[str, Any]) -> str:
         if operation in {"observe", "working_set", "recall"}:
@@ -300,11 +304,26 @@ class JevRepositoryContext(RepositoryContext):
         revision = arguments.get("repository_revision")
         if revision is not None and not isinstance(revision, str):
             raise ValueError("repository_revision must be a string")
+        task = _string(arguments, "task")
+        focus = _string(arguments, "focus", "")
+        retention = self.retention_controller.evaluate(
+            task=task, focus=focus, store=self.observations
+        )
+        capability_decision = self.tool_filter.filter(
+            task=task, focus=focus, candidates=candidates
+        )
+        offered = list(capability_decision.candidates)
+        if len(offered) < 2:
+            offered = candidates
+        combined_observations = [
+            *self.observations.descriptors(),
+            *observations,
+        ][-20:]
         decision = self.action_controller.choose_next_action(
-            task=_string(arguments, "task"),
-            focus=_string(arguments, "focus", ""),
-            observations=observations,
-            candidates=candidates,
+            task=task,
+            focus=focus,
+            observations=combined_observations,
+            candidates=offered,
             repository_revision=revision,
         )
         return json.dumps(
@@ -318,6 +337,13 @@ class JevRepositoryContext(RepositoryContext):
                 "output_tokens": decision.output_tokens,
                 "cost": decision.cost,
                 "latency_ms": decision.latency_ms,
+                "retention": {
+                    "kept": list(retention.kept),
+                    "deferred": list(retention.deferred),
+                    "probabilities": retention.probabilities,
+                    "fallback_reason": retention.fallback_reason,
+                },
+                "capability_probabilities": capability_decision.probabilities,
             },
             ensure_ascii=False,
         )
