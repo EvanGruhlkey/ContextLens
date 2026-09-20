@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -25,6 +26,16 @@ MAX_CANDIDATES = 32
 MAX_EXACT_CANDIDATES = 8
 MAX_DEFERRED_HANDLES = 8
 SELECTION_THRESHOLD = 0.5
+
+
+def _sum_cost(values: Any) -> str | None:
+    known = [value for value in values if value is not None]
+    if not known:
+        return None
+    try:
+        return str(sum(Decimal(str(value)) for value in known))
+    except InvalidOperation:
+        return None
 
 
 class Judge(Protocol):
@@ -330,6 +341,27 @@ class JevRepositoryContext(RepositoryContext):
             candidates=offered,
             repository_revision=revision,
         )
+        stages = (retention, capability_decision, decision)
+        controller_usage = {
+            "input_tokens": sum(item.input_tokens or 0 for item in stages),
+            "output_tokens": sum(item.output_tokens or 0 for item in stages),
+            "latency_ms": sum(item.latency_ms or 0 for item in stages),
+            "cost": _sum_cost(item.cost for item in stages),
+        }
+        telemetry = {
+            "task": task,
+            "focus": focus,
+            "selected": decision.selected.action_id if decision.selected else None,
+            "available_actions": list(decision.available_action_ids),
+            "retained": list(retention.kept),
+            "deferred": list(retention.deferred),
+            "repository_revision": revision,
+            **controller_usage,
+        }
+        with (self.state / "controller_calls.jsonl").open(
+            "a", encoding="utf-8"
+        ) as stream:
+            stream.write(json.dumps(telemetry, ensure_ascii=False) + "\n")
         return json.dumps(
             {
                 "selected": decision.selected.action_id if decision.selected else None,
@@ -348,6 +380,7 @@ class JevRepositoryContext(RepositoryContext):
                     "fallback_reason": retention.fallback_reason,
                 },
                 "capability_probabilities": capability_decision.probabilities,
+                "controller_usage": controller_usage,
             },
             ensure_ascii=False,
         )

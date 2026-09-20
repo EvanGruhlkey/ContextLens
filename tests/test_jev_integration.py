@@ -193,6 +193,12 @@ def test_next_reports_working_set_and_capability_decisions(service):
     decision = __import__("json").loads(result["content"][0]["text"])
     assert decision["retention"]["kept"]
     assert set(decision["capability_probabilities"]) == {"read", "edit"}
+    telemetry = (service.state / "controller_calls.jsonl").read_text()
+    row = __import__("json").loads(telemetry)
+    assert row["selected"] in {"read", "edit"}
+    assert row["input_tokens"] == 300
+    assert row["output_tokens"] == 6
+    assert "config.py:12" not in telemetry
 
 
 def test_mcp_rejects_invalid_select_arguments(service):
