@@ -22,8 +22,10 @@ class ToolJudge(Protocol):
 class ToolFilterDecision:
     candidates: tuple[CandidateAction, ...]
     probabilities: dict[str, float]
+    model: str | None
     input_tokens: int | None
     output_tokens: int | None
+    cost: str | None
     latency_ms: float | None
     fallback_reason: str | None = None
 
@@ -74,7 +76,14 @@ class ToolFilter:
             evaluation = self.judge.evaluate(state, questions)
         except GatewayError:
             return ToolFilterDecision(
-                tuple(candidates), {}, None, None, None, "gateway_unavailable"
+                tuple(candidates),
+                {},
+                None,
+                None,
+                None,
+                None,
+                None,
+                "gateway_unavailable",
             )
         probabilities = evaluation.probabilities
         if set(probabilities) != set(questions) or any(
@@ -91,7 +100,9 @@ class ToolFilter:
         return ToolFilterDecision(
             selected,
             dict(probabilities),
+            evaluation.model,
             evaluation.input_tokens,
             evaluation.output_tokens,
+            evaluation.cost,
             evaluation.latency_ms,
         )

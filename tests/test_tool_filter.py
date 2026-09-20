@@ -36,6 +36,8 @@ def test_filter_keeps_relevant_and_recovery_capabilities():
         "read",
         "recover",
     ]
+    assert result.model == "typesafe-ai/jev"
+    assert result.cost == "0"
 
 
 def test_filter_failure_returns_every_capability():
