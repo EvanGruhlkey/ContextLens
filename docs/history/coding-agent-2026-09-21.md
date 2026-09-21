@@ -1,3 +1,25 @@
+# Paired coding-agent benchmark — 21 September 2026
+
+This is the measured run that produced the current architecture. It predates
+the two-layer rewrite, so its condition names are the ones used at the time:
+
+| Report label | What it was |
+| --- | --- |
+| Baseline | raw tool output, no ContextLens |
+| Jev Filter | Jev KEEP/DROP over tool-output chunks, no structural expansion. This is the ancestor of today's live-pruning layer. |
+| ContextLens | Jev filtering plus deterministic Python AST expansion around whatever Jev kept. This path was retired; see [`experiments/structural_expansion/`](../../experiments/structural_expansion/). |
+
+There was no transcript-compaction condition in this run.
+
+Ten frozen real Python GitHub issues (Click, responses, Luigi, Powertools,
+Flask, Babel), two of them from SWE-bench-Live. `gpt-5.6-luna` at
+`reasoning.effort=low`, 20 turns, 300 s timeout, one trial. Hidden graders
+calibrated 10/10. All 30 paired attempts completed. Jev scored through the
+Vercel AI Gateway; coding-model calls stayed on OpenAI. Raw rows are in
+[`coding-agent-2026-09-21.json`](coding-agent-2026-09-21.json).
+
+Read it as one trial of ten tasks, not a statistical quality claim.
+
 | Condition   | Verified Fixes | Coding Input Tokens | Uncached Input | Cached Input | Output Tokens | Total Coding Tokens | Raw Tool Output | Injected Tool Output | Tokens Removed | Agent Turns | Recoveries | Jev Input |
 | ----------- | -------------: | ------------------: | -------------: | -----------: | ------------: | ------------------: | --------------: | -------------------: | -------------: | ----------: | ---------: | --------: |
 | Baseline    | 5 | 583,459 | 67,718 | 515,741 | 14,975 | 598,434 | 46,950 | 46,950 | 0 | 136 | 0 | 0 |

@@ -1,112 +1,50 @@
 # ContextLens roadmap
 
-ContextLens reduces the context coding agents have to read. The goal is lower
-frontier coding-model input per successful task, without extra agent turns.
+The goal is fewer coding-model input tokens per verified fix, with no extra
+agent turns and no drop in task success.
 
 ## Product rules
 
-- Filter on the tool-response path. Do not add coding-model turns to decide
-  what context to keep.
-- Use Jev only for closed-form KEEP/DROP over already-discovered candidates.
-- Keep semantic relevance and structural dependency support separate.
-- Preserve exact originals and make every omission recoverable.
-- Fail open when scoring, parsing, validation, or recovery is uncertain.
-- Measure complete task trajectories. Never mix Jev tokens into the primary
+- Reduce context on the tool-response path and on the host's own transcript.
+  Never spend a frontier-model turn deciding what to keep.
+- Use Jev only for closed-form relevance questions over content the agent
+  already discovered. Jev does not choose actions, write code, run tools, plan,
+  or summarize.
+- Never rewrite or synthesize. Keep verbatim, truncate to a bounded prefix, or
+  remove.
+- Keep every omission exactly recoverable behind a stable handle.
+- Fail open when scoring, validation, or fitting is uncertain.
+- Measure complete task trajectories. Never mix Jev tokens into the
   coding-model input metric.
 
-## Implemented foundation
+## Shipped
 
-- Transparent observation filtering for source, search, tests, and logs.
-- Configurable bypass for small, ranged, and known-symbol reads.
-- Python AST dependency closure after Jev-selected primary code.
-- Content-addressed receipts and observation handles.
-- Active / pinned / deferred working sets with Jev garbage collection.
-- Default MCP surface: filter, read, recover, pin, list.
-- Local three-condition fixture evaluation.
-- Paired real coding-agent harness on ten frozen Python issues with
-  transparent host-side filtering.
+- Live tool-output pruning: chunking, deterministic protection of diagnostics
+  and results, batched Jev KEEP/DROP, bounded state, receipts for everything
+  omitted.
+- Transcript compaction: descriptor-based KEEP/TRUNCATE/DROP over old tool
+  interactions, with the task, recent messages, edits, recent failures, and
+  pinned content protected.
+- A `prune` / `compact` / `recover` CLI and a two-tool MCP server.
+- A paired coding-agent benchmark with baseline, live pruning, and live pruning
+  plus compaction over ten frozen real GitHub issues, and an offline harness
+  check that needs no credentials.
 
-## Current decision
+## Next
 
-The default product is the filter layer, not an action controller. Mandatory
-`context_next` routing increased agent input and turns in the paired pilot
-(2/3 verified fixes, 156.21% more complete input on finished pairs) and stays
-experimental (`--profile controller`).
+1. Run the paired benchmark live and publish the measured three-condition
+   numbers. Until that happens the README reports the September 2026 run that
+   measured the previous architecture.
+2. Tune the live-pruning threshold and chunk size against measured trajectories
+   rather than intuition.
+3. Decide whether compaction should run on a token trigger, a turn cadence, or
+   both, from measurements.
+4. Report recovery rate as a quality signal: frequent recovery means pruning is
+   too aggressive.
 
-The coding-agent harness is the main evaluation. The Jev-enabled 21 September
-2026 gpt-5.6-luna run completed 30/30 attempts. Verified fixes were Baseline
-5/10, Jev Filter 7/10, ContextLens 5/10. Jev Filter used 203,743 fewer
-coding-model input tokens and two fewer turns. ContextLens used 522,156 more
-coding-model input tokens after two large unreduced trajectories. That is one
-trial, not a shipping-gate claim.
+## Explicitly out of scope
 
-## Next: live paired coding-agent gate
-
-- Re-run baseline / Jev-filter / full ContextLens with a frontier coding model
-  and Jev credentials.
-- Require no task-success regression, a meaningful drop in coding-model input,
-  and no material turn increase.
-- Report Jev tokens and cost separately.
-
-## Experimental controller
-
-The older `context_next` loop remains available for reproduction:
-
-- Trigger decisions only at measurable uncertainty or phase boundaries.
-- Reuse one decision across related reads or verification operations.
-- Compare optional routing against evidence selection without action routing.
-- Require a complete paired run with no timeout before considering a default.
-
-## Later: adaptive retention
-
-- Replace the fixed semantic threshold with a query-adaptive gate.
-- Calibrate semantic evidence and dependency support independently.
-- Add a budget controller that expands or contracts around structural risk.
-- Distinguish complete definition retention from lightweight interface views.
-- Add explicit confidence and repair-cost fields to every decision.
-
-## Later: more observation shapes
-
-- Search results: retain matching hits plus file, symbol, and result-group headers.
-- Tracebacks and logs: retain causal chains, exception boundaries, and local time
-  windows while collapsing repeated frames and noise.
-- JSON: retain matching leaves plus ancestor keys, referenced identifiers, and
-  schema-critical siblings.
-- Plain text: use semantic spans with headings, list boundaries, and local windows.
-- Add JavaScript and TypeScript parsing after Python behavior is calibrated.
-
-## Implemented runtime integration
-
-- A middleware adapter handles repository reads and observations.
-- One task goal persists while focus changes between decisions.
-- Source and observation recovery are first-class MCP tools.
-- Add deterministic caching keyed by task, focus, content, and configuration.
-- Add concurrency limits and backend health/circuit-breaker behavior.
-
-## Evaluation gates
-
-Every change must report:
-
-- total task success and mechanical evaluator results;
-- complete input and output volume across the run;
-- recovery calls and reread behavior;
-- pruning latency and backend failures;
-- retained-line precision by reason;
-- syntax and structural-repair failures; and
-- paired confidence intervals over repeated trials.
-
-The first release target is a Python coding-task suite with paired baseline and
-pruned runs. A default threshold ships only after it meets a no-regression gate
-across tasks and demonstrates net end-to-end reduction after recovery traffic.
-
-## Deliberately removed from the main product
-
-- repository instruction-file inventory and linting;
-- configuration minimization and patch generation;
-- provider-specific repository scope resolution;
-- repository-context CI verdicts; and
-- static savings claims that are not tied to task trajectories.
-
-Useful paired-runner, evaluator, artifact, redaction, and telemetry internals
-may be reused behind the new runtime path. They are implementation support, not
-the user-facing product.
+- Choosing the agent's next action, or any form of agent control.
+- LLM summarization of history.
+- Structural AST expansion in the default path. It measured badly; see
+  [`experiments/structural_expansion/`](experiments/structural_expansion/).
