@@ -317,13 +317,13 @@ def _usage_from_response(data: Mapping[str, Any]) -> dict[str, int]:
 
 
 def _endpoint() -> tuple[str, str]:
-    gateway = os.environ.get("AI_GATEWAY_API_KEY", "").strip()
     openai = os.environ.get("OPENAI_API_KEY", "").strip()
+    gateway = os.environ.get("AI_GATEWAY_API_KEY", "").strip()
     base = os.environ.get("OPENAI_BASE_URL", "").strip().rstrip("/")
-    if gateway:
-        return base or "https://ai-gateway.vercel.sh/v1", gateway
     if openai:
         return base or "https://api.openai.com/v1", openai
+    if gateway:
+        return base or "https://ai-gateway.vercel.sh/v1", gateway
     raise AgentUnavailable(
         "Set OPENAI_API_KEY or AI_GATEWAY_API_KEY for the coding agent"
     )

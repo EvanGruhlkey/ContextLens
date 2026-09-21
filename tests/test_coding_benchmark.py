@@ -1,7 +1,12 @@
 from types import SimpleNamespace
 
 from benchmarks.goal import analyze_coding, comma, markdown_report, prompt
-from benchmarks.host_agent import CODING_POLICIES, coding_prompt, run_host_agent
+from benchmarks.host_agent import (
+    CODING_POLICIES,
+    _endpoint,
+    coding_prompt,
+    run_host_agent,
+)
 from contextlens.context_adapter import Answer, ToolCall
 from contextlens.jev_gateway import Evaluation
 
@@ -18,6 +23,15 @@ def test_coding_prompts_are_identical_and_do_not_name_contextlens():
 def test_comma_formats_large_totals():
     assert comma(1_191_403) == "1,191,403"
     assert comma(0) == "0"
+
+
+def test_coding_model_prefers_openai_when_both_keys_exist(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("AI_GATEWAY_API_KEY", "vck-test")
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    url, key = _endpoint()
+    assert url == "https://api.openai.com/v1"
+    assert key == "sk-test"
 
 
 def _coding_row(policy, passed=True, tokens=100, injected=80, raw=80):
