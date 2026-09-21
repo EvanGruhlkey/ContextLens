@@ -1,0 +1,145 @@
+{
+  "coding_model_metrics_measured": false,
+  "conditions": {
+    "baseline": {
+      "agent_turns": null,
+      "coding_model_input_tokens": null,
+      "coding_model_output_tokens": null,
+      "coding_model_uncached_input_tokens": null,
+      "condition": "baseline",
+      "injected_tool_output_tokens": 1004,
+      "jev_cost": null,
+      "jev_input_tokens": 0,
+      "jev_output_tokens": 0,
+      "latency_ms": 0.10996800006068952,
+      "observations": [
+        {
+          "bypass_reason": "baseline",
+          "injected_tokens": 512,
+          "jev_input_tokens": 0,
+          "jev_output_tokens": 0,
+          "kind": "code",
+          "raw_tokens": 512,
+          "recovery_calls": 0
+        },
+        {
+          "bypass_reason": "baseline",
+          "injected_tokens": 170,
+          "jev_input_tokens": 0,
+          "jev_output_tokens": 0,
+          "kind": "search",
+          "raw_tokens": 170,
+          "recovery_calls": 0
+        },
+        {
+          "bypass_reason": "baseline",
+          "injected_tokens": 322,
+          "jev_input_tokens": 0,
+          "jev_output_tokens": 0,
+          "kind": "test",
+          "raw_tokens": 322,
+          "recovery_calls": 0
+        }
+      ],
+      "raw_tool_output_tokens": 1004,
+      "recovery_calls": 0,
+      "task_success": null
+    },
+    "contextlens": {
+      "agent_turns": null,
+      "coding_model_input_tokens": null,
+      "coding_model_output_tokens": null,
+      "coding_model_uncached_input_tokens": null,
+      "condition": "contextlens",
+      "injected_tool_output_tokens": 418,
+      "jev_cost": "0",
+      "jev_input_tokens": 60,
+      "jev_output_tokens": 12,
+      "latency_ms": 6.295137000051909,
+      "observations": [
+        {
+          "bypass_reason": null,
+          "injected_tokens": 74,
+          "jev_input_tokens": 20,
+          "jev_output_tokens": 4,
+          "kind": "code",
+          "raw_tokens": 512,
+          "recovery_calls": 1
+        },
+        {
+          "bypass_reason": null,
+          "injected_tokens": 22,
+          "jev_input_tokens": 20,
+          "jev_output_tokens": 4,
+          "kind": "search",
+          "raw_tokens": 170,
+          "recovery_calls": 1
+        },
+        {
+          "bypass_reason": "no_net_reduction",
+          "injected_tokens": 322,
+          "jev_input_tokens": 20,
+          "jev_output_tokens": 4,
+          "kind": "test",
+          "raw_tokens": 322,
+          "recovery_calls": 0
+        }
+      ],
+      "raw_tool_output_tokens": 1004,
+      "recovery_calls": 2,
+      "task_success": null
+    },
+    "jev_observations": {
+      "agent_turns": null,
+      "coding_model_input_tokens": null,
+      "coding_model_output_tokens": null,
+      "coding_model_uncached_input_tokens": null,
+      "condition": "jev_observations",
+      "injected_tool_output_tokens": 418,
+      "jev_cost": "0",
+      "jev_input_tokens": 60,
+      "jev_output_tokens": 12,
+      "latency_ms": 4.719278000038685,
+      "observations": [
+        {
+          "bypass_reason": null,
+          "injected_tokens": 74,
+          "jev_input_tokens": 20,
+          "jev_output_tokens": 4,
+          "kind": "code",
+          "raw_tokens": 512,
+          "recovery_calls": 1
+        },
+        {
+          "bypass_reason": null,
+          "injected_tokens": 22,
+          "jev_input_tokens": 20,
+          "jev_output_tokens": 4,
+          "kind": "search",
+          "raw_tokens": 170,
+          "recovery_calls": 1
+        },
+        {
+          "bypass_reason": "no_net_reduction",
+          "injected_tokens": 322,
+          "jev_input_tokens": 20,
+          "jev_output_tokens": 4,
+          "kind": "test",
+          "raw_tokens": 322,
+          "recovery_calls": 0
+        }
+      ],
+      "raw_tool_output_tokens": 1004,
+      "recovery_calls": 2,
+      "task_success": null
+    }
+  },
+  "injected_token_reduction_percent": 58.37,
+  "primary_metric": "injected_tool_output_tokens",
+  "success_gate": {
+    "agent_turns_do_not_increase": null,
+    "coding_model_input_decreases": null,
+    "injected_tool_output_decreases": true,
+    "task_success_does_not_regress": null
+  }
+}

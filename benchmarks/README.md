@@ -1,5 +1,16 @@
 # Benchmarks
 
+## Observation-filter fixture
+
+Compare unfiltered tool output with Jev KEEP/DROP and full ContextLens
+(structural expansion plus recovery) on fixed source, search, and test
+observations. This measures injected tool-output tokens. It does not run a
+coding agent and does not claim frontier-model savings.
+
+```bash
+python -m benchmarks.filter_eval --output benchmarks/results/filter-eval.json
+```
+
 ## Jev primary-first evidence benchmark
 
 The live Jev component benchmark checks fixed primary/support cases and records

@@ -1,43 +1,47 @@
 # ContextLens roadmap
 
-ContextLens helps coding agents find the repository code they need for a task.
-The goal is lower end-to-end input volume without reducing task success. The
-current compact, Jev, and controller pilots have not met that gate.
+ContextLens reduces the context coding agents have to read. The goal is lower
+frontier coding-model input per successful task, without extra agent turns.
 
 ## Product rules
 
-- Condition every selection on the current task or narrower runtime focus.
-- Keep semantic evidence and structural support as separate signals.
+- Filter on the tool-response path. Do not add coding-model turns to decide
+  what context to keep.
+- Use Jev only for closed-form KEEP/DROP over already-discovered candidates.
+- Keep semantic relevance and structural dependency support separate.
 - Preserve exact originals and make every omission recoverable.
 - Fail open when scoring, parsing, validation, or recovery is uncertain.
-- Measure complete task trajectories, not isolated prompt size.
-- Add a format only after its dependency rules have task-level tests.
+- Measure complete task trajectories. Never mix Jev tokens into the primary
+  coding-model input metric.
 
 ## Implemented foundation
 
-- Stable request, result, reason, and omission-range contracts.
-- SWE-Pruner-compatible HTTP semantic scoring adapter.
-- Python AST dependency closure for imports, definitions, scopes, decorators,
-  control flow, and bounded symbol hops.
-- Parseable skeleton rendering with line-range markers.
-- Content-addressed local receipts and exact range recovery.
-- Command-line and local HTTP entry points.
-- Reduction, latency, backend, bypass, and kept-line telemetry.
-- Descriptor-first Jev evidence ranking with exact-source verification.
-- Typed bounded action selection exposed through MCP.
-- Recoverable active and deferred observation working sets.
-- Jev-assisted retention and capability filtering with deterministic fallback.
-- Iterative controller sessions and complete controller-usage telemetry.
-- Paired whole-trajectory accounting that includes Jev overhead.
+- Transparent observation filtering for source, search, tests, and logs.
+- Configurable bypass for small, ranged, and known-symbol reads.
+- Python AST dependency closure after Jev-selected primary code.
+- Content-addressed receipts and observation handles.
+- Active / pinned / deferred working sets with Jev garbage collection.
+- Default MCP surface: filter, read, recover, pin, list.
+- Local three-condition fixture evaluation.
 
 ## Current decision
 
-Keep the controller experimental. The three-task paired pilot produced 2/3
-verified fixes in both conditions, one control timeout, and 156.21% higher total
-input across the two complete pairs. Mandatory decisions before each major tool
-operation are not the shipping policy.
+The default product is the filter layer, not an action controller. Mandatory
+`context_next` routing increased agent input and turns in the paired pilot
+(2/3 verified fixes, 156.21% more complete input on finished pairs) and stays
+experimental (`--profile controller`).
 
-## Next: sparse controller invocation
+## Next: live paired coding-agent gate
+
+- Run baseline / Jev-filter / full ContextLens against the existing goal
+  fixtures with the same agent, tools, and timeouts.
+- Require no task-success regression, a meaningful drop in coding-model input,
+  and no material turn increase.
+- Report Jev tokens and cost separately.
+
+## Experimental controller
+
+The older `context_next` loop remains available for reproduction:
 
 - Trigger decisions only at measurable uncertainty or phase boundaries.
 - Reuse one decision across related reads or verification operations.
