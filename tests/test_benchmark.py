@@ -16,6 +16,7 @@ from benchmarks.agent import (
     coding_prompt,
     response_input,
     run_agent,
+    sanitized_environment,
     workspace_tools,
 )
 from benchmarks.offline import LocalJudge, build_repository
@@ -141,6 +142,24 @@ def test_tools_stay_inside_the_workspace(tmp_path: Path) -> None:
     assert tools["shell"]({}).startswith("shell requires")
     assert "exit=0" in tools["shell"]({"command": "echo hi"})
     assert tools["apply_patch"]({}).startswith("apply_patch requires")
+
+
+def test_tools_cannot_read_the_harness_credentials(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-secret-value")
+    monkeypatch.setenv("AI_GATEWAY_API_KEY", "vck-secret-value")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://example.invalid")
+    monkeypatch.setenv("PLAIN_SETTING", "kept")
+    assert "OPENAI_API_KEY" not in sanitized_environment()
+    assert "AI_GATEWAY_API_KEY" not in sanitized_environment()
+    assert "OPENAI_BASE_URL" not in sanitized_environment()
+    assert sanitized_environment()["PLAIN_SETTING"] == "kept"
+    workspace = noisy_repository(tmp_path / "repo")
+    output = workspace_tools(workspace)["shell"]({"command": "env"})
+    assert "sk-secret-value" not in output
+    assert "vck-secret-value" not in output
+    assert "PLAIN_SETTING=kept" in output
 
 
 def test_response_input_carries_calls_and_outputs() -> None:

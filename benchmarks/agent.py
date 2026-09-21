@@ -198,10 +198,29 @@ def coding_prompt(task: str) -> str:
     )
 
 
+_SENSITIVE = ("API_KEY", "APIKEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
+
+
+def sanitized_environment() -> dict[str, str]:
+    """The environment tools run in, without the harness's own credentials.
+
+    The agent's `shell` tool would otherwise be able to read the coding-model
+    and gateway keys and print them into a transcript that gets saved.
+    """
+
+    return {
+        name: value
+        for name, value in os.environ.items()
+        if not any(marker in name.upper() for marker in _SENSITIVE)
+        and name not in {"OPENAI_BASE_URL"}
+    }
+
+
 def workspace_tools(workspace: Path) -> dict[str, Callable[[Mapping[str, Any]], str]]:
     """The identical tool set every condition gets."""
 
     root = workspace.resolve()
+    environment = sanitized_environment()
 
     def read_file(arguments: Mapping[str, Any]) -> str:
         relative = arguments.get("path")
@@ -230,7 +249,7 @@ def workspace_tools(workspace: Path) -> dict[str, Callable[[Mapping[str, Any]], 
             command += ["--glob", glob]
         target = arguments.get("path")
         command.append(target if isinstance(target, str) and target else ".")
-        completed = _run(command, root, shell=False)
+        completed = _run(command, root, shell=False, env=environment)
         output = completed.stdout or completed.stderr
         if completed.returncode not in {0, 1}:
             return output or f"grep failed with code {completed.returncode}"
@@ -240,7 +259,7 @@ def workspace_tools(workspace: Path) -> dict[str, Callable[[Mapping[str, Any]], 
         command = arguments.get("command")
         if not isinstance(command, str) or not command.strip():
             return "shell requires command."
-        completed = _run(command, root, shell=True)
+        completed = _run(command, root, shell=True, env=environment)
         parts = [part for part in (completed.stdout, completed.stderr) if part]
         parts.append(f"exit={completed.returncode}")
         return "\n".join(parts)
@@ -256,6 +275,7 @@ def workspace_tools(workspace: Path) -> dict[str, Callable[[Mapping[str, Any]], 
             capture_output=True,
             timeout=DEFAULT_COMMAND_TIMEOUT,
             check=False,
+            env=environment,
         )
         if completed.returncode:
             return completed.stderr.decode(errors="replace") or "apply_patch failed"
@@ -623,7 +643,11 @@ def _post(
 
 
 def _run(
-    command: str | list[str], cwd: Path, *, shell: bool
+    command: str | list[str],
+    cwd: Path,
+    *,
+    shell: bool,
+    env: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
@@ -635,6 +659,7 @@ def _run(
         timeout=DEFAULT_COMMAND_TIMEOUT,
         check=False,
         shell=shell,
+        env=dict(env) if env is not None else None,
     )
 
 
