@@ -1,1045 +1,219 @@
-"""Command-line workflows for ContextLens."""
+"""Command line entry point: prune, compact, recover, and serve MCP."""
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
-import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from contextlens import __version__
-from contextlens.analysis import (
-    EvidenceScope,
-    Measurement,
-    PairedAnalyzer,
-    SavingsAnalyzer,
-    Workload,
-)
-from contextlens.bootstrap import initialize_repository, render_init_terminal
-from contextlens.ci import (
-    StaticCiPolicy,
-    evaluate_static_ci,
-    evaluate_verified_ci,
-    write_summary,
-)
-from contextlens.evaluators import ExactMatchEvaluator, TestResultsEvaluator
-from contextlens.experiments import (
-    AdaptiveAblationPlanner,
-    AdaptiveSearchRunner,
-    AgentSettings,
-    DirectorySnapshot,
-    ExperimentEvent,
-    MemoryReplayCache,
-    ReplayCoordinator,
-    ReplayStatus,
-    ReplayTask,
-    ReplayWorker,
-    ResourceLimits,
-    SearchConfig,
-    SubprocessAgentAdapter,
-)
-from contextlens.minimize import (
-    minimize_repository,
-    render_minimization_terminal,
-)
-from contextlens.optimization import (
-    ContextOptimizer,
-    ContextValuePredictor,
-    OptimizationObjective,
-    OptimizationPolicy,
-)
-from contextlens.policy import ContextPolicy, policy_from_report
-from contextlens.profiler import ContextProfiler, RunObservation
-from contextlens.regression import (
-    render_verification_markdown,
-    render_verification_terminal,
-    verify_repository,
-)
-from contextlens.reports import (
-    Report,
-    ReportBuilder,
-    render_csv,
-    render_html,
-    render_json,
-    render_terminal,
-)
-from contextlens.repository import (
-    EffectiveContext,
-    diff_effective_context,
-    diff_repository,
-    render_diff_terminal,
-    render_effective_context_terminal,
-    render_markdown,
-    render_scan_terminal,
-    resolve_effective_context,
-    scan_repository,
-)
-from contextlens.runtime import apply_context_policy
-from contextlens.trace import ArtifactStore, ContextSource, TraceReader
+from contextlens.compaction import CompactionConfig, compact_transcript
+from contextlens.filtering import OutputPruner, PruneConfig, PruneRequest
+from contextlens.jev import JevGateway
+from contextlens.models import Message, ToolResult, ToolUse
+from contextlens.receipts import ReceiptStore
+
+DEFAULT_RECEIPTS = Path(".contextlens/receipts")
 
 
-def main(argv: list[str] | None = None) -> None:
-    """Run the ContextLens CLI."""
-    parser = _parser()
-    arguments = parser.parse_args(argv)
-    if not hasattr(arguments, "handler"):
-        parser.print_help()
-        return
-    try:
-        code = arguments.handler(arguments)
-    except (KeyError, OSError, RuntimeError, TypeError, ValueError) as error:
-        parser.exit(2, f"contextlens: {error}\n")
-    if code:
-        raise SystemExit(code)
-
-
-def _parser() -> argparse.ArgumentParser:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="contextlens",
-        description="Test repository agent context changes for regressions.",
+        description="Transparent context reduction for coding agents",
     )
-    parser.add_argument("--version", action="version", version=__version__)
-    commands = parser.add_subparsers(dest="command")
+    commands = parser.add_subparsers(dest="subcommand", required=True)
 
-    init = commands.add_parser(
-        "init",
-        help="detect repository checks and create a starter verification suite",
+    prune = commands.add_parser(
+        "prune", help="prune one large tool result before the coding model reads it"
     )
-    init.add_argument("repository", nargs="?", type=Path, default=Path("."))
-    init.add_argument("--output", type=Path)
-    init.add_argument("--force", action="store_true")
-    init.add_argument("--format", choices=("terminal", "json"), default="terminal")
-    init.set_defaults(handler=_init)
+    prune.add_argument("--task", required=True)
+    prune.add_argument("--focus", default="")
+    prune.add_argument("--tool", default="tool")
+    prune.add_argument("--path")
+    prune.add_argument("--command")
+    prune.add_argument(
+        "--input", type=Path, help="tool output to read; stdin when omitted"
+    )
+    prune.add_argument("--receipts", type=Path, default=DEFAULT_RECEIPTS)
+    prune.add_argument("--json", action="store_true")
 
-    scan = commands.add_parser(
-        "scan",
-        help="discover and statically inspect repository agent context",
+    compact = commands.add_parser(
+        "compact", help="drop stale tool calls and results from a transcript"
     )
-    scan.add_argument(
-        "repository",
-        nargs="?",
-        type=Path,
-        default=Path("."),
-        help="repository path (default: current directory)",
+    compact.add_argument(
+        "--transcript", type=Path, help="JSON transcript; stdin when omitted"
     )
-    scan.add_argument(
-        "--target",
-        action="append",
-        default=[],
-        metavar="PATH",
-        help="resolve effective context for a target path (repeatable)",
-    )
-    scan.add_argument(
-        "--provider",
-        choices=("portable", "codex", "claude", "copilot", "cursor"),
-        default="portable",
-        help="scope resolver used with --target (default: portable)",
-    )
-    scan.add_argument("--request-id", help=argparse.SUPPRESS)
-    scan.add_argument("--observation", type=Path, help=argparse.SUPPRESS)
-    scan.add_argument("--artifacts", type=Path, help=argparse.SUPPRESS)
-    scan.add_argument(
-        "--format",
-        choices=("terminal", "json", "markdown", "csv", "html"),
-        default="terminal",
-    )
-    scan.add_argument("--output", type=Path)
-    scan.set_defaults(handler=_scan)
+    compact.add_argument("--task", default="")
+    compact.add_argument("--receipts", type=Path, default=DEFAULT_RECEIPTS)
+    compact.add_argument("--trigger-tokens", type=int)
+    compact.add_argument("--preserve-recent-messages", type=int)
+    compact.add_argument("--json", action="store_true")
 
-    context_diff = commands.add_parser(
-        "diff",
-        help="compare worktree agent context with a Git base",
+    recover = commands.add_parser(
+        "recover", help="recover exact omitted content by receipt handle"
     )
-    context_diff.add_argument("repository", nargs="?", type=Path, default=Path("."))
-    context_diff.add_argument("--base")
-    context_diff.add_argument("--target", action="append", default=[])
-    context_diff.add_argument(
-        "--provider",
-        choices=("portable", "codex", "claude", "copilot", "cursor"),
-        default="portable",
-    )
-    context_diff.add_argument(
-        "--format", choices=("terminal", "json", "markdown"), default="terminal"
-    )
-    context_diff.add_argument("--output", type=Path)
-    context_diff.set_defaults(handler=_diff)
+    recover.add_argument("receipt_id")
+    recover.add_argument("--start-line", type=int)
+    recover.add_argument("--end-line", type=int)
+    recover.add_argument("--receipts", type=Path, default=DEFAULT_RECEIPTS)
 
-    verify = commands.add_parser(
-        "verify",
-        help="run matched base-versus-candidate context trials",
-    )
-    verify.add_argument(
-        "config",
-        nargs="?",
-        type=Path,
-        default=Path(".contextlens/evals.json"),
-    )
-    verify.add_argument("--repository", type=Path, default=Path("."))
-    verify.add_argument("--base")
-    verify.add_argument(
-        "--format", choices=("terminal", "json", "markdown"), default="terminal"
-    )
-    verify.add_argument("--output", type=Path)
-    verify.set_defaults(handler=_verify)
-
-    minimize = commands.add_parser(
-        "minimize",
-        help="generate static candidates and verify a safe context patch",
-    )
-    minimize.add_argument("paths", nargs="*")
-    minimize.add_argument("--repository", type=Path, default=Path("."))
-    minimize.add_argument("--config", type=Path)
-    minimize.add_argument("--max-candidates", type=int, default=8)
-    minimize.add_argument("--patch-output", type=Path)
-    minimize.add_argument("--report-output", type=Path)
-    minimize.add_argument("--format", choices=("terminal", "json"), default="terminal")
-    minimize.set_defaults(handler=_minimize)
-
-    ci = commands.add_parser(
-        "ci",
-        help="run static or verified agent-context regression gates",
-    )
-    ci.add_argument("--mode", choices=("static", "verified"), default="static")
-    ci.add_argument("--repository", type=Path, default=Path("."))
-    ci.add_argument("--base")
-    ci.add_argument("--config", type=Path, default=Path(".contextlens/evals.json"))
-    ci.add_argument("--max-context-increase", type=float)
-    ci.add_argument("--max-duplicate-increase", type=int)
-    ci.add_argument("--max-stale-increase", type=int)
-    ci.add_argument("--target", action="append", default=[])
-    ci.add_argument(
-        "--provider",
-        choices=("portable", "codex", "claude", "copilot", "cursor"),
-        default="portable",
-    )
-    ci.add_argument("--json-output", type=Path)
-    ci.add_argument("--summary", type=Path)
-    ci.set_defaults(handler=_ci)
-
-    record = commands.add_parser(
-        "record",
-        help="run an instrumented agent that writes a ContextLens trace",
-    )
-    record.add_argument("--output", required=True, type=Path)
-    record.add_argument("agent_command", nargs=argparse.REMAINDER)
-    record.set_defaults(handler=_record)
-
-    profile = commands.add_parser(
-        "profile",
-        help="profile one recorded ContextLens request (legacy trace workflow)",
-    )
-    profile.add_argument("trace", type=Path)
-    profile.add_argument("--request-id")
-    profile.add_argument("--observation", type=Path)
-    profile.add_argument("--artifacts", type=Path)
-    _format_arguments(profile)
-    profile.set_defaults(handler=_profile)
-
-    analyze = commands.add_parser(
-        "analyze",
-        help="compare paired baseline and ablated measurements",
-    )
-    analyze.add_argument("measurements", type=Path)
-    analyze.add_argument("--baseline", required=True)
-    analyze.add_argument("--ablated", required=True)
-    analyze.add_argument("--label")
-    analyze.add_argument("--confidence", type=float, default=0.95)
-    analyze.add_argument("--bootstrap-samples", type=int, default=2_000)
-    analyze.add_argument("--seed", type=int, default=0)
-    analyze.add_argument("--equivalence-tolerance", type=float, default=0)
-    analyze.add_argument("--runs-per-day", type=float)
-    analyze.add_argument("--projection-days", type=int, default=30)
-    analyze.add_argument("--experiment-cost-usd", type=float, default=0)
-    _format_arguments(analyze)
-    analyze.set_defaults(handler=_analyze)
-
-    optimize = commands.add_parser(
-        "optimize",
-        help="run adaptive search and combined target-model verification",
-    )
-    optimize.add_argument("config", type=Path)
-    _format_arguments(optimize)
-    optimize.set_defaults(handler=_optimize)
-
-    report = commands.add_parser(
-        "report",
-        help="render a saved ContextLens report",
-    )
-    report.add_argument("report", type=Path)
-    _format_arguments(report)
-    report.set_defaults(handler=_render_saved)
-
-    policy = commands.add_parser(
-        "policy",
-        help="export a validated context policy from a saved report",
-    )
-    policy.add_argument("report", type=Path)
-    policy.add_argument("--objective", default="balanced")
-    policy.add_argument("--format", choices=("yaml", "json"), default="yaml")
-    policy.add_argument("--output", required=True, type=Path)
-    policy.set_defaults(handler=_export_policy)
-
-    trim = commands.add_parser(
-        "trim",
-        help="apply a verified policy and emit prompt-ready context",
-    )
-    trim.add_argument("context", type=Path)
-    trim.add_argument("--policy", required=True, type=Path)
-    trim.add_argument("--output", type=Path)
-    trim.add_argument("--lazy-output", type=Path)
-    trim.add_argument("--audit-output", type=Path)
-    trim.add_argument("--request-id")
-    trim.add_argument("--agent-id")
-    trim.add_argument("--phase")
-    trim.add_argument("--max-tokens", type=int)
-    trim.add_argument("--min-reduction", type=float, default=0.0)
-    trim.add_argument("--strict", action="store_true")
-    trim.add_argument("--dry-run", action="store_true")
-    trim.add_argument("--force", action="store_true")
-    trim.set_defaults(handler=_trim)
+    mcp = commands.add_parser("mcp", help="serve context_prune and context_recover")
+    mcp.add_argument("--task", default="")
+    mcp.add_argument("--receipts", type=Path, default=DEFAULT_RECEIPTS)
     return parser
 
 
-def _format_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--format",
-        choices=("terminal", "json", "csv", "html"),
-        default="terminal",
-    )
-    parser.add_argument("--output", type=Path)
-
-
-def _record(arguments: argparse.Namespace) -> int:
-    command = list(arguments.agent_command)
-    if command and command[0] == "--":
-        command.pop(0)
-    if not command:
-        raise ValueError("record requires an agent command after --")
-    output = arguments.output.resolve()
-    if output.exists():
-        raise ValueError(f"trace already exists: {output}")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    environment = os.environ.copy()
-    environment["CONTEXTLENS_TRACE"] = str(output)
-    completed = subprocess.run(command, env=environment, check=False)
-    if completed.returncode != 0:
-        return completed.returncode
-    if not output.exists():
-        raise RuntimeError(
-            "agent completed without writing CONTEXTLENS_TRACE; "
-            "instrument the agent with TraceWriter"
-        )
-    TraceReader(output).read_header()
-    print(output)
-    return 0
-
-
-def _scan(arguments: argparse.Namespace) -> int:
-    repository = arguments.repository
-    if repository.is_file() and repository.suffix.casefold() == ".jsonl":
-        return _profile_trace(arguments, repository)
-    inventory = scan_repository(repository)
-    report = (
-        resolve_effective_context(
-            inventory,
-            arguments.target,
-            provider=arguments.provider,
-        )
-        if arguments.target
-        else inventory
-    )
-    if arguments.format in {"csv", "html"}:
-        raise ValueError(
-            "repository scan supports terminal, json, or markdown; "
-            "use `contextlens profile` for legacy report formats"
-        )
-    content = (
-        (
-            render_effective_context_terminal(report)
-            if isinstance(report, EffectiveContext)
-            else render_scan_terminal(report)
-        )
-        if arguments.format == "terminal"
-        else json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n"
-        if arguments.format == "json"
-        else render_markdown(report)
-    )
-    _write_text(content, arguments.output)
-    return 0
-
-
-def _init(arguments: argparse.Namespace) -> int:
-    result = initialize_repository(
-        arguments.repository,
-        output=arguments.output,
-        force=arguments.force,
-    )
-    content = (
-        render_init_terminal(result)
-        if arguments.format == "terminal"
-        else json.dumps(result.to_dict(), indent=2, ensure_ascii=False) + "\n"
-    )
-    sys.stdout.write(content)
-    return 0
-
-
-def _profile(arguments: argparse.Namespace) -> int:
-    return _profile_trace(arguments, arguments.trace)
-
-
-def _profile_trace(arguments: argparse.Namespace, trace: Path) -> int:
-    events = list(TraceReader(trace).events())
-    selected = _select_request(events, arguments.request_id)
-    observation = _observation(_load_json(arguments.observation))
-    artifact_store = (
-        ArtifactStore(arguments.artifacts) if arguments.artifacts is not None else None
-    )
-    profile = ContextProfiler(artifact_store=artifact_store).profile(
-        selected,
-        observation,
-    )
-    report = (
-        ReportBuilder("ContextLens one-run profile")
-        .add_profile(profile)
-        .metadata(
-            trace=str(trace),
-            request_id=profile.request_id,
-        )
-        .build()
-    )
-    _write_report(report, arguments.format, arguments.output)
-    return 0
-
-
-def _diff(arguments: argparse.Namespace) -> int:
-    report = diff_repository(arguments.repository, base_ref=arguments.base)
-    effective = (
-        diff_effective_context(
-            report,
-            arguments.target,
-            provider=arguments.provider,
-        )
-        if arguments.target
-        else None
-    )
-    report_value = report.to_dict()
-    if effective is not None:
-        report_value["effective_context"] = effective
-    content = (
-        render_diff_terminal(report) + _render_effective_diff_terminal(effective)
-        if arguments.format == "terminal"
-        else json.dumps(report_value, indent=2, ensure_ascii=False) + "\n"
-        if arguments.format == "json"
-        else render_markdown(report) + _render_effective_diff_markdown(effective)
-    )
-    _write_text(content, arguments.output)
-    return 0
-
-
-def _verify(arguments: argparse.Namespace) -> int:
-    print("Running paired context experiment", file=sys.stderr, flush=True)
-    report = verify_repository(
-        arguments.config,
-        root=arguments.repository,
-        base_ref=arguments.base,
-        progress=_verification_progress,
-    )
-    content = (
-        render_verification_terminal(report)
-        if arguments.format == "terminal"
-        else json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n"
-        if arguments.format == "json"
-        else render_verification_markdown(report)
-    )
-    _write_text(content, arguments.output)
-    return report.exit_code
-
-
-def _verification_progress(event: ExperimentEvent) -> None:
-    label = event.variant.upper()
-    if event.phase == "starting":
-        if event.order_position == 1:
-            print(
-                f"\nTask: {event.task_id}\nTrial {event.trial}",
-                file=sys.stderr,
-            )
-        print(f"  {label:<10} starting...", file=sys.stderr, flush=True)
-        return
-    result = event.result
-    assert result is not None
-    outcome = result.outcome
-    input_tokens = outcome.input_tokens if outcome is not None else None
-    usage = (
-        f"{input_tokens:,} input tokens"
-        if input_tokens is not None
-        else "input unavailable"
-    )
-    classification = event.classification.value if event.classification else "unknown"
-    print(
-        f"  {label:<10} {classification.upper():<20} "
-        f"{result.duration_seconds:.1f}s  {usage}",
-        file=sys.stderr,
-        flush=True,
-    )
-
-
-def _minimize(arguments: argparse.Namespace) -> int:
-    report = minimize_repository(
-        arguments.repository,
-        config_path=arguments.config,
-        selected_paths=tuple(arguments.paths),
-        max_candidates=arguments.max_candidates,
-    )
-    if arguments.patch_output is not None:
-        if not report.recommended or report.patch is None:
-            raise ValueError(
-                "refusing to write a minimization patch that did not pass verification"
-            )
-        patch_output = arguments.patch_output.resolve()
-        patch_output.parent.mkdir(parents=True, exist_ok=True)
-        patch_output.write_text(report.patch, encoding="utf-8", newline="\n")
-    content = (
-        render_minimization_terminal(report)
-        if arguments.format == "terminal"
-        else json.dumps(report.to_dict(), indent=2, ensure_ascii=False) + "\n"
-    )
-    _write_text(content, arguments.report_output)
-    return report.exit_code
-
-
-def _ci(arguments: argparse.Namespace) -> int:
-    if arguments.mode == "static":
-        context_diff = diff_repository(arguments.repository, base_ref=arguments.base)
-        targets = tuple(arguments.target) or _configured_targets(arguments.config)
-        effective = (
-            diff_effective_context(
-                context_diff,
-                targets,
-                provider=arguments.provider,
-            )
-            if targets
-            else None
-        )
-        result = evaluate_static_ci(
-            context_diff,
-            StaticCiPolicy(
-                max_context_increase_fraction=arguments.max_context_increase,
-                max_duplicate_increase_tokens=arguments.max_duplicate_increase,
-                max_stale_reference_increase=arguments.max_stale_increase,
-            ),
-            effective_context=effective,
-        )
-        summary = render_markdown(context_diff) + _render_effective_diff_markdown(
-            effective
-        )
-    else:
-        verification = verify_repository(
-            arguments.config,
-            root=arguments.repository,
-            base_ref=arguments.base,
-        )
-        result = evaluate_verified_ci(verification)
-        summary = render_verification_markdown(verification)
-    if arguments.json_output is not None:
-        _write_text(
-            json.dumps(result.to_dict(), indent=2, ensure_ascii=False) + "\n",
-            arguments.json_output,
-        )
-    summary_path = arguments.summary
-    if summary_path is None:
-        github_summary = os.environ.get("GITHUB_STEP_SUMMARY")
-        summary_path = Path(github_summary) if github_summary else None
-    if summary_path is not None:
-        write_summary(summary_path, summary)
-    sys.stdout.write(summary)
-    if result.reasons:
-        for reason in result.reasons:
-            print(f"contextlens ci: {reason}", file=sys.stderr)
-    return result.exit_code
-
-
-def _analyze(arguments: argparse.Namespace) -> int:
-    value = _load_json(arguments.measurements)
-    raw_items = value.get("measurements", value) if isinstance(value, dict) else value
-    if not isinstance(raw_items, list):
-        raise ValueError("measurements file must contain a JSON list")
-    measurements = tuple(_measurement(item) for item in raw_items)
-    effect = PairedAnalyzer(
-        confidence=arguments.confidence,
-        bootstrap_samples=arguments.bootstrap_samples,
-        random_seed=arguments.seed,
-        equivalence_tolerance=arguments.equivalence_tolerance,
-    ).analyze(
-        measurements,
-        baseline_variant_id=arguments.baseline,
-        ablated_variant_id=arguments.ablated,
-    )
-    builder = ReportBuilder("ContextLens paired analysis").add_effect(
-        effect,
-        source_id=arguments.ablated,
-        name=arguments.label or arguments.ablated,
-    )
-    if arguments.runs_per_day is not None:
-        recommendation = SavingsAnalyzer().recommend(
-            effect,
-            Workload(
-                runs_per_day=arguments.runs_per_day,
-                projection_days=arguments.projection_days,
-                experiment_cost_usd=arguments.experiment_cost_usd,
-            ),
-            source_id=arguments.ablated,
-            name=arguments.label or arguments.ablated,
-        )
-        builder.add_savings(recommendation)
-    report = builder.metadata(
-        baseline_variant_id=arguments.baseline,
-        ablated_variant_id=arguments.ablated,
-        confidence=arguments.confidence,
-        equivalence_tolerance=arguments.equivalence_tolerance,
-    ).build()
-    _write_report(report, arguments.format, arguments.output)
-    return 0
-
-
-def _optimize(arguments: argparse.Namespace) -> int:
-    config_path = arguments.config.resolve()
-    config = _load_json(config_path)
-    if not isinstance(config, dict):
-        raise ValueError("optimization config must be a JSON object")
-    base = config_path.parent
-    trace_path = _relative_path(base, config["trace"])
-    events = list(TraceReader(trace_path).events())
-    selected = _select_request(events, config.get("request_id"))
-    context = tuple(event.source for event in selected)
-    artifacts = config.get("artifacts")
-    artifact_store = (
-        ArtifactStore(_relative_path(base, artifacts))
-        if artifacts is not None
-        else None
-    )
-    profile = ContextProfiler(artifact_store=artifact_store).profile(
-        selected,
-        _observation(config.get("observation", {})),
-    )
-
-    task_value = _object(config, "task")
-    agent_value = _object(config, "agent")
-    task = ReplayTask(
-        task_id=str(task_value["task_id"]),
-        instruction=str(task_value["instruction"]),
-        metadata=dict(task_value.get("metadata", {})),
-    )
-    settings = AgentSettings(
-        provider=str(agent_value["provider"]),
-        model=str(agent_value["model"]),
-        seed=_optional_int(agent_value.get("seed")),
-        temperature=_optional_float(agent_value.get("temperature")),
-        tools=tuple(agent_value.get("tools", ())),
-        parameters=dict(agent_value.get("parameters", {})),
-    )
-    limits = ResourceLimits(**dict(config.get("limits", {})))
-    worker = ReplayWorker(
-        adapter=SubprocessAgentAdapter(
-            tuple(str(item) for item in agent_value["command"]),
-            adapter_id=str(agent_value.get("adapter_id", "subprocess-v1")),
-        ),
-        snapshot=DirectorySnapshot(_relative_path(base, task_value["workspace"])),
-        task=task,
-        context=context,
-        settings=settings,
-        timeout_seconds=limits.timeout_seconds,
-    )
-    coordinator = ReplayCoordinator(
-        worker,
-        limits,
-        cache=MemoryReplayCache(),
-    )
-    evaluator = _evaluator(_object(config, "evaluator"), task.task_id)
-    search_value = dict(config.get("search", {}))
-    score_name = str(search_value.pop("score_name", "quality"))
-    planner = AdaptiveAblationPlanner(
-        context,
-        config=SearchConfig(**search_value),
-        profiles=profile.profiles,
-    )
-    search_run = AdaptiveSearchRunner(
-        planner,
-        coordinator,
-        evaluator,
-        score_name=score_name,
-    ).run()
-    baseline_result = next(
-        result
-        for result in search_run.replay_results
-        if result.variant_id == "baseline"
-        and result.status in {ReplayStatus.COMPLETED, ReplayStatus.CACHED}
-    )
-    baseline_evaluation = _evaluation_for_result(
-        search_run.replay_results,
-        search_run.evaluations,
-        baseline_result.run_id,
-    )
-    optimization_value = dict(config.get("optimization", {}))
-    objective = OptimizationObjective(optimization_value.pop("objective", "min_cost"))
-    predictor_path = optimization_value.pop("predictor", None)
-    predictor = (
-        ContextValuePredictor.from_dict(
-            _load_json(_relative_path(base, predictor_path))
-        )
-        if predictor_path is not None
-        else None
-    )
-    verify_estimated_cost = optimization_value.pop(
-        "verification_estimated_cost_usd",
-        None,
-    )
-    policy = OptimizationPolicy(objective=objective, **optimization_value)
-    optimizer = ContextOptimizer(
-        context,
-        profiles=profile.profiles,
-        predictor=predictor,
-    )
-    candidate = optimizer.propose(search_run.report, policy)
-    baseline_outcome = baseline_result.outcome
-    verified = optimizer.verify(
-        candidate,
-        coordinator=coordinator,
-        evaluator=evaluator,
-        score_name=score_name,
-        baseline_score=baseline_evaluation.scores[score_name],
-        baseline_cost_usd=(
-            baseline_outcome.cost_usd if baseline_outcome is not None else None
-        ),
-        baseline_latency_seconds=baseline_result.duration_seconds,
-        estimated_cost_usd=_optional_float(verify_estimated_cost),
-        policy=policy,
-    )
-    report = (
-        ReportBuilder("ContextLens optimization report")
-        .add_profile(profile)
-        .add_search(search_run.report)
-        .add_verified_configuration(verified)
-        .add_runs(
-            (
-                *search_run.replay_results,
-                verified.replay_result,
-            )
-        )
-        .metadata(
-            config=str(config_path),
-            task_id=task.task_id,
-            provider=settings.provider,
-            model=settings.model,
-            evaluator=evaluator.evaluator_id,
-        )
-        .build()
-    )
-    _write_report(report, arguments.format, arguments.output)
-    return 0 if verified.accepted else 3
-
-
-def _render_saved(arguments: argparse.Namespace) -> int:
-    value = _load_json(arguments.report)
-    if not isinstance(value, dict):
-        raise ValueError("report file must contain a JSON object")
-    _write_report(
-        Report.from_dict(value),
-        arguments.format,
-        arguments.output,
-    )
-    return 0
-
-
-def _export_policy(arguments: argparse.Namespace) -> int:
-    value = _load_json(arguments.report)
-    if not isinstance(value, dict):
-        raise ValueError("report must contain a JSON object")
-    policy = policy_from_report(
-        Report.from_dict(value),
-        objective=arguments.objective,
-    )
-    output = arguments.output.resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    content = policy.to_yaml() if arguments.format == "yaml" else policy.to_json()
-    output.write_text(content, encoding="utf-8")
-    print(output)
-    return 0
-
-
-def _trim(arguments: argparse.Namespace) -> int:
-    if arguments.max_tokens is not None and arguments.max_tokens < 0:
-        raise ValueError("--max-tokens cannot be negative")
-    if not 0 <= arguments.min_reduction <= 1:
-        raise ValueError("--min-reduction must be between 0 and 1")
-    if not arguments.dry_run and arguments.output is None:
-        raise ValueError("trim requires --output unless --dry-run is used")
+def main(argv: Sequence[str] | None = None) -> int:
+    arguments = build_parser().parse_args(argv)
     try:
-        policy = ContextPolicy.from_json(arguments.policy.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
-        raise ValueError(
-            "trim requires a JSON policy; export one with "
-            "`contextlens policy --format json`"
-        ) from error
-    context = _load_context(arguments.context, arguments.request_id)
-    applied = apply_context_policy(
-        context,
-        policy,
-        agent_id=arguments.agent_id,
-        phase=arguments.phase,
-        strict=arguments.strict,
+        if arguments.subcommand == "prune":
+            return _prune(arguments)
+        if arguments.subcommand == "compact":
+            return _compact(arguments)
+        if arguments.subcommand == "recover":
+            sys.stdout.write(
+                ReceiptStore(arguments.receipts).read(
+                    arguments.receipt_id,
+                    start_line=arguments.start_line,
+                    end_line=arguments.end_line,
+                )
+            )
+            return 0
+        from contextlens.mcp import serve_stdio
+
+        serve_stdio(ReceiptStore(arguments.receipts), task=arguments.task)
+        return 0
+    except (KeyError, OSError, RuntimeError, ValueError) as error:
+        print(f"contextlens: {error}", file=sys.stderr)
+        return 2
+
+
+def _prune(arguments: argparse.Namespace) -> int:
+    output = _read(arguments.input)
+    tool_arguments: dict[str, Any] = {}
+    if arguments.path:
+        tool_arguments["path"] = arguments.path
+    if arguments.command:
+        tool_arguments["command"] = arguments.command
+    outcome = OutputPruner(
+        ReceiptStore(arguments.receipts),
+        judge=JevGateway(),
+        config=PruneConfig.from_env(),
+    ).prune(
+        PruneRequest(
+            task=arguments.task,
+            output=output,
+            tool=arguments.tool,
+            arguments=tool_arguments,
+            focus=arguments.focus,
+        )
     )
-    if arguments.max_tokens is not None and applied.after_tokens > arguments.max_tokens:
-        raise ValueError(
-            f"trimmed context has {applied.after_tokens} tokens, exceeding "
-            f"--max-tokens {arguments.max_tokens}"
-        )
-    if applied.reduction_fraction < arguments.min_reduction:
-        raise ValueError(
-            f"context reduction {applied.reduction_fraction:.1%} is below "
-            f"--min-reduction {arguments.min_reduction:.1%}"
-        )
-    if not arguments.dry_run:
-        assert arguments.output is not None
-        output = arguments.output.resolve()
-        _write_json_artifact(
-            output,
-            applied.prompt_dict(),
-            force=arguments.force,
-        )
-        if applied.lazy or arguments.lazy_output is not None:
-            lazy_output = (
-                arguments.lazy_output.resolve()
-                if arguments.lazy_output is not None
-                else output.with_name(f"{output.stem}.lazy.json")
-            )
-            _write_json_artifact(
-                lazy_output,
-                applied.lazy_dict(),
-                force=arguments.force,
-            )
-        if arguments.audit_output is not None:
-            _write_json_artifact(
-                arguments.audit_output.resolve(),
-                applied.audit_dict(),
-                force=arguments.force,
-            )
-    print(
-        f"Context: {applied.before_tokens:,} -> {applied.after_tokens:,} tokens "
-        f"({applied.saved_tokens:,} saved, "
-        f"{applied.reduction_fraction:.1%} reduction)"
-    )
-    if applied.warnings:
-        print(f"Warnings: {len(applied.warnings)}", file=sys.stderr)
+    if arguments.json:
+        print(json.dumps({"text": outcome.text, **outcome.to_dict()}, indent=2))
+    else:
+        print(outcome.text)
     return 0
 
 
-def _write_report(
-    report: Report,
-    output_format: str,
-    output: Path | None,
-) -> None:
-    renderers = {
-        "terminal": render_terminal,
-        "json": render_json,
-        "csv": render_csv,
-        "html": render_html,
+def _compact(arguments: argparse.Namespace) -> int:
+    messages = parse_transcript(json.loads(_read(arguments.transcript)))
+    overrides: dict[str, int] = {}
+    if arguments.trigger_tokens is not None:
+        overrides["trigger_tokens"] = arguments.trigger_tokens
+    if arguments.preserve_recent_messages is not None:
+        overrides["preserve_recent_messages"] = arguments.preserve_recent_messages
+    result = compact_transcript(
+        messages,
+        JevGateway(),
+        config=CompactionConfig(**overrides),
+        receipts=ReceiptStore(arguments.receipts),
+        task=arguments.task,
+    )
+    payload: dict[str, Any] = {
+        "messages": render_transcript(result.messages),
+        **result.to_dict(),
     }
-    content = renderers[output_format](report)
-    if output is None:
-        sys.stdout.write(content)
-        return
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(content, encoding="utf-8", newline="\n")
-    print(output)
+    if arguments.json:
+        print(json.dumps(payload, indent=2))
+    else:
+        print(json.dumps(payload["messages"], indent=2))
+    return 0
 
 
-def _write_text(content: str, output: Path | None) -> None:
-    if output is None:
-        sys.stdout.write(content)
-        return
-    resolved = output.resolve()
-    resolved.parent.mkdir(parents=True, exist_ok=True)
-    resolved.write_text(content, encoding="utf-8", newline="\n")
-    print(resolved)
+def parse_transcript(value: Any) -> tuple[Message, ...]:
+    """Read a transcript in the JSON shape ``render_transcript`` produces."""
 
-
-def _configured_targets(config: Path) -> tuple[str, ...]:
-    if not config.is_file():
-        return ()
-    value = _load_json(config)
-    if not isinstance(value, dict) or not isinstance(value.get("tasks"), list):
-        return ()
-    targets: list[str] = []
-    for raw_task in value["tasks"]:
-        if not isinstance(raw_task, dict):
-            continue
-        raw_targets = raw_task.get("target_paths", ())
-        if not isinstance(raw_targets, list):
-            continue
-        for target in raw_targets:
-            normalized = str(target)
-            if normalized and normalized not in targets:
-                targets.append(normalized)
-    return tuple(targets)
-
-
-def _render_effective_diff_terminal(value: dict[str, Any] | None) -> str:
-    if value is None:
-        return ""
-    base = int(value["base_estimated_tokens"])
-    candidate = int(value["candidate_estimated_tokens"])
-    delta = int(value["delta_estimated_tokens"])
-    return (
-        "\nEffective target context\n"
-        f"Targets: {', '.join(value['targets'])}\n"
-        f"Resolver: {value['provider']}\n"
-        f"Estimated tokens: {base:,} -> {candidate:,} ({delta:+,})\n"
-        "Observed/static — NOT VERIFIED.\n"
-    )
-
-
-def _render_effective_diff_markdown(value: dict[str, Any] | None) -> str:
-    if value is None:
-        return ""
-    base = int(value["base_estimated_tokens"])
-    candidate = int(value["candidate_estimated_tokens"])
-    delta = int(value["delta_estimated_tokens"])
-    return (
-        "\n### Effective target context\n\n"
-        f"Targets: {', '.join(f'`{item}`' for item in value['targets'])}  \n"
-        f"Resolver: `{value['provider']}`  \n"
-        f"Estimated tokens: **{base:,} → {candidate:,} ({delta:+,})**\n\n"
-        "Observed/static — **NOT VERIFIED**.\n"
-    )
-
-
-def _select_request(
-    events: list[Any],
-    request_id: str | None,
-) -> tuple[Any, ...]:
-    if not events:
-        raise ValueError("trace contains no context events")
-    selected_id = request_id or events[0].request_id
-    selected = tuple(event for event in events if event.request_id == selected_id)
-    if not selected:
-        raise ValueError(f"request {selected_id!r} was not found in the trace")
-    return selected
-
-
-def _observation(value: Any) -> RunObservation:
-    value = value or {}
-    if not isinstance(value, dict):
-        raise ValueError("observation must be a JSON object")
-    return RunObservation(
-        output_text=str(value.get("output_text", "")),
-        accessed_source_ids=frozenset(value.get("accessed_source_ids", ())),
-        commands=tuple(str(item) for item in value.get("commands", ())),
-        tool_inputs=tuple(str(item) for item in value.get("tool_inputs", ())),
-        changed_files=tuple(str(item) for item in value.get("changed_files", ())),
-        task_text=str(value.get("task_text", "")),
-        searched_queries=tuple(str(item) for item in value.get("searched_queries", ())),
-    )
-
-
-def _measurement(value: Any) -> Measurement:
-    if not isinstance(value, dict):
-        raise ValueError("each measurement must be a JSON object")
-    values = dict(value)
-    values["evidence_scope"] = EvidenceScope(
-        values.get("evidence_scope", "target_model")
-    )
-    return Measurement(**values)
-
-
-def _evaluator(value: dict[str, Any], task_id: str) -> Any:
-    evaluator_type = value.get("type")
-    if evaluator_type == "exact_match":
-        return ExactMatchEvaluator(
-            {task_id: str(value["expected"])},
-            case_sensitive=bool(value.get("case_sensitive", False)),
-        )
-    if evaluator_type == "test_results":
-        return TestResultsEvaluator(
-            failure_markers=tuple(
-                value.get("failure_markers", ("fail", "error", "timeout"))
+    if not isinstance(value, list):
+        raise ValueError("transcript must be a list of messages")
+    messages: list[Message] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("each transcript message must be an object")
+        messages.append(
+            Message(
+                role=str(item.get("role", "")),
+                text=str(item.get("text", "")),
+                tool_uses=tuple(
+                    ToolUse(
+                        str(use["tool_use_id"]),
+                        str(use["tool"]),
+                        dict(use.get("arguments") or {}),
+                    )
+                    for use in item.get("tool_uses") or []
+                ),
+                tool_results=tuple(
+                    ToolResult(
+                        str(result["tool_use_id"]),
+                        str(result.get("text", "")),
+                        bool(result.get("is_error", False)),
+                        str(result["receipt_id"])
+                        if result.get("receipt_id")
+                        else None,
+                    )
+                    for result in item.get("tool_results") or []
+                ),
+                pinned=bool(item.get("pinned", False)),
             )
         )
-    raise ValueError(f"unsupported evaluator type: {evaluator_type!r}")
+    return tuple(messages)
 
 
-def _evaluation_for_result(
-    results: tuple[Any, ...],
-    evaluations: tuple[Any, ...],
-    run_id: str,
-) -> Any:
-    evaluation_index = 0
-    for result in results:
-        if result.status not in {ReplayStatus.COMPLETED, ReplayStatus.CACHED}:
-            continue
-        evaluation = evaluations[evaluation_index]
-        evaluation_index += 1
-        if result.run_id == run_id:
-            return evaluation
-    raise ValueError(f"no evaluation found for run {run_id!r}")
+def render_transcript(messages: Sequence[Message]) -> list[dict[str, Any]]:
+    """Serialize a transcript so it round-trips through ``parse_transcript``."""
+
+    payload: list[dict[str, Any]] = []
+    for message in messages:
+        item: dict[str, Any] = {"role": message.role, "text": message.text}
+        if message.tool_uses:
+            item["tool_uses"] = [
+                {
+                    "tool_use_id": use.tool_use_id,
+                    "tool": use.tool,
+                    "arguments": dict(use.arguments),
+                }
+                for use in message.tool_uses
+            ]
+        if message.tool_results:
+            item["tool_results"] = [
+                {
+                    "tool_use_id": result.tool_use_id,
+                    "text": result.text,
+                    "is_error": result.is_error,
+                    "receipt_id": result.receipt_id,
+                }
+                for result in message.tool_results
+            ]
+        if message.pinned:
+            item["pinned"] = True
+        payload.append(item)
+    return payload
 
 
-def _load_json(path: Path | None) -> Any:
-    if path is None:
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _load_context(path: Path, request_id: str | None) -> tuple[ContextSource, ...]:
-    if path.suffix.casefold() == ".jsonl":
-        return tuple(
-            event.source
-            for event in _select_request(
-                list(TraceReader(path).events()),
-                request_id,
-            )
-        )
-    value = _load_json(path)
-    raw_items = value.get("context") if isinstance(value, dict) else value
-    if not isinstance(raw_items, list) or not raw_items:
-        raise ValueError("context JSON must be a nonempty list or contain `context`")
-    if not all(isinstance(item, dict) for item in raw_items):
-        raise ValueError("every context item must be a JSON object")
-    return tuple(ContextSource.from_dict(item) for item in raw_items)
-
-
-def _write_json_artifact(path: Path, value: Any, *, force: bool) -> None:
-    if path.exists() and not force:
-        raise ValueError(f"refusing to overwrite existing file: {path}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
-
-
-def _relative_path(base: Path, value: Any) -> Path:
-    path = Path(str(value))
-    return path if path.is_absolute() else (base / path).resolve()
-
-
-def _object(value: dict[str, Any], key: str) -> dict[str, Any]:
-    result = value.get(key)
-    if not isinstance(result, dict):
-        raise ValueError(f"{key!r} must be a JSON object")
-    return result
-
-
-def _optional_int(value: Any) -> int | None:
-    return int(value) if value is not None else None
-
-
-def _optional_float(value: Any) -> float | None:
-    return float(value) if value is not None else None
+def _read(path: Path | None) -> str:
+    return path.read_text(encoding="utf-8") if path is not None else sys.stdin.read()
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

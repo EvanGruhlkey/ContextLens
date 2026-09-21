@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "contextlens"
-version = "0.1.0"
+version = "0.2.0"
 description = "Transparent context-reduction layer for coding agents"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Evan Gruhlkey" }]
 classifiers = [
-  "Development Status :: 2 - Pre-Alpha",
+  "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.12",
@@ -19,14 +19,8 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Testing",
 ]
-dependencies = [
-  "tree-sitter>=0.25,<0.26",
-  "tree-sitter-javascript>=0.25,<0.26",
-  "tree-sitter-typescript>=0.23,<0.24",
-  "tiktoken>=0.8,<1",
-]
+dependencies = []
 keywords = [
-  "agents-md",
   "coding-agents",
   "context-engineering",
   "developer-tools",
@@ -36,22 +30,10 @@ keywords = [
 ]
 
 [project.optional-dependencies]
-evidence = []
-neural = [
-  "hf-xet>=1.1.0",
-  "swe-pruner>=0.1.1",
-  "torch>=2.8.0,<3",
-  "transformers>=4.57.1,<5",
-]
-benchmark = ["tiktoken>=0.8,<1"]
 dev = [
-  "hf-xet>=1.1.0",
   "mypy>=1.10",
   "pytest>=8.2",
   "ruff>=0.5",
-  "swe-pruner>=0.1.1",
-  "torch>=2.8.0,<3",
-  "transformers>=4.57.1,<5",
 ]
 
 [project.urls]
@@ -61,21 +43,15 @@ Issues = "https://github.com/EvanGruhlkey/ContextLens/issues"
 Repository = "https://github.com/EvanGruhlkey/ContextLens.git"
 
 [project.scripts]
-contextlens = "contextlens.pruning_cli:main"
+contextlens = "contextlens.cli:main"
 
 [tool.hatch.build]
-# The repository evaluation harness is intentionally development-only. Expose
-# it to editable installs without shipping the generic top-level `evals`
-# package in the production wheel.
+# The paired benchmark harness is development-only. Expose it to editable
+# installs without shipping it in the production wheel.
 dev-mode-dirs = ["src", "."]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/contextlens"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"migrations/0001_normalized_contextlens.sql" = "contextlens/migrations/0001_normalized_contextlens.sql"
-"schemas/context-policy.schema.json" = "contextlens/schemas/context-policy.schema.json"
-"schemas/contextlens-evals.schema.json" = "contextlens/schemas/contextlens-evals.schema.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -90,7 +66,7 @@ show_missing = true
 skip_covered = true
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 88
 
 [tool.ruff.lint]

@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol
 
 from contextlens.models import estimate_state_tokens
 
@@ -26,8 +26,6 @@ MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 DEFAULT_MAX_STATE_TOKENS = 25_000
 DEFAULT_MAX_REQUEST_TOKENS = 30_000
 REQUEST_OVERHEAD_TOKENS = 20
-
-T = TypeVar("T")
 
 
 class JevError(RuntimeError):
@@ -109,7 +107,7 @@ def boolean_question(
     return question
 
 
-def batch_questions(
+def batch_questions[T](
     items: Sequence[T],
     questions_for: Callable[[T], Mapping[str, Any]],
     *,
