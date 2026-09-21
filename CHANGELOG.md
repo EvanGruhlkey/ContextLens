@@ -4,11 +4,12 @@
 
 - Added a paired real coding-agent benchmark as the main evaluation: ten
   frozen Python GitHub issues, three transparent conditions (baseline / Jev
-  filter / ContextLens), and host-side tool-result filtering. The 21 September
-  2026 coding-model run completed 30/30 attempts on gpt-5.6-luna. Verified
-  fixes were Baseline 6/10, Jev Filter 5/10, ContextLens 5/10. Jev was
-  unavailable, so filter conditions failed open; token deltas are trajectory
-  variance, not measured context reduction.
+  filter / ContextLens), and host-side tool-result filtering. The Jev-enabled
+  21 September 2026 gpt-5.6-luna run completed 30/30 attempts. Verified fixes
+  were Baseline 5/10, Jev Filter 7/10, ContextLens 5/10. Jev Filter used
+  203,743 fewer coding-model input tokens (-34.9%). ContextLens used 522,156
+  more, dominated by two unreduced trajectories. Jev tokens are reported
+  separately (136,505 / 124,519 input).
 - Kept `benchmarks.filter_eval` as the component regression for injected
   tool-output filtering.
 

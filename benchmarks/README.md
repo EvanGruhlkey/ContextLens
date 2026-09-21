@@ -12,9 +12,8 @@ python -m benchmarks.goal --output evals/artifacts/coding-agent --trials 1 --tim
 
 The prompt, tools, model, reasoning, timeout, environment, and max turns are
 identical across conditions. Jev usage is stored separately from coding-model
-tokens. The 21 September 2026 gpt-5.6-luna run completed 30/30 attempts
-(Baseline 6/10, Jev Filter 5/10, ContextLens 5/10) with Jev unavailable, so
-filter conditions were passthrough. See the
+tokens. The Jev-enabled 21 September 2026 gpt-5.6-luna run completed 30/30
+attempts (Baseline 5/10, Jev Filter 7/10, ContextLens 5/10). See the
 [README Real Coding-Agent Benchmark](../README.md#real-coding-agent-benchmark)
 and [coding-agent.json](results/coding-agent.json).
 
