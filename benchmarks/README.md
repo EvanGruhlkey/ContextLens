@@ -1,5 +1,20 @@
 # Benchmarks
 
+## Real coding-agent benchmark
+
+Paired Baseline / Jev Filter / ContextLens runs on ten frozen Python GitHub
+issues. The coding agent is not told to use ContextLens; filtering happens on
+the host tool-response path.
+
+```bash
+python -m benchmarks.goal --output evals/artifacts/coding-agent --trials 1 --timeout 300
+```
+
+The prompt, tools, model, reasoning, timeout, environment, and max turns are
+identical across conditions. Jev usage is stored separately from coding-model
+tokens. See the [README Real Coding-Agent Benchmark](../README.md#real-coding-agent-benchmark)
+and [coding-agent.json](results/coding-agent.json).
+
 ## Observation-filter fixture
 
 Compare unfiltered tool output with Jev KEEP/DROP and full ContextLens

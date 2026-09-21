@@ -60,11 +60,12 @@ def test_analyze_coding_keeps_absolute_token_totals():
         "absolute": -80,
         "percent": -40.0,
     }
+    assert result["all_agent_unavailable"] is False
     assert result["conditions"]["contextlens"]["tool_output_tokens_removed"] == 51
     text = markdown_report(result)
     assert "1" in text
     assert "-80" in text
-    assert "owner/repo/repo-task" in text
+    assert "repo-task" in text
 
 
 def test_host_agent_filters_tool_output_before_the_model(tmp_path):

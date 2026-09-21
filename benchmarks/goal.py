@@ -656,7 +656,7 @@ def analyze_coding(
         )
         tasks.append(
             {
-                "task": f"{baseline.get('repo', '')}/{baseline['case']}",
+                "task": baseline["case"],
                 "case": baseline["case"],
                 "baseline_pass": baseline["verified_success"],
                 "contextlens_pass": full["verified_success"],
@@ -681,11 +681,14 @@ def analyze_coding(
         return {"absolute": absolute, "percent": percent}
 
     complete = len(pairs) == expected_pairs and len(rows) == expected_pairs * 3
+    statuses = [row.get("status") for row in rows]
     return {
         "conditions": conditions,
         "complete_pairs": len(pairs),
         "expected_pairs": expected_pairs,
         "complete": complete,
+        "all_agent_unavailable": bool(rows)
+        and all(status == "agent_unavailable" for status in statuses),
         "deltas": {
             "jev_filter": {field: delta(field, "jev_filter") for field in fields},
             "contextlens": {field: delta(field, "contextlens") for field in fields},
@@ -819,6 +822,14 @@ def markdown_report(analysis: dict[str, Any]) -> str:
             )
         else:
             turns_text = "did not change"
+    if analysis.get("all_agent_unavailable"):
+        lines += [
+            "",
+            "This run did not execute a coding model. Every paired attempt "
+            "ended with `agent_unavailable` (no OPENAI_API_KEY or "
+            "AI_GATEWAY_API_KEY). The zeros below are that blocked run, not a "
+            "measured ContextLens saving or quality result.",
+        ]
     lines += [
         "",
         "Verified fixes: "
@@ -862,6 +873,11 @@ def markdown_report(analysis: dict[str, Any]) -> str:
             f"cost {full['jev_cost']}."
         ),
     ]
+    if analysis.get("all_agent_unavailable"):
+        lines.append(
+            "Do not treat these zeros as evidence that ContextLens preserved "
+            "fixes or reduced frontier-model context."
+        )
     return "\n".join(lines) + "\n"
 
 

@@ -76,28 +76,76 @@ not need a gateway key.
 Vercel Pro and Enterprise users can set `CONTEXTLENS_VERCEL_ZDR=1` for
 zero-data-retention routing. Vercel rejects that option on Hobby plans.
 
-## Evaluation
+## Real Coding-Agent Benchmark
 
-The primary metric is **frontier coding-model input per successful task**, not
-Jev token usage. Jev cost is reported separately and is never mixed into that
-number.
+The main evaluation is a paired coding-agent run on ten frozen real Python
+GitHub issues (Click, responses, Luigi, Powertools, Flask, Babel). Two of the
+tasks are SWE-bench-Live lite instances (`python-babel__babel-1141`,
+`pallets__flask-5637`). The agent sees original issue text only. Gold patches,
+hidden tests, and relevant symbols stay on the host.
+
+Three conditions share the same model, reasoning level, prompt, commit, tools,
+timeout, environment, and max turns. ContextLens is not mentioned to the agent.
+It transforms tool results on the host before they enter the coding model:
+
+1. **Baseline** — raw tool outputs
+2. **Jev Filter** — KEEP/DROP relevance filtering, no AST expansion
+3. **ContextLens** — Jev filtering, structural source expansion, recovery handles
 
 ```bash
-python -m benchmarks.filter_eval --output benchmarks/results/filter-eval.json
-python -m benchmarks.goal --output evals/artifacts/goal-new --trials 1 --timeout 240
+export OPENAI_API_KEY="..."          # or AI_GATEWAY_API_KEY
+export AI_GATEWAY_API_KEY="..."      # required for Jev
+python -m benchmarks.goal --output evals/artifacts/coding-agent --trials 1 --timeout 300
 ```
 
-`benchmarks.filter_eval` is a local three-condition fixture:
+Jev tokens and cost are reported separately and are never added to coding-model
+input. `benchmarks.filter_eval` remains a component regression for the filter
+pipeline; it is not this coding-agent result.
 
-1. **Baseline** — unfiltered tool output
-2. **Jev observation filtering** — KEEP/DROP without AST expansion
-3. **Full ContextLens** — Jev filtering, structural expansion, and recovery handles
+Checked-in 21 September 2026 run: hidden graders calibrated **10/10** (buggy
+checkout fails, gold patch passes). Every one of the **30** paired attempts
+then ended `agent_unavailable` because this environment had no coding-model
+API key. The tables record that blocked run in full. They are **not** a
+measurement of ContextLens savings or bug-fix quality.
 
-A checked-in fixture run reduced injected tool-output tokens from 1004 to 418
-(58.37%) with Jev scored separately (60 input / 12 output tokens). Source and
-test snippets that are not actually smaller after omission markers fail open.
-This is not a coding-agent result: coding-model input, turns, and verified
-task success were not measured.
+| Condition   | Verified Fixes | Coding Input Tokens | Uncached Input | Cached Input | Output Tokens | Total Coding Tokens | Raw Tool Output | Injected Tool Output | Tokens Removed | Agent Turns | Recoveries | Jev Input |
+| ----------- | -------------: | ------------------: | -------------: | -----------: | ------------: | ------------------: | --------------: | -------------------: | -------------: | ----------: | ---------: | --------: |
+| Baseline    |              0 |                   0 |              0 |            0 |             0 |                   0 |               0 |                    0 |              0 |           0 |          0 |         0 |
+| Jev Filter  |              0 |                   0 |              0 |            0 |             0 |                   0 |               0 |                    0 |              0 |           0 |          0 |         0 |
+| ContextLens |              0 |                   0 |              0 |            0 |             0 |                   0 |               0 |                    0 |              0 |           0 |          0 |         0 |
+
+| Metric                      | Jev Filter vs Baseline | ContextLens vs Baseline |
+| --------------------------- | ---------------------: | ----------------------: |
+| Coding-model input tokens   |                     +0 |                      +0 |
+| Uncached coding-model input |                     +0 |                      +0 |
+| Injected tool output        |                     +0 |                      +0 |
+| Agent turns                 |                     +0 |                      +0 |
+| Verified fixes              |                     +0 |                      +0 |
+
+| Task                                | Baseline Pass | ContextLens Pass | Baseline Input | ContextLens Input | Tokens Saved | Input Change |
+| ----------------------------------- | ------------- | ---------------- | -------------: | ----------------: | -----------: | -----------: |
+| aws-powertools-eventbridge-replay   | ❌             | ❌                |              0 |                 0 |            0 |          n/a |
+| aws-powertools-query-merge          | ❌             | ❌                |              0 |                 0 |            0 |          n/a |
+| click-empty-default                 | ❌             | ❌                |              0 |                 0 |            0 |          n/a |
+| click-short-help                    | ❌             | ❌                |              0 |                 0 |            0 |          n/a |
+| pallets-flask-trusted-hosts         | ❌             | ❌                |              0 |                 0 |            0 |          n/a |
+| python-babel-parse-time             | ❌             | ❌                |              0 |                 0 |            0 |          n/a |
+| responses-blank-query               | ❌             | ❌                |              0 |                 0 |            0 |          n/a |
+| responses-query-mutation            | ❌             | ❌                |              0 |                 0 |            0 |          n/a |
+| spotify-luigi-bool-default          | ❌             | ❌                |              0 |                 0 |            0 |          n/a |
+| spotify-luigi-run-arguments         | ❌             | ❌                |              0 |                 0 |            0 |          n/a |
+
+Verified fixes: Baseline **0/10**, Jev Filter **0/10**, ContextLens **0/10**.
+ContextLens saved **0** coding-model input tokens (0%). Uncached coding-model
+input saved **0**. Tool-output tokens prevented from entering model context:
+**0**. Agent turns did not change. Recoveries: **0** calls restoring **0**
+tokens. Jev usage (separate): **0** input / **0** output tokens, cost **0**.
+Do not treat these zeros as evidence that ContextLens preserved fixes or
+reduced frontier-model context.
+
+The component filter fixture is unchanged: injected tool-output tokens fell
+from **1,004** to **418** (58.37%), with Jev scored separately (**60** input /
+**12** output). That is not a coding-agent result.
 
 The live paired coding-agent gate remains:
 
@@ -109,7 +157,8 @@ AND
 agent turns do not materially increase
 ```
 
-Do not treat fixture token reduction as that gate.
+Do not treat fixture token reduction, or a blocked `agent_unavailable` run, as
+that gate.
 
 ## Experimental / research
 

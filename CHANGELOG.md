@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added a paired real coding-agent benchmark as the main evaluation: ten
+  frozen Python GitHub issues, three transparent conditions (baseline / Jev
+  filter / ContextLens), and host-side tool-result filtering. The 21 September
+  2026 run calibrated all hidden graders, then recorded 0/10 verified fixes
+  and 0 coding-model tokens because every attempt was `agent_unavailable`.
+- Kept `benchmarks.filter_eval` as the component regression for injected
+  tool-output filtering.
+
 - Made transparent observation filtering the default product: Jev scores
   already-discovered source, search, test, and log candidates; AST expansion
   stays local; omitted exact text remains recoverable.

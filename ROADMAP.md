@@ -23,6 +23,8 @@ frontier coding-model input per successful task, without extra agent turns.
 - Active / pinned / deferred working sets with Jev garbage collection.
 - Default MCP surface: filter, read, recover, pin, list.
 - Local three-condition fixture evaluation.
+- Paired real coding-agent harness on ten frozen Python issues with
+  transparent host-side filtering.
 
 ## Current decision
 
@@ -31,10 +33,15 @@ The default product is the filter layer, not an action controller. Mandatory
 (2/3 verified fixes, 156.21% more complete input on finished pairs) and stays
 experimental (`--profile controller`).
 
+The coding-agent harness is the main evaluation. The 21 September 2026 run
+calibrated 10/10 hidden graders, then recorded 0/10 verified fixes because
+every attempt was `agent_unavailable` (no coding-model API key). That is not
+a savings result.
+
 ## Next: live paired coding-agent gate
 
-- Run baseline / Jev-filter / full ContextLens against the existing goal
-  fixtures with the same agent, tools, and timeouts.
+- Re-run baseline / Jev-filter / full ContextLens with a frontier coding model
+  and Jev credentials.
 - Require no task-success regression, a meaningful drop in coding-model input,
   and no material turn increase.
 - Report Jev tokens and cost separately.
