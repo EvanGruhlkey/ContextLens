@@ -34,9 +34,10 @@ The default product is the filter layer, not an action controller. Mandatory
 experimental (`--profile controller`).
 
 The coding-agent harness is the main evaluation. The 21 September 2026 run
-calibrated 10/10 hidden graders, then recorded 0/10 verified fixes because
-every attempt was `agent_unavailable` (no coding-model API key). That is not
-a savings result.
+calibrated 10/10 hidden graders and completed 30/30 gpt-5.6-luna attempts.
+Verified fixes were Baseline 6/10, Jev Filter 5/10, ContextLens 5/10. Jev
+did not score, so filter conditions failed open. Token deltas are trajectory
+variance, not a savings result.
 
 ## Next: live paired coding-agent gate
 

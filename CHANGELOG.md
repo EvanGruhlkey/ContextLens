@@ -5,8 +5,10 @@
 - Added a paired real coding-agent benchmark as the main evaluation: ten
   frozen Python GitHub issues, three transparent conditions (baseline / Jev
   filter / ContextLens), and host-side tool-result filtering. The 21 September
-  2026 run calibrated all hidden graders, then recorded 0/10 verified fixes
-  and 0 coding-model tokens because every attempt was `agent_unavailable`.
+  2026 coding-model run completed 30/30 attempts on gpt-5.6-luna. Verified
+  fixes were Baseline 6/10, Jev Filter 5/10, ContextLens 5/10. Jev was
+  unavailable, so filter conditions failed open; token deltas are trajectory
+  variance, not measured context reduction.
 - Kept `benchmarks.filter_eval` as the component regression for injected
   tool-output filtering.
 
