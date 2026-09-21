@@ -67,11 +67,14 @@ never enter the agent's workspace. Two tasks come from SWE-bench-Live.
 
 `results/` holds measured reports:
 
-- `four-condition-2026-09-21-blocked.{json,md}` — the four-condition run was
-  executed and produced **no measurement**. The harness completed end to end
-  (ten repositories fetched, ten graders calibrated, forty attempts run and
-  graded) but every attempt ended `agent_unavailable` for lack of a coding-model
-  key. Saved so the failure is on the record; cite no number from it.
+- `four-condition-2026-09-21.{json,md}` — the measured four-condition run.
+  `gpt-5.6-luna` at `reasoning.effort=low`, 20 turns, 300 s, one trial, ten
+  tasks, 39 of 40 attempts completed. Verified fixes 5 / 5 / 7 / 5. **Neither
+  layer engaged materially**: compaction never fired (largest transcript 14,022
+  tokens against the 20,000-token trigger) and live pruning removed 2.7% of raw
+  tool output (average tool result about 500 tokens against a 1,500-token gate).
+  `compaction_only` was mechanically identical to baseline and still scored +2
+  fixes and +3.0% input, which is this suite's noise floor.
 - `offline.{json,md}` — the offline harness check.
 
 Reports for architectures that no longer exist are under

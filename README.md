@@ -106,81 +106,80 @@ user constraints, every edit, and recent failures. See
 
 ## Results
 
-### Measured coding-agent run, 21 September 2026
-
-This is the run that produced the current architecture. It measured the
-**previous** architecture, so its labels are the ones used then: "Jev Filter" is
-the ancestor of today's live-pruning layer, and "ContextLens" was Jev filtering
-plus Python AST expansion. There was no compaction condition.
+### Measured four-condition run, 21 September 2026
 
 Ten frozen real Python GitHub issues (Click, responses, Luigi, Powertools,
 Flask, Babel), two from SWE-bench-Live. `gpt-5.6-luna` at
-`reasoning.effort=low`, 20 turns, 300 s, one trial, identical prompts, tools,
-and commits. Hidden graders calibrated 10/10. All 30 paired attempts completed.
-Jev scored through the Vercel AI Gateway; coding-model calls stayed on OpenAI.
+`reasoning.effort=low`, 20 turns, 300 s, one trial. All four conditions share
+the coding model, reasoning effort, issue prompt, repository commit, tool set,
+timeout, turn limit, and hidden grader; only the ContextLens layers differ. The
+agent is never told ContextLens exists. Hidden graders calibrated 10/10; 39 of
+40 attempts completed (one baseline attempt hit the turn limit). Jev scored
+through the Vercel AI Gateway; coding-model calls went to OpenAI.
 
-| Condition | Verified Fixes | Coding Input Tokens | Uncached Input | Cached Input | Output Tokens | Total Coding Tokens | Raw Tool Output | Injected Tool Output | Tokens Removed | Agent Turns | Recoveries | Jev Input |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Baseline | 5 | 583,459 | 67,718 | 515,741 | 14,975 | 598,434 | 46,950 | 46,950 | 0 | 136 | 0 | 0 |
-| Jev Filter | 7 | 379,716 | 57,359 | 322,357 | 16,137 | 395,853 | 48,276 | 26,920 | 21,356 | 134 | 0 | 136,505 |
-| + AST expansion | 5 | 1,105,615 | 151,696 | 953,919 | 14,989 | 1,120,604 | 138,931 | 119,054 | 19,877 | 141 | 0 | 124,519 |
-
-| Metric | Jev Filter vs Baseline | + AST expansion vs Baseline |
-| --- | ---: | ---: |
-| Coding-model input tokens | -203,743 (-34.9%) | +522,156 (+89.5%) |
-| Uncached coding-model input | -10,359 (-15.3%) | +83,978 (+124.0%) |
-| Injected tool output | -20,030 (-42.7%) | +72,104 (+153.6%) |
-| Agent turns | -2 (-1.5%) | +5 (+3.7%) |
-| Verified fixes | +2 | +0 |
-
-| Task | Baseline | Jev Filter | + AST | Baseline Input | Jev Filter Input | + AST Input |
-| --- | --- | --- | --- | ---: | ---: | ---: |
-| aws-powertools-eventbridge-replay | ✅ | ✅ | ✅ | 79,418 | 30,005 | 29,772 |
-| aws-powertools-query-merge | ❌ | ❌ | ❌ | 125,593 | 80,315 | 79,077 |
-| click-empty-default | ❌ | ❌ | ❌ | 61,088 | 30,619 | 34,485 |
-| click-short-help | ❌ | ❌ | ❌ | 27,291 | 18,250 | 490,067 |
-| pallets-flask-trusted-hosts | ❌ | ✅ | ❌ | 79,769 | 75,477 | 73,710 |
-| python-babel-parse-time | ✅ | ✅ | ✅ | 37,987 | 28,294 | 40,720 |
-| responses-blank-query | ✅ | ✅ | ✅ | 24,891 | 24,289 | 22,721 |
-| responses-query-mutation | ✅ | ✅ | ✅ | 24,342 | 23,998 | 24,796 |
-| spotify-luigi-bool-default | ✅ | ✅ | ✅ | 41,709 | 39,789 | 45,746 |
-| spotify-luigi-run-arguments | ❌ | ✅ | ❌ | 81,371 | 28,680 | 264,521 |
-
-Full report:
-[`docs/history/coding-agent-2026-09-21.md`](docs/history/coding-agent-2026-09-21.md).
-
-### The four-condition run for this architecture is blocked, not skipped
-
-The current benchmark compares four conditions on the same ten frozen tasks:
-
-| Condition | Live pruning | Transcript compaction |
+| Condition | Live pruning | Compaction |
 | --- | --- | --- |
 | `baseline` | no | no |
 | `live_pruning` | yes | no |
 | `compaction_only` | no | yes |
 | `full_contextlens` | yes | yes |
 
-It was executed on 21 September 2026 and **produced no measurement**. The
-harness itself completed: all ten repositories were fetched at their pinned
-commits, all ten hidden graders calibrated (each fails before the fix and
-passes with the gold patch), all forty attempts ran, and all forty patches were
-graded. Every attempt then ended in `agent_unavailable`, because the
-environment had no `OPENAI_API_KEY` and no `AI_GATEWAY_API_KEY`. Verified fixes
-were 0/10 in every condition and every token counter was zero.
+| Condition | Verified Fixes | Coding Input | Uncached | Cached | Output | Total Coding | Raw Tool Output | Injected Tool Output | Tokens Removed | Agent Turns | Tool Calls | Compaction Events | Tasks Compacted | Recoveries | Jev Input | Jev Output | Jev Cost | Wall Clock |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 5 | 463,023 | 55,593 | 407,430 | 17,974 | 480,997 | 44,533 | 44,533 | 0 | 135 | 126 | 0 | 0 | 0 | 0 | 0 | 0 | 403.3 s |
+| Live Pruning | 5 | 447,362 | 61,704 | 385,658 | 16,283 | 463,645 | 55,279 | 53,798 | 1,481 | 120 | 110 | 0 | 0 | 0 | 22,079 | 799 | 0 | 327.6 s |
+| Compaction Only | 7 | 476,918 | 53,818 | 423,100 | 17,177 | 494,095 | 56,801 | 56,801 | 0 | 117 | 107 | 0 | 0 | 0 | 0 | 0 | 0 | 390.1 s |
+| Full ContextLens | 5 | 479,354 | 61,744 | 417,610 | 19,207 | 498,561 | 53,426 | 52,743 | 683 | 127 | 117 | 0 | 0 | 0 | 19,105 | 512 | 0 | 353.1 s |
 
-The blocked run is saved as
-[`benchmarks/results/four-condition-2026-09-21-blocked.md`](benchmarks/results/four-condition-2026-09-21-blocked.md)
-so the failure is on the record. **No number in it means anything about
-ContextLens, and nothing has been invented to stand in for the missing
-measurement.** Re-running the command below with both keys set produces the
-real tables.
+| Metric vs Baseline | Live Pruning | Compaction Only | Full ContextLens |
+| --- | ---: | ---: | ---: |
+| Verified fixes | +0 | +2 | +0 |
+| Coding-model input tokens | -15,661 (-3.4%) | +13,895 (+3.0%) | +16,331 (+3.5%) |
+| Uncached coding-model input | +6,111 (+11.0%) | -1,775 (-3.2%) | +6,151 (+11.1%) |
+| Cached coding-model input | -21,772 (-5.3%) | +15,670 (+3.8%) | +10,180 (+2.5%) |
+| Output tokens | -1,691 (-9.4%) | -797 (-4.4%) | +1,233 (+6.9%) |
+| Total coding-model tokens | -17,352 (-3.6%) | +13,098 (+2.7%) | +17,564 (+3.7%) |
+| Raw tool output | +10,746 (+24.1%) | +12,268 (+27.5%) | +8,893 (+20.0%) |
+| Injected tool output | +9,265 (+20.8%) | +12,268 (+27.5%) | +8,210 (+18.4%) |
+| Agent turns | -15 (-11.1%) | -18 (-13.3%) | -8 (-5.9%) |
+| Tool calls | -16 (-12.7%) | -19 (-15.1%) | -9 (-7.1%) |
+| Wall clock | -75.7 s (-18.8%) | -13.2 s (-3.3%) | -50.2 s (-12.4%) |
 
-One thing the blocked run cannot tell us and the design can: compaction only
-fires once a transcript passes its default 20,000-token trigger, which was not
-lowered. On the September run the baseline agent injected about 4,700 tool-output
-tokens per task across 20 turns, so compaction may fire on few tasks or none.
-How many tasks actually trigger it is reported as `Tasks Compacted`, and a run
-where that column is zero would mean the compaction layer was never exercised.
+| Task | Base | Live | Compact | Full | Base Input | Live Input | Compact Input | Full Input |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
+| aws-powertools-eventbridge-replay | ✅ | ❌ | ✅ | ❌ | 26,084 | 57,670 | 77,805 | 52,262 |
+| aws-powertools-query-merge | ❌ | ❌ | ❌ | ❌ | 82,705 | 58,357 | 41,511 | 98,385 |
+| click-empty-default | ❌ | ❌ | ❌ | ❌ | 40,411 | 34,185 | 40,033 | 34,293 |
+| click-short-help | ❌ | ❌ | ❌ | ❌ | 19,518 | 31,285 | 24,670 | 35,513 |
+| pallets-flask-trusted-hosts | ❌ | ✅ | ✅ | ✅ | 80,186 | 88,309 | 96,772 | 69,388 |
+| python-babel-parse-time | ✅ | ✅ | ✅ | ✅ | 42,228 | 28,888 | 27,450 | 23,725 |
+| responses-blank-query | ✅ | ✅ | ✅ | ✅ | 22,653 | 29,837 | 16,977 | 21,893 |
+| responses-query-mutation | ✅ | ❌ | ✅ | ✅ | 19,953 | 17,913 | 28,659 | 32,162 |
+| spotify-luigi-bool-default | ✅ | ✅ | ✅ | ✅ | 47,921 | 42,532 | 42,302 | 32,301 |
+| spotify-luigi-run-arguments | ❌ | ✅ | ✅ | ❌ | 81,364 | 58,386 | 80,739 | 79,432 |
+
+Regressions, where baseline fixed a task and a ContextLens condition did not:
+
+- **Live Pruning** — 2: `aws-powertools-eventbridge-replay`,
+  `responses-query-mutation`. Newly fixed: `pallets-flask-trusted-hosts`,
+  `spotify-luigi-run-arguments`.
+- **Compaction Only** — none. Newly fixed: `pallets-flask-trusted-hosts`,
+  `spotify-luigi-run-arguments`.
+- **Full ContextLens** — 1: `aws-powertools-eventbridge-replay`. Newly fixed:
+  `pallets-flask-trusted-hosts`.
+
+Full report:
+[`benchmarks/results/four-condition-2026-09-21.md`](benchmarks/results/four-condition-2026-09-21.md).
+
+### Earlier run, previous architecture
+
+The 21 September run that retired AST structural expansion measured Baseline
+**583,459** coding-model input tokens and 5/10 fixes, Jev filtering alone
+**379,716** and 7/10, and Jev filtering plus AST expansion **1,105,615** and
+5/10. That filtering condition used a lower minimum-size threshold and removed
+**21,356** tool-output tokens, which is why it showed a large input reduction the
+run above does not reproduce. Full report:
+[`docs/history/coding-agent-2026-09-21.md`](docs/history/coding-agent-2026-09-21.md).
 
 ### Offline harness check
 
@@ -204,34 +203,59 @@ deliberately lowered because the scripted transcript is tiny. Raw rows:
 
 ## What the numbers mean
 
-- **Jev filtering alone used 203,743 fewer coding-model input tokens (-34.9%)**
-  than baseline, with two more verified fixes and two fewer agent turns.
-  Injected tool output fell from 46,950 to 26,920. That condition is the direct
-  ancestor of today's live-pruning layer, and it is why live pruning is the
-  default.
-- **AST structural expansion used 522,156 more coding-model input tokens
-  (+89.5%)** and fixed two fewer tasks than Jev filtering. Two trajectories
-  dominate: `click-short-help` reached 490,067 coding-model input tokens against
-  a 27,291 baseline, and `spotify-luigi-run-arguments` reached 264,521. It
-  still pruned its own raw output (138,931 to 119,054 tokens); the agent simply
-  fetched far more. It has been removed from the default path and now lives in
+The honest reading of the four-condition run: **at their default thresholds,
+neither layer engaged enough on these tasks to move the coding model's token
+count, so this run does not show ContextLens reducing context.** It also does
+not show it costing fixes. Both layers were effectively idle.
+
+- **Transcript compaction never fired.** Zero events across all 20 attempts in
+  the two compaction conditions. The largest transcript in the whole run reached
+  **14,022** estimated tokens against the production trigger of **20,000**, with
+  a median around **5,600**. Twenty turns on a single-file bug fix simply does
+  not produce a long transcript. The threshold was not lowered to force it.
+- **Therefore `compaction_only` was mechanically identical to `baseline`** — same
+  raw tool output, no pruning, no compaction — and it still scored **7/10 against
+  baseline's 5/10**, differing by **+3.0%** coding-model input. That is the most
+  useful number in the run: it measures the noise floor of this suite directly.
+  A ±2 fix swing and a ±3% token swing here mean nothing. Read every other
+  comparison against that.
+- **Live pruning barely fired.** It requested Jev on 3 of 10 tasks (4 requests
+  total) and removed **1,481 of 55,279** raw tool-output tokens, **2.7%**. The
+  cause is mechanical: the average tool result was about **500 tokens** against
+  the **1,500-token** minimum-size gate, so almost nothing was eligible. Its
+  -3.4% coding-model input is inside the noise floor above, not a saving.
+- **Injected tool output rose in every candidate condition** (+18% to +28%).
+  ContextLens cannot add text, and it removed tokens where it ran. Those agents
+  simply took different, longer tool sequences — visible in raw tool output
+  rising by a nearly identical amount. This is trajectory variance.
+- **Jev is cheap and separate.** 22,079 input / 799 output tokens for live
+  pruning, 19,105 / 512 for full ContextLens, gateway-reported cost 0, and never
+  added to coding-model input in any table.
+- **No recovery was ever needed.** 0 recovery calls in every condition, so the
+  pruning that did happen never removed something the agent had to ask for back.
+- **Wall clock fell in every candidate condition** (-3% to -19%), tracking the
+  lower turn and tool-call counts rather than anything ContextLens did.
+- The earlier run's **-34.9%** input reduction came from a filtering condition
+  with a lower size gate that removed **21,356** tool-output tokens, 14× more
+  than live pruning removed here. The reduction was real; the current default
+  threshold is what prevents reproducing it.
+- **AST structural expansion** remains retired: **+522,156** input tokens
+  (+89.5%) against baseline, driven by two runaway trajectories
+  (`click-short-help` 490,067, `spotify-luigi-run-arguments` 264,521). See
   [`experiments/structural_expansion/`](experiments/structural_expansion/).
-- **Jev spend is separate.** 136,505 input / 24,232 output tokens for Jev
-  filtering, 124,519 / 21,914 with AST expansion, at a gateway-reported cost of
-  0. Jev tokens are never added to coding-model input, in any table.
 - **A `context_next` loop** in which Jev chose the agent's next capability kept
-  2/3 verified fixes, timed out once, and used 156.21% more complete input on
-  finished pairs. Deciding for the agent cost input and turns, which is why Jev
-  only decides relevance.
-- The 21 September run is **one trial of ten tasks**. It is evidence about
-  direction, not a statistical quality claim, and it does not measure the
-  compaction layer at all.
-- **The main question is still open.** Whether ContextLens preserves verified
-  fixes while making the coding model process materially fewer tokens has been
-  answered only for the live-pruning ancestor (yes, on one trial: -34.9% input,
-  +2 fixes). Transcript compaction has never been measured against a real
-  coding model, and the four-condition comparison that would settle it has not
-  produced data.
+  2/3 verified fixes, timed out once, and used 156.21% more complete input.
+  Deciding for the agent cost input and turns, which is why Jev only decides
+  relevance.
+
+**Answer to the main question, as measured:** on ten single-file Python bug
+fixes at 20 turns, ContextLens neither reduced the tokens the coding model
+processed nor cost verified fixes, because its triggers are set for workloads
+with far more tool output and far longer transcripts than these tasks produce.
+The next step is not to tune thresholds until the table looks better — it is to
+measure on a workload that actually generates large tool outputs and long
+sessions, and to report threshold sensitivity as its own labelled experiment.
+One trial of ten tasks is not a statistical claim in either direction.
 
 ## Run it
 
