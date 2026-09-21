@@ -3,8 +3,10 @@
 <p align="center"><b>Give coding agents less to read.</b><br>
 JevSweep uses Jev to remove low-value tool output before it reaches the coding model, while keeping every removed result exactly recoverable.</p>
 
+
 <p align="center">
-<img width="404" height="377" alt="image" src="https://github.com/user-attachments/assets/0f20612e-3b83-4090-a2c3-9e69d9dc4408" />
+<img width="1672" height="941" alt="image" src="https://github.com/user-attachments/assets/45246829-5aba-49a4-b08a-7da80992b48c" />
+
 </p>
 
 ## How it works
@@ -17,28 +19,6 @@ JevSweep uses Jev to remove low-value tool output before it reaches the coding m
 
 4. **Prune.** Low-value chunks are removed before the coding model sees them. Each removed section points back to a receipt containing the exact original text.
 
-```text
-coding agent
-     |
-     v
-  tool call
-     |
-     v
- raw result ---------> receipt
-     |
-     v
- protect + chunk
-     |
-     v
-     Jev
- KEEP / DROP
-     |
-     v
-smaller result
-     |
-     v
- coding model
-```
 
 JevSweep also includes transcript compaction for longer sessions. Old tool calls can be kept, shortened, or removed based on whether they still matter.
 
