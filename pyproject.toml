@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "contextlens"
 version = "0.1.0"
-description = "Help coding agents find the repository code they need for a task"
+description = "Transparent context-reduction layer for coding agents"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }

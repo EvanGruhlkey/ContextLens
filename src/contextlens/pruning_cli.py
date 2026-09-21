@@ -25,7 +25,7 @@ from contextlens.pruning import (
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="contextlens",
-        description="Jev-powered repository context selection through Vercel Gateway",
+        description="Transparent context reduction for coding-agent tool results",
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -80,7 +80,11 @@ def build_parser() -> argparse.ArgumentParser:
     mcp.add_argument("--root", type=Path, default=Path.cwd())
     mcp.add_argument("--state", type=Path, default=Path(".contextlens"))
     mcp.add_argument("--encoding", default="o200k_base")
-    mcp.add_argument("--profile", choices=("jev", "compact", "legacy"), default="jev")
+    mcp.add_argument(
+        "--profile",
+        choices=("filter", "compact", "jev", "controller", "legacy"),
+        default="filter",
+    )
     mcp.add_argument("--backend", choices=("none", "local", "http"), default="none")
     mcp.add_argument("--backend-url", default="http://127.0.0.1:8000/prune")
     mcp.add_argument("--model", default=DEFAULT_SWE_PRUNER_MODEL)
@@ -144,6 +148,27 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path(".contextlens/receipts"),
     )
+
+    filter_cmd = commands.add_parser(
+        "filter", help="filter one tool observation before the coding model"
+    )
+    filter_cmd.add_argument("--task", required=True)
+    filter_cmd.add_argument("--focus", default="")
+    filter_cmd.add_argument(
+        "--input", type=Path, help="observation path; stdin when omitted"
+    )
+    filter_cmd.add_argument("--kind", default="")
+    filter_cmd.add_argument("--tool", default="tool")
+    filter_cmd.add_argument("--path")
+    filter_cmd.add_argument("--symbol")
+    filter_cmd.add_argument("--start-line", type=int)
+    filter_cmd.add_argument("--end-line", type=int)
+    filter_cmd.add_argument(
+        "--receipts",
+        type=Path,
+        default=Path(".contextlens/receipts"),
+    )
+    filter_cmd.add_argument("--json", action="store_true")
 
     serve = commands.add_parser("serve", help="run the local pruning service")
     serve.add_argument("--host", default="127.0.0.1")
@@ -222,23 +247,27 @@ def main(
             print(context.call(operation, payload))
             return 0
         if arguments.command == "mcp":
-            if arguments.profile in {"jev", "compact"}:
+            if arguments.profile in {"filter", "jev", "controller", "compact"}:
                 from contextlens.context_mcp import serve_stdio as serve_context
                 from contextlens.context_tools import RepositoryContext
+                from contextlens.filter_context import FilterContext
                 from contextlens.jev_context import JevRepositoryContext
 
                 if arguments.backend != "none":
                     raise ValueError("neural backends require --profile legacy")
-                context_type = (
-                    JevRepositoryContext
-                    if arguments.profile == "jev"
-                    else RepositoryContext
-                )
-                serve_context(
-                    context_type(
+                if arguments.profile == "filter":
+                    session: RepositoryContext = FilterContext(
                         arguments.root, arguments.state, encoding=arguments.encoding
                     )
-                )
+                elif arguments.profile in {"jev", "controller"}:
+                    session = JevRepositoryContext(
+                        arguments.root, arguments.state, encoding=arguments.encoding
+                    )
+                else:
+                    session = RepositoryContext(
+                        arguments.root, arguments.state, encoding=arguments.encoding
+                    )
+                serve_context(session)
                 return 0
             from contextlens.evidence_mcp import serve_stdio
             from contextlens.evidence_session import EvidenceSession
@@ -286,6 +315,8 @@ def main(
             return 0
         if arguments.command == "prune":
             return _prune(arguments, scorer)
+        if arguments.command == "filter":
+            return _filter_observation(arguments)
         if arguments.command == "recover":
             return _recover(arguments)
         from contextlens.pruning.server import serve
@@ -331,6 +362,61 @@ def _prune(arguments: argparse.Namespace, scorer: SemanticScorer | None) -> int:
     ).prune(request)
     if arguments.json:
         print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+    else:
+        print(result.text)
+    return 0
+
+
+def _filter_observation(arguments: argparse.Namespace) -> int:
+    from contextlens.filtering import FilterConfig, FilterRequest, ObservationFilter
+    from contextlens.jev_gateway import JevGateway
+    from contextlens.pruning.model import ObservationKind
+
+    content = (
+        arguments.input.read_text(encoding="utf-8")
+        if arguments.input is not None
+        else sys.stdin.read()
+    )
+    kind = ObservationKind(arguments.kind) if arguments.kind else None
+    result = ObservationFilter(
+        ReceiptStore(arguments.receipts),
+        judge=JevGateway(),
+        config=FilterConfig.from_env(),
+    ).filter(
+        FilterRequest(
+            task=arguments.task,
+            content=content,
+            focus=arguments.focus,
+            tool=arguments.tool,
+            arguments={"path": arguments.path} if arguments.path else {},
+            kind=kind,
+            path=arguments.path,
+            start_line=arguments.start_line,
+            end_line=arguments.end_line,
+            known_symbol=arguments.symbol,
+        )
+    )
+    if arguments.json:
+        print(
+            json.dumps(
+                {
+                    "text": result.text,
+                    "receipt_id": result.receipt_id,
+                    "kind": result.kind.value,
+                    "original_tokens": result.original_tokens,
+                    "retained_tokens": result.retained_tokens,
+                    "bypass_reason": result.bypass_reason,
+                    "backend": result.backend,
+                    "jev_input_tokens": result.jev_input_tokens,
+                    "jev_output_tokens": result.jev_output_tokens,
+                    "jev_cost": result.jev_cost,
+                    "latency_ms": result.latency_ms,
+                    "recovery_hint": result.recovery_hint,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
     else:
         print(result.text)
     return 0

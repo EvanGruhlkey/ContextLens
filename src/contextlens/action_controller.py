@@ -1,4 +1,7 @@
-"""Jev chooses one bounded next action without executing it."""
+"""Experimental controller: Jev chooses one bounded next action without executing it.
+
+This is not the default product. Serve it with ``contextlens mcp --profile controller``.
+"""
 
 from __future__ import annotations
 

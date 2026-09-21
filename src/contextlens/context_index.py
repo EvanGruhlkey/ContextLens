@@ -321,6 +321,40 @@ def _javascript_units(
     return units, support
 
 
+def split_source_units(path: str, source: str) -> list[Unit]:
+    """Split a single file into functions, methods, classes, constants, and imports."""
+    from contextlens.evidence_index import parse_units
+
+    suffix = Path(path).suffix.lower()
+    collected: dict[str, Unit] = {}
+    try:
+        if suffix in {"", ".py"}:
+            nested, _headers = _python_units(
+                path if suffix == ".py" else f"{path}.py", source
+            )
+        elif suffix in {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}:
+            nested, _headers = _javascript_units(path, source)
+        else:
+            nested = []
+    except SyntaxError:
+        nested = []
+    try:
+        indexed_path = path if suffix else f"{path}.py"
+        top_level = parse_units(indexed_path, source)
+    except (SyntaxError, ValueError):
+        top_level = []
+    for unit in [*top_level, *nested]:
+        collected[unit.key] = replace(unit, path=path)
+    if collected:
+        return list(collected.values())
+    lines = source.splitlines()
+    if not lines:
+        return []
+    return [
+        Unit(path, 1, len(lines), source, [], [], [], "text", True),
+    ]
+
+
 def discover_candidates(
     root: Path, state: Path, query: str, focus: str = "", *, limit: int | None = None
 ) -> list[Candidate]:

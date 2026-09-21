@@ -30,9 +30,9 @@ def message(method, **params):
     return {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
 
 
-def test_default_cli_profile_uses_jev():
+def test_default_cli_profile_uses_filter():
     args = build_parser().parse_args(["mcp"])
-    assert args.profile == "jev"
+    assert args.profile == "filter"
     assert args.encoding == "o200k_base"
 
 

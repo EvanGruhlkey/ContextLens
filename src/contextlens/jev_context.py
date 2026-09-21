@@ -82,6 +82,7 @@ class JevRepositoryContext(RepositoryContext):
     selection_enabled = True
     action_enabled = True
     working_set_enabled = True
+    mcp_profile = "jev"
 
     def __init__(
         self,

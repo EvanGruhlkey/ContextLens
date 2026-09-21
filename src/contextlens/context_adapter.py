@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Protocol
 
+from contextlens.filtering import FilterSession
 from contextlens.pruning.model import PruneRequest
 from contextlens.pruning.receipts import ReceiptStore
 from contextlens.pruning.runtime import PruningSession, ToolObservation
@@ -52,6 +53,7 @@ class Solver(Protocol):
 class HostTool:
     execute: Callable[[Mapping[str, Any]], str]
     prune: bool = False
+    filter_output: bool = False
 
 
 @dataclass(frozen=True)
@@ -87,16 +89,31 @@ class ContextAdapter:
         receipts: ReceiptStore,
         *,
         session: PruningSession | None = None,
+        filter_session: FilterSession | None = None,
         tools: Mapping[str, HostTool] | None = None,
     ) -> None:
         self.repository = repository
         self.receipts = receipts
         self.session = session
+        self.filter_session = filter_session
         self.tools = dict(tools or {})
-        if set(self.tools) & {"select", "find", "read", "expand"}:
+        reserved = {
+            "select",
+            "find",
+            "read",
+            "expand",
+            "filter",
+            "recover",
+            "pin",
+            "list",
+        }
+        if set(self.tools) & reserved:
             raise ValueError("repository operation names are reserved")
-        if session is None and any(tool.prune for tool in self.tools.values()):
-            raise ValueError("pruned host tools require a PruningSession")
+        needs_transform = any(
+            tool.prune or tool.filter_output for tool in self.tools.values()
+        )
+        if needs_transform and session is None and filter_session is None:
+            raise ValueError("filtered host tools require a FilterSession")
         self.history: list[Message] = []
         self.audit: list[ObservationAudit] = []
 
@@ -155,25 +172,41 @@ class ContextAdapter:
     def _execute(self, name: str, arguments: Mapping[str, Any]) -> str:
         receipt_id = None
         try:
-            if name in {"select", "find", "read", "expand"}:
+            if name in {
+                "select",
+                "find",
+                "read",
+                "expand",
+                "filter",
+                "recover",
+                "pin",
+                "list",
+            }:
                 raw = self.repository.call(name, arguments)
-                prune = False
+                transform = False
             else:
                 tool = self.tools.get(name)
                 if tool is None:
                     self.audit.append(ObservationAudit(name, None, "unknown_tool"))
                     return "Tool unavailable. Choose a registered tool."
                 raw = tool.execute(arguments)
-                prune = tool.prune
+                transform = tool.prune or tool.filter_output
             if not isinstance(raw, str):
                 raise TypeError("tool output must be text")
             receipt_id = self.receipts.save(
                 PruneRequest(content=raw, task="audit", tool=name)
             ).receipt_id
             text = raw
-            if prune:
-                assert self.session is not None
-                text = self.session.observe(ToolObservation(raw, name, arguments)).text
+            if transform:
+                if self.filter_session is not None:
+                    text = self.filter_session.observe(
+                        ToolObservation(raw, name, arguments)
+                    ).text
+                else:
+                    assert self.session is not None
+                    text = self.session.observe(
+                        ToolObservation(raw, name, arguments)
+                    ).text
             self.audit.append(ObservationAudit(name, receipt_id))
             return text
         except Exception as error:

@@ -98,7 +98,7 @@ def test_errors_and_turn_limit_are_bounded(tmp_path: Path) -> None:
         adapter.run(lambda messages: ToolCall("unknown"), "fix", max_turns=2)
     assert len(adapter.audit) == 2
     assert all(record.error == "unknown_tool" for record in adapter.audit)
-    with pytest.raises(ValueError, match="PruningSession"):
+    with pytest.raises(ValueError, match="FilterSession"):
         ContextAdapter(
             Repository(),
             ReceiptStore(tmp_path),
