@@ -102,55 +102,59 @@ Jev tokens and cost are reported separately and are never added to coding-model
 input. `benchmarks.filter_eval` remains a component regression for the filter
 pipeline; it is not this coding-agent result.
 
-Checked-in 21 September 2026 run: hidden graders calibrated **10/10** (buggy
-checkout fails, gold patch passes). The host agent then completed all **30**
-paired attempts on `gpt-5.6-luna` (`reasoning.effort=low`, 20 turns, 300s).
-There was no `AI_GATEWAY_API_KEY`, so Jev never scored. Jev Filter and
-ContextLens **failed open** (passthrough). Tool-output tokens removed are
-**0** on every attempt. The tables are a real coding-agent result. They are
-**not** a measurement of ContextLens context reduction.
+Checked-in 21 September 2026 Jev-enabled run: hidden graders calibrated
+**10/10**. The host agent completed all **30** paired attempts on
+`gpt-5.6-luna` (`reasoning.effort=low`, 20 turns, 300s). Jev scored through
+the Vercel AI Gateway. Coding-model calls stayed on OpenAI. Tool-output tokens
+removed are **21,356** (Jev Filter) and **19,877** (ContextLens). Jev tokens
+are separate: **136,505** / **124,519** input.
 
 | Condition   | Verified Fixes | Coding Input Tokens | Uncached Input | Cached Input | Output Tokens | Total Coding Tokens | Raw Tool Output | Injected Tool Output | Tokens Removed | Agent Turns | Recoveries | Jev Input |
 | ----------- | -------------: | ------------------: | -------------: | -----------: | ------------: | ------------------: | --------------: | -------------------: | -------------: | ----------: | ---------: | --------: |
-| Baseline    |              6 |             468,766 |         64,773 |      403,993 |        14,631 |             483,397 |          40,751 |               40,751 |              0 |         125 |          0 |         0 |
-| Jev Filter  |              5 |             452,790 |         62,653 |      390,137 |        14,967 |             467,757 |          38,036 |               38,573 |              0 |         119 |          0 |         0 |
-| ContextLens |              5 |             489,836 |         63,405 |      426,431 |        16,234 |             506,070 |          39,555 |               39,980 |              0 |         128 |          0 |         0 |
+| Baseline    |              5 |             583,459 |         67,718 |      515,741 |        14,975 |             598,434 |          46,950 |               46,950 |              0 |         136 |          0 |         0 |
+| Jev Filter  |              7 |             379,716 |         57,359 |      322,357 |        16,137 |             395,853 |          48,276 |               26,920 |         21,356 |         134 |          0 |   136,505 |
+| ContextLens |              5 |           1,105,615 |        151,696 |      953,919 |        14,989 |           1,120,604 |         138,931 |              119,054 |         19,877 |         141 |          0 |   124,519 |
 
 | Metric                      | Jev Filter vs Baseline | ContextLens vs Baseline |
 | --------------------------- | ---------------------: | ----------------------: |
-| Coding-model input tokens   |         -15,976 (-3.4%) |          +21,070 (+4.5%) |
-| Uncached coding-model input |          -2,120 (-3.3%) |           -1,368 (-2.1%) |
-| Injected tool output        |          -2,178 (-5.3%) |             -771 (-1.9%) |
-| Agent turns                 |              -6 (-4.8%) |               +3 (+2.4%) |
-| Verified fixes              |                      -1 |                       -1 |
+| Coding-model input tokens   |       -203,743 (-34.9%) |        +522,156 (+89.5%) |
+| Uncached coding-model input |        -10,359 (-15.3%) |         +83,978 (+124.0%) |
+| Injected tool output        |        -20,030 (-42.7%) |         +72,104 (+153.6%) |
+| Agent turns                 |              -2 (-1.5%) |               +5 (+3.7%) |
+| Verified fixes              |                      +2 |                       +0 |
 
-| Task                                | Baseline Pass | ContextLens Pass | Baseline Input | ContextLens Input | Tokens Saved | Input Change |
-| ----------------------------------- | ------------- | ---------------- | -------------: | ----------------: | -----------: | -----------: |
-| aws-powertools-eventbridge-replay   | ✅             | ✅                |         58,529 |            80,518 |      -21,989 |       -37.6% |
-| aws-powertools-query-merge          | ❌             | ❌                |         89,528 |            78,941 |       10,587 |       +11.8% |
-| click-empty-default                 | ❌             | ❌                |         53,261 |            48,392 |        4,869 |        +9.1% |
-| click-short-help                    | ❌             | ❌                |         25,816 |            36,642 |      -10,826 |       -41.9% |
-| pallets-flask-trusted-hosts         | ✅             | ❌                |         84,166 |            65,356 |       18,810 |       +22.3% |
-| python-babel-parse-time             | ✅             | ✅                |         28,745 |            33,419 |       -4,674 |       -16.3% |
-| responses-blank-query               | ✅             | ✅                |         24,635 |            28,882 |       -4,247 |       -17.2% |
-| responses-query-mutation            | ✅             | ✅                |         22,915 |            19,320 |        3,595 |       +15.7% |
-| spotify-luigi-bool-default          | ✅             | ✅                |         26,044 |            41,615 |      -15,571 |       -59.8% |
-| spotify-luigi-run-arguments         | ❌             | ❌                |         55,127 |            56,751 |       -1,624 |        -2.9% |
+| Task                                | Baseline | Jev Filter | ContextLens | Baseline Input | Jev Filter Input | ContextLens Input |
+| ----------------------------------- | -------- | ---------- | ----------- | -------------: | ---------------: | ----------------: |
+| aws-powertools-eventbridge-replay   | ✅        | ✅          | ✅           |         79,418 |           30,005 |            29,772 |
+| aws-powertools-query-merge          | ❌        | ❌          | ❌           |        125,593 |           80,315 |            79,077 |
+| click-empty-default                 | ❌        | ❌          | ❌           |         61,088 |           30,619 |            34,485 |
+| click-short-help                    | ❌        | ❌          | ❌           |         27,291 |           18,250 |           490,067 |
+| pallets-flask-trusted-hosts         | ❌        | ✅          | ❌           |         79,769 |           75,477 |            73,710 |
+| python-babel-parse-time             | ✅        | ✅          | ✅           |         37,987 |           28,294 |            40,720 |
+| responses-blank-query               | ✅        | ✅          | ✅           |         24,891 |           24,289 |            22,721 |
+| responses-query-mutation            | ✅        | ✅          | ✅           |         24,342 |           23,998 |            24,796 |
+| spotify-luigi-bool-default          | ✅        | ✅          | ✅           |         41,709 |           39,789 |            45,746 |
+| spotify-luigi-run-arguments         | ❌        | ✅          | ❌           |         81,371 |           28,680 |           264,521 |
 
-Verified fixes: Baseline **6/10**, Jev Filter **5/10**, ContextLens **5/10**.
-ContextLens used **21,070** more coding-model input tokens (+4.5%). Uncached
-coding-model input changed by **-1,368** (-2.1%). Injected tool-output tokens
-differed by **-771** (39,980 vs baseline 40,751); filtering removed **0**.
-Agent turns increased by **3** (+2.4%). Recoveries: **0** calls restoring **0**
-tokens. Jev usage (separate): **0** input / **0** output tokens, cost **0**.
-The Flask trusted-hosts miss on the filter-named conditions is another
-independent trajectory, not dropped evidence: Jev never ran. Do not treat
-these deltas as ContextLens savings or as a measured quality regression from
-filtering.
+Verified fixes: Baseline **5/10**, Jev Filter **7/10**, ContextLens **5/10**.
+Jev Filter used **203,743** fewer coding-model input tokens (-34.9%) and
+**2** fewer agent turns (-1.5%). Injected tool output fell from **46,950** to
+**26,920**. Jev Filter extra fixes were Flask trusted-hosts and Luigi run
+arguments; both still failed under ContextLens. This is one trial of ten
+tasks, not a statistical quality claim.
+
+ContextLens used **522,156** more coding-model input tokens (+89.5%). Two
+trajectories dominate that total: `click-short-help` ingested **65,113** raw
+tool-output tokens unreduced (**490,067** coding-model input vs **27,291**
+baseline), and `spotify-luigi-run-arguments` used **264,521** coding-model
+input after still dropping **11,593** tool tokens. ContextLens filtering
+removed **19,877** tokens from its own raw tool output (**138,931 → 119,054**),
+but the agent fetched much more raw output than baseline, so coding-model
+input rose. Recoveries: **0**. Jev cost recorded by the gateway: **0**.
 
 The component filter fixture is unchanged: injected tool-output tokens fell
 from **1,004** to **418** (58.37%), with Jev scored separately (**60** input /
-**12** output). That is not a coding-agent result.
+**12** output). That is not this coding-agent result.
 
 The live paired coding-agent gate remains:
 
@@ -162,9 +166,12 @@ AND
 agent turns do not materially increase
 ```
 
-This run does not pass that gate. Filter conditions were passthrough, so the
-input and turn deltas are coding-agent variance. Re-run with a Vercel AI
-Gateway key before treating Jev Filter or ContextLens as a filter result.
+On this single trial, **Jev Filter met those three numbers** (5/10 → 7/10,
+-34.9% coding-model input, -1.5% turns). **ContextLens did not**: success
+held at 5/10, coding-model input rose 89.5%, turns rose 3.7%. Do not treat
+the Jev Filter totals as a shipping gate without more trials, and do not
+average ContextLens with Jev Filter: full ContextLens is the product path
+with structural expansion, and it lost to the outliers above.
 
 ## Experimental / research
 

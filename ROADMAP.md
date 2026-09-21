@@ -33,11 +33,12 @@ The default product is the filter layer, not an action controller. Mandatory
 (2/3 verified fixes, 156.21% more complete input on finished pairs) and stays
 experimental (`--profile controller`).
 
-The coding-agent harness is the main evaluation. The 21 September 2026 run
-calibrated 10/10 hidden graders and completed 30/30 gpt-5.6-luna attempts.
-Verified fixes were Baseline 6/10, Jev Filter 5/10, ContextLens 5/10. Jev
-did not score, so filter conditions failed open. Token deltas are trajectory
-variance, not a savings result.
+The coding-agent harness is the main evaluation. The Jev-enabled 21 September
+2026 gpt-5.6-luna run completed 30/30 attempts. Verified fixes were Baseline
+5/10, Jev Filter 7/10, ContextLens 5/10. Jev Filter used 203,743 fewer
+coding-model input tokens and two fewer turns. ContextLens used 522,156 more
+coding-model input tokens after two large unreduced trajectories. That is one
+trial, not a shipping-gate claim.
 
 ## Next: live paired coding-agent gate
 
