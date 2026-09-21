@@ -1,6 +1,6 @@
 {
   "benchmark": "offline_harness_check",
-  "started_at": "2026-09-21T04:29:34.985539+00:00",
+  "started_at": "2026-09-21T05:17:14.342047+00:00",
   "model": "scripted-solver",
   "reasoning": "none",
   "trials": 1,
@@ -9,7 +9,8 @@
   "conditions": [
     "baseline",
     "live_pruning",
-    "live_and_compaction"
+    "compaction_only",
+    "full_contextlens"
   ],
   "note": "No coding model and no Jev gateway. A scripted solver replays one fixed tool sequence and a local heuristic answers the relevance questions. Coding-model token columns are zero because no coding model ran. This measures the ContextLens layers and the report, not task success or frontier-model savings.",
   "tasks": [
@@ -20,9 +21,10 @@
   "rows": [
     {
       "status": "completed",
-      "agent_seconds": 0.00798768899994684,
+      "agent_seconds": 0.011231450000195764,
       "agent_turns": 7,
       "tool_calls": 6,
+      "compaction_triggered": false,
       "raw_tool_output_tokens": 6587,
       "injected_tool_output_tokens": 6587,
       "tool_output_tokens_removed": 0,
@@ -50,9 +52,10 @@
     },
     {
       "status": "completed",
-      "agent_seconds": 0.029721905000087645,
+      "agent_seconds": 0.03379542299990135,
       "agent_turns": 7,
       "tool_calls": 6,
+      "compaction_triggered": false,
       "raw_tool_output_tokens": 6587,
       "injected_tool_output_tokens": 477,
       "tool_output_tokens_removed": 6110,
@@ -80,9 +83,41 @@
     },
     {
       "status": "completed",
-      "agent_seconds": 0.03222547600012149,
+      "agent_seconds": 0.021304892000443942,
       "agent_turns": 7,
       "tool_calls": 6,
+      "compaction_triggered": true,
+      "raw_tool_output_tokens": 6587,
+      "injected_tool_output_tokens": 6587,
+      "tool_output_tokens_removed": 0,
+      "tool_output_reduction_percent": 0.0,
+      "compaction_attempts": 5,
+      "compaction_events": 1,
+      "compaction_tokens_removed": 3275,
+      "final_transcript_tokens": 3478,
+      "recovery_calls": 0,
+      "recovered_tokens": 0,
+      "input_tokens": 0,
+      "cached_input_tokens": 0,
+      "uncached_input_tokens": 0,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "jev_requests": 4,
+      "jev_input_tokens": 0,
+      "jev_output_tokens": 0,
+      "jev_cost": "0.000000",
+      "case": "offline-parse-amount",
+      "trial": 0,
+      "condition": "compaction_only",
+      "verified_success": true,
+      "transcript_messages": 12
+    },
+    {
+      "status": "completed",
+      "agent_seconds": 0.03376747099991917,
+      "agent_turns": 7,
+      "tool_calls": 6,
+      "compaction_triggered": true,
       "raw_tool_output_tokens": 6587,
       "injected_tool_output_tokens": 477,
       "tool_output_tokens_removed": 6110,
@@ -104,7 +139,7 @@
       "jev_cost": "0.000000",
       "case": "offline-parse-amount",
       "trial": 0,
-      "condition": "live_and_compaction",
+      "condition": "full_contextlens",
       "verified_success": true,
       "transcript_messages": 10
     }
@@ -132,7 +167,9 @@
         "jev_requests": 0,
         "jev_input_tokens": 0,
         "jev_output_tokens": 0,
+        "tasks_with_compaction": 0,
         "jev_cost": "0.000000",
+        "wall_clock_seconds": 0.0,
         "median_agent_seconds": 0.0
       },
       "live_pruning": {
@@ -156,10 +193,38 @@
         "jev_requests": 2,
         "jev_input_tokens": 0,
         "jev_output_tokens": 0,
+        "tasks_with_compaction": 0,
         "jev_cost": "0.000000",
+        "wall_clock_seconds": 0.0,
         "median_agent_seconds": 0.0
       },
-      "live_and_compaction": {
+      "compaction_only": {
+        "attempts": 1,
+        "passed": 1,
+        "incomplete_or_invalid": 0,
+        "input_tokens": 0,
+        "uncached_input_tokens": 0,
+        "cached_input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "raw_tool_output_tokens": 6587,
+        "injected_tool_output_tokens": 6587,
+        "tool_output_tokens_removed": 0,
+        "agent_turns": 7,
+        "tool_calls": 6,
+        "compaction_events": 1,
+        "compaction_tokens_removed": 3275,
+        "recovery_calls": 0,
+        "recovered_tokens": 0,
+        "jev_requests": 4,
+        "jev_input_tokens": 0,
+        "jev_output_tokens": 0,
+        "tasks_with_compaction": 1,
+        "jev_cost": "0.000000",
+        "wall_clock_seconds": 0.0,
+        "median_agent_seconds": 0.0
+      },
+      "full_contextlens": {
         "attempts": 1,
         "passed": 1,
         "incomplete_or_invalid": 0,
@@ -180,7 +245,9 @@
         "jev_requests": 3,
         "jev_input_tokens": 0,
         "jev_output_tokens": 0,
+        "tasks_with_compaction": 1,
         "jev_cost": "0.000000",
+        "wall_clock_seconds": 0.0,
         "median_agent_seconds": 0.0
       }
     },
@@ -188,9 +255,14 @@
     "expected_pairs": 1,
     "complete": true,
     "all_agent_unavailable": false,
+    "any_agent_unavailable": false,
     "jev_never_scored": false,
     "deltas": {
       "live_pruning": {
+        "passed": {
+          "absolute": 0,
+          "percent": 0.0
+        },
         "input_tokens": {
           "absolute": 0,
           "percent": null
@@ -219,10 +291,6 @@
           "absolute": -6110,
           "percent": -92.8
         },
-        "tool_output_tokens_removed": {
-          "absolute": 6110,
-          "percent": null
-        },
         "agent_turns": {
           "absolute": 0,
           "percent": 0.0
@@ -231,40 +299,62 @@
           "absolute": 0,
           "percent": 0.0
         },
-        "compaction_events": {
-          "absolute": 0,
+        "wall_clock_seconds": {
+          "absolute": 0.0,
           "percent": null
-        },
-        "compaction_tokens_removed": {
-          "absolute": 0,
-          "percent": null
-        },
-        "recovery_calls": {
-          "absolute": 0,
-          "percent": null
-        },
-        "recovered_tokens": {
-          "absolute": 0,
-          "percent": null
-        },
-        "jev_requests": {
-          "absolute": 2,
-          "percent": null
-        },
-        "jev_input_tokens": {
-          "absolute": 0,
-          "percent": null
-        },
-        "jev_output_tokens": {
-          "absolute": 0,
-          "percent": null
-        },
-        "passed": {
-          "absolute": 0,
-          "percent": 0.0
         }
       },
-      "live_and_compaction": {
+      "compaction_only": {
+        "passed": {
+          "absolute": 0,
+          "percent": 0.0
+        },
+        "input_tokens": {
+          "absolute": 0,
+          "percent": null
+        },
+        "uncached_input_tokens": {
+          "absolute": 0,
+          "percent": null
+        },
+        "cached_input_tokens": {
+          "absolute": 0,
+          "percent": null
+        },
+        "output_tokens": {
+          "absolute": 0,
+          "percent": null
+        },
+        "total_tokens": {
+          "absolute": 0,
+          "percent": null
+        },
+        "raw_tool_output_tokens": {
+          "absolute": 0,
+          "percent": 0.0
+        },
+        "injected_tool_output_tokens": {
+          "absolute": 0,
+          "percent": 0.0
+        },
+        "agent_turns": {
+          "absolute": 0,
+          "percent": 0.0
+        },
+        "tool_calls": {
+          "absolute": 0,
+          "percent": 0.0
+        },
+        "wall_clock_seconds": {
+          "absolute": 0.0,
+          "percent": null
+        }
+      },
+      "full_contextlens": {
+        "passed": {
+          "absolute": 0,
+          "percent": 0.0
+        },
         "input_tokens": {
           "absolute": 0,
           "percent": null
@@ -293,10 +383,6 @@
           "absolute": -6110,
           "percent": -92.8
         },
-        "tool_output_tokens_removed": {
-          "absolute": 6110,
-          "percent": null
-        },
         "agent_turns": {
           "absolute": 0,
           "percent": 0.0
@@ -305,43 +391,21 @@
           "absolute": 0,
           "percent": 0.0
         },
-        "compaction_events": {
-          "absolute": 1,
+        "wall_clock_seconds": {
+          "absolute": 0.0,
           "percent": null
-        },
-        "compaction_tokens_removed": {
-          "absolute": 250,
-          "percent": null
-        },
-        "recovery_calls": {
-          "absolute": 0,
-          "percent": null
-        },
-        "recovered_tokens": {
-          "absolute": 0,
-          "percent": null
-        },
-        "jev_requests": {
-          "absolute": 3,
-          "percent": null
-        },
-        "jev_input_tokens": {
-          "absolute": 0,
-          "percent": null
-        },
-        "jev_output_tokens": {
-          "absolute": 0,
-          "percent": null
-        },
-        "passed": {
-          "absolute": 0,
-          "percent": 0.0
         }
       }
     },
     "quality_regressions": {
       "live_pruning": [],
-      "live_and_compaction": []
+      "compaction_only": [],
+      "full_contextlens": []
+    },
+    "quality_gains": {
+      "live_pruning": [],
+      "compaction_only": [],
+      "full_contextlens": []
     },
     "tasks": [
       {
@@ -349,16 +413,29 @@
         "baseline": {
           "passed": true,
           "input_tokens": 0,
+          "injected_tool_output_tokens": 6587,
+          "compaction_triggered": false,
           "status": "completed"
         },
         "live_pruning": {
           "passed": true,
           "input_tokens": 0,
+          "injected_tool_output_tokens": 477,
+          "compaction_triggered": false,
           "status": "completed"
         },
-        "live_and_compaction": {
+        "compaction_only": {
           "passed": true,
           "input_tokens": 0,
+          "injected_tool_output_tokens": 6587,
+          "compaction_triggered": true,
+          "status": "completed"
+        },
+        "full_contextlens": {
+          "passed": true,
+          "input_tokens": 0,
+          "injected_tool_output_tokens": 477,
+          "compaction_triggered": true,
           "status": "completed"
         }
       }

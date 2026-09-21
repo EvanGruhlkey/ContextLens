@@ -1,12 +1,14 @@
 """Host-owned coding agent with transparent ContextLens layers.
 
 Every condition gets the same task text, tool set, model, reasoning effort,
-timeout, and turn limit. The agent is never told that ContextLens exists:
+timeout, turn limit, and hidden grader. The agent is never told that
+ContextLens exists:
 
-    baseline             raw tool output, transcript grows untouched
-    live_pruning         large tool results pruned before the model reads them
-    live_and_compaction  live pruning, plus stale tool interactions compacted
-                         out of the transcript once it grows past a threshold
+    baseline          raw tool output, transcript grows untouched
+    live_pruning      large tool results pruned before the model reads them
+    compaction_only   raw tool output, but stale tool interactions compacted
+                      out of the transcript once it passes the threshold
+    full_contextlens  both layers
 """
 
 from __future__ import annotations
@@ -34,7 +36,9 @@ from contextlens.models import (
 )
 from contextlens.receipts import ReceiptStore
 
-CONDITIONS = ("baseline", "live_pruning", "live_and_compaction")
+CONDITIONS = ("baseline", "live_pruning", "compaction_only", "full_contextlens")
+LIVE_PRUNING_CONDITIONS = frozenset({"live_pruning", "full_contextlens"})
+COMPACTION_CONDITIONS = frozenset({"compaction_only", "full_contextlens"})
 DEFAULT_MAX_TURNS = 20
 DEFAULT_COMMAND_TIMEOUT = 30
 MAX_TOOL_OUTPUT_CHARS = 400_000
@@ -153,6 +157,7 @@ class RunMetrics:
             "agent_seconds": self.agent_seconds,
             "agent_turns": self.agent_turns,
             "tool_calls": self.tool_calls,
+            "compaction_triggered": self.compaction_events > 0,
             "raw_tool_output_tokens": self.raw_tool_output_tokens,
             "injected_tool_output_tokens": self.injected_tool_output_tokens,
             "tool_output_tokens_removed": removed,
@@ -290,7 +295,7 @@ def run_agent(
     metrics = RunMetrics()
     usage: dict[str, int] = {}
     session: PruneSession | None = None
-    if condition != "baseline":
+    if condition in LIVE_PRUNING_CONDITIONS:
         session = PruneSession(
             receipts,
             task=task,
@@ -299,7 +304,7 @@ def run_agent(
         )
     compactor = (
         compaction_config or CompactionConfig()
-        if condition == "live_and_compaction"
+        if condition in COMPACTION_CONDITIONS
         else None
     )
     tools = workspace_tools(workspace)

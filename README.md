@@ -149,14 +149,38 @@ Jev scored through the Vercel AI Gateway; coding-model calls stayed on OpenAI.
 Full report:
 [`docs/history/coding-agent-2026-09-21.md`](docs/history/coding-agent-2026-09-21.md).
 
-### The three-condition run for this architecture has not happened yet
+### The four-condition run for this architecture is blocked, not skipped
 
-The rebuilt benchmark compares baseline, live pruning, and live pruning plus
-compaction. Running it needs an `OPENAI_API_KEY` and an `AI_GATEWAY_API_KEY`,
-which the environment this refactor was done in did not have. **No number in
-this README was produced by the new three-condition benchmark**, and none has
-been invented to stand in for one. The command is below; the report it writes
-replaces this section.
+The current benchmark compares four conditions on the same ten frozen tasks:
+
+| Condition | Live pruning | Transcript compaction |
+| --- | --- | --- |
+| `baseline` | no | no |
+| `live_pruning` | yes | no |
+| `compaction_only` | no | yes |
+| `full_contextlens` | yes | yes |
+
+It was executed on 21 September 2026 and **produced no measurement**. The
+harness itself completed: all ten repositories were fetched at their pinned
+commits, all ten hidden graders calibrated (each fails before the fix and
+passes with the gold patch), all forty attempts ran, and all forty patches were
+graded. Every attempt then ended in `agent_unavailable`, because the
+environment had no `OPENAI_API_KEY` and no `AI_GATEWAY_API_KEY`. Verified fixes
+were 0/10 in every condition and every token counter was zero.
+
+The blocked run is saved as
+[`benchmarks/results/four-condition-2026-09-21-blocked.md`](benchmarks/results/four-condition-2026-09-21-blocked.md)
+so the failure is on the record. **No number in it means anything about
+ContextLens, and nothing has been invented to stand in for the missing
+measurement.** Re-running the command below with both keys set produces the
+real tables.
+
+One thing the blocked run cannot tell us and the design can: compaction only
+fires once a transcript passes its default 20,000-token trigger, which was not
+lowered. On the September run the baseline agent injected about 4,700 tool-output
+tokens per task across 20 turns, so compaction may fire on few tasks or none.
+How many tasks actually trigger it is reported as `Tasks Compacted`, and a run
+where that column is zero would mean the compaction layer was never exercised.
 
 ### Offline harness check
 
@@ -164,16 +188,19 @@ What can be measured without credentials: a scripted solver replays one fixed
 tool sequence against a synthetic repository, and a local heuristic answers the
 relevance questions in Jev's place.
 
-| Condition | Raw Tool Output | Injected Tool Output | Removed | Compactions | Final Transcript |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Baseline | 6,587 | 6,587 | 0 | 0 | 6,753 |
-| Live Pruning | 6,587 | 477 | 6,110 (92.76%) | 0 | 643 |
-| Live + Compaction | 6,587 | 477 | 6,110 (92.76%) | 1 | 393 |
+| Condition | Raw Tool Output | Injected Tool Output | Removed | Compaction Events | Compaction Tokens Removed | Final Transcript |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 6,587 | 6,587 | 0 | 0 | 0 | 6,753 |
+| Live Pruning | 6,587 | 477 | 6,110 (92.76%) | 0 | 0 | 643 |
+| Compaction Only | 6,587 | 6,587 | 0 | 1 | 3,275 | 3,478 |
+| Full ContextLens | 6,587 | 477 | 6,110 (92.76%) | 1 | 250 | 393 |
 
-Tool calls and agent turns are identical across all three conditions, by
-construction. This exercises the two layers and the report; it runs no coding
-model, so it says nothing about task success or frontier-model savings. Raw
-rows: [`benchmarks/results/offline.json`](benchmarks/results/offline.json).
+Tool calls (6) and agent turns (7) are identical across all four conditions, by
+construction. Each layer reduces context on its own and they compose. This
+exercises the layers and the report; it runs no coding model, so it says nothing
+about task success or frontier-model savings, and its compaction trigger is
+deliberately lowered because the scripted transcript is tiny. Raw rows:
+[`benchmarks/results/offline.json`](benchmarks/results/offline.json).
 
 ## What the numbers mean
 
@@ -199,6 +226,12 @@ rows: [`benchmarks/results/offline.json`](benchmarks/results/offline.json).
 - The 21 September run is **one trial of ten tasks**. It is evidence about
   direction, not a statistical quality claim, and it does not measure the
   compaction layer at all.
+- **The main question is still open.** Whether ContextLens preserves verified
+  fixes while making the coding model process materially fewer tokens has been
+  answered only for the live-pruning ancestor (yes, on one trial: -34.9% input,
+  +2 fixes). Transcript compaction has never been measured against a real
+  coding model, and the four-condition comparison that would settle it has not
+  produced data.
 
 ## Run it
 
@@ -225,12 +258,13 @@ zero-data-retention routing. Thresholds are configurable through
 `CONTEXTLENS_MIN_TOKENS`, `CONTEXTLENS_CHUNK_LINES`,
 `CONTEXTLENS_KEEP_THRESHOLD`, and `CONTEXTLENS_MAX_STATE_TOKENS`.
 
-The paired coding-agent benchmark, and the offline harness check that needs no
-credentials:
+The four-condition paired coding-agent benchmark, and the offline harness check
+that needs no credentials. Nine of the ten hidden graders shell out to `uv`:
 
 ```bash
 export OPENAI_API_KEY="..."
 export AI_GATEWAY_API_KEY="..."
+python -m pip install uv
 python -m benchmarks.run --output benchmarks/artifacts/paired --trials 1 --timeout 300
 
 python -m benchmarks.offline --output benchmarks/results/offline.json

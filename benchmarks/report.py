@@ -6,12 +6,13 @@ import statistics
 from collections.abc import Sequence
 from typing import Any
 
-from benchmarks.agent import CONDITIONS
+from benchmarks.agent import COMPACTION_CONDITIONS, CONDITIONS
 
 LABELS = {
     "baseline": "Baseline",
     "live_pruning": "Live Pruning",
-    "live_and_compaction": "Live + Compaction",
+    "compaction_only": "Compaction Only",
+    "full_contextlens": "Full ContextLens",
 }
 
 TOTAL_FIELDS = (
@@ -45,23 +46,30 @@ HEADLINE_COLUMNS = (
     ("injected_tool_output_tokens", "Injected Tool Output"),
     ("tool_output_tokens_removed", "Tokens Removed"),
     ("agent_turns", "Agent Turns"),
-    ("compaction_events", "Compactions"),
-    ("recovery_calls", "Recoveries"),
+    ("tool_calls", "Tool Calls"),
+    ("compaction_events", "Compaction Events"),
+    ("compaction_tokens_removed", "Compaction Tokens Removed"),
+    ("tasks_with_compaction", "Tasks Compacted"),
+    ("recovery_calls", "Recovery Calls"),
     ("recovered_tokens", "Recovered Tokens"),
     ("jev_input_tokens", "Jev Input"),
     ("jev_output_tokens", "Jev Output"),
     ("jev_cost", "Jev Cost"),
-    ("median_agent_seconds", "Median Seconds"),
+    ("wall_clock_seconds", "Wall Clock (s)"),
 )
 
 DELTA_METRICS = (
+    ("passed", "Verified fixes"),
     ("input_tokens", "Coding-model input tokens"),
     ("uncached_input_tokens", "Uncached coding-model input"),
+    ("cached_input_tokens", "Cached coding-model input"),
+    ("output_tokens", "Output tokens"),
+    ("total_tokens", "Total coding-model tokens"),
+    ("raw_tool_output_tokens", "Raw tool output"),
     ("injected_tool_output_tokens", "Injected tool output"),
-    ("total_tokens", "Total coding tokens"),
     ("agent_turns", "Agent turns"),
     ("tool_calls", "Tool calls"),
-    ("passed", "Verified fixes"),
+    ("wall_clock_seconds", "Wall clock"),
 )
 
 
@@ -84,7 +92,22 @@ def analyze(rows: Sequence[dict[str, Any]], expected_pairs: int) -> dict[str, An
                 row["status"] != "completed" for row in selected
             ),
             **{field: _total(selected, field) for field in TOTAL_FIELDS},
+            "tasks_with_compaction": sum(
+                bool(row.get("compaction_triggered")) for row in selected
+            ),
             "jev_cost": format(cost, "f"),
+            "wall_clock_seconds": (
+                round(
+                    sum(
+                        float(row.get("agent_seconds") or 0)
+                        + float(row.get("verification_seconds") or 0)
+                        for row in selected
+                    ),
+                    1,
+                )
+                if selected
+                else None
+            ),
             "median_agent_seconds": (
                 round(statistics.median(row["agent_seconds"] for row in selected), 1)
                 if selected
@@ -104,11 +127,12 @@ def analyze(rows: Sequence[dict[str, Any]], expected_pairs: int) -> dict[str, An
     def delta(field: str, condition: str) -> dict[str, Any]:
         first = conditions["baseline"].get(field)
         second = conditions[condition].get(field)
-        if not isinstance(first, int) or not isinstance(second, int):
+        if not isinstance(first, (int, float)) or not isinstance(second, (int, float)):
             return {"absolute": None, "percent": None}
+        absolute = second - first
         return {
-            "absolute": second - first,
-            "percent": round(100 * (second - first) / first, 1) if first else None,
+            "absolute": round(absolute, 1) if isinstance(absolute, float) else absolute,
+            "percent": round(100 * absolute / first, 1) if first else None,
         }
 
     candidates = [name for name in CONDITIONS if name != "baseline"]
@@ -121,6 +145,15 @@ def analyze(rows: Sequence[dict[str, Any]], expected_pairs: int) -> dict[str, An
         )
         for name in candidates
     }
+    recoveries = {
+        name: sorted(
+            group["baseline"]["case"]
+            for group in pairs
+            if group[name]["verified_success"]
+            and not group["baseline"]["verified_success"]
+        )
+        for name in candidates
+    }
     return {
         "conditions": conditions,
         "complete_pairs": len(pairs),
@@ -129,6 +162,9 @@ def analyze(rows: Sequence[dict[str, Any]], expected_pairs: int) -> dict[str, An
         and len(rows) == expected_pairs * len(CONDITIONS),
         "all_agent_unavailable": bool(rows)
         and all(row["status"] == "agent_unavailable" for row in rows),
+        "any_agent_unavailable": any(
+            row["status"] == "agent_unavailable" for row in rows
+        ),
         "jev_never_scored": bool(rows)
         and all(
             (row.get("jev_requests") or 0) == 0
@@ -136,13 +172,11 @@ def analyze(rows: Sequence[dict[str, Any]], expected_pairs: int) -> dict[str, An
             if row["condition"] != "baseline"
         ),
         "deltas": {
-            name: {
-                **{field: delta(field, name) for field in TOTAL_FIELDS},
-                "passed": delta("passed", name),
-            }
+            name: {field: delta(field, name) for field, _title in DELTA_METRICS}
             for name in candidates
         },
         "quality_regressions": regressions,
+        "quality_gains": recoveries,
         "tasks": [
             {
                 "case": group["baseline"]["case"],
@@ -150,6 +184,12 @@ def analyze(rows: Sequence[dict[str, Any]], expected_pairs: int) -> dict[str, An
                     name: {
                         "passed": group[name]["verified_success"],
                         "input_tokens": group[name].get("input_tokens"),
+                        "injected_tool_output_tokens": group[name].get(
+                            "injected_tool_output_tokens"
+                        ),
+                        "compaction_triggered": bool(
+                            group[name].get("compaction_triggered")
+                        ),
                         "status": group[name]["status"],
                     }
                     for name in CONDITIONS
@@ -175,8 +215,12 @@ def markdown(report: dict[str, Any]) -> str:
         f"{len(report.get('tasks', []))} frozen task(s). "
         f"Implementation `{str(report.get('implementation_revision') or 'n/a')[:12]}`.",
         "",
-        "Jev tokens are counted separately and are never part of coding-model "
-        "input. The agent is not told that ContextLens exists.",
+        "All four conditions share the coding model, reasoning effort, issue "
+        "prompt, repository commit, tool set, timeout, turn limit, and hidden "
+        "grader. The agent is never told that ContextLens exists. Jev tokens "
+        "are counted separately and never enter coding-model input.",
+        "",
+        "## Aggregate",
         "",
     ]
     header = "| Condition | " + " | ".join(
@@ -191,8 +235,9 @@ def markdown(report: dict[str, Any]) -> str:
     candidates = [name for name in CONDITIONS if name != "baseline"]
     lines += [
         "",
-        "| Metric vs Baseline | " + " | ".join(LABELS[name] for name in candidates)
-        + " |",
+        "## Versus baseline",
+        "",
+        "| Metric | " + " | ".join(LABELS[name] for name in candidates) + " |",
         "| --- | " + " | ".join("---:" for _ in candidates) + " |",
     ]
     for field, title in DELTA_METRICS:
@@ -208,19 +253,72 @@ def markdown(report: dict[str, Any]) -> str:
             else:
                 cells.append(f"{absolute:+,} ({percent:+.1f}%)")
         lines.append(f"| {title} | " + " | ".join(cells) + " |")
+    lines += ["", "## Per task", ""]
     lines += [
-        "",
         "| Task | " + " | ".join(f"{LABELS[name]} Fix" for name in CONDITIONS) + " | "
-        + " | ".join(f"{LABELS[name]} Input" for name in CONDITIONS) + " |",
+        + " | ".join(f"{LABELS[name]} Input" for name in CONDITIONS) + " | Compacted |",
         "| --- | " + " | ".join("---" for _ in CONDITIONS) + " | "
-        + " | ".join("---:" for _ in CONDITIONS) + " |",
+        + " | ".join("---:" for _ in CONDITIONS) + " | --- |",
     ]
     for task in analysis["tasks"]:
         marks = [mark(task[name]["passed"]) for name in CONDITIONS]
         inputs = [comma(task[name]["input_tokens"]) for name in CONDITIONS]
-        lines.append(f"| {task['case']} | " + " | ".join([*marks, *inputs]) + " |")
-    lines += ["", *_notes(report, analysis)]
+        compacted = ", ".join(
+            LABELS[name]
+            for name in CONDITIONS
+            if name in COMPACTION_CONDITIONS and task[name]["compaction_triggered"]
+        )
+        lines.append(
+            f"| {task['case']} | "
+            + " | ".join([*marks, *inputs, compacted or "none"])
+            + " |"
+        )
+    lines += ["", "## Regressions", ""]
+    lines += _regressions(analysis)
+    lines += ["", "## Notes", ""]
+    lines += _notes(report, analysis)
     return "\n".join(lines) + "\n"
+
+
+def _regressions(analysis: dict[str, Any]) -> list[str]:
+    """Tasks the baseline fixed and a ContextLens condition did not."""
+
+    lines: list[str] = []
+    total = 0
+    for name in CONDITIONS:
+        if name == "baseline":
+            continue
+        cases = analysis["quality_regressions"][name]
+        gains = analysis["quality_gains"][name]
+        total += len(cases)
+        lines.append(
+            f"- **{LABELS[name]}**: "
+            + (
+                f"{len(cases)} regression(s) — {', '.join(cases)}."
+                if cases
+                else "no task that baseline fixed regressed."
+            )
+            + (f" Newly fixed: {', '.join(gains)}." if gains else "")
+        )
+    baseline_passed = analysis["conditions"]["baseline"]["passed"]
+    lines.append("")
+    if not analysis["tasks"]:
+        lines.append(
+            "No task completed every condition, so no regression comparison is "
+            "possible."
+        )
+    elif baseline_passed == 0:
+        lines.append(
+            "The baseline fixed no task, so there was nothing a ContextLens "
+            "condition could regress. This is not evidence that ContextLens "
+            "preserves fixes."
+        )
+    elif total == 0:
+        lines.append(
+            f"No ContextLens condition lost any of the {baseline_passed} fix(es) "
+            "the baseline achieved."
+        )
+    return lines
 
 
 def _notes(report: dict[str, Any], analysis: dict[str, Any]) -> list[str]:
@@ -239,21 +337,28 @@ def _notes(report: dict[str, Any], analysis: dict[str, Any]) -> list[str]:
         notes += [
             "**This run executed no coding model.** Every attempt ended in "
             "`agent_unavailable` because neither `OPENAI_API_KEY` nor "
-            "`AI_GATEWAY_API_KEY` was set. The zeros below are a blocked run, "
-            "not a measured result.",
+            "`AI_GATEWAY_API_KEY` was set. Every number below is a blocked "
+            "run, not a measured result. Do not read any token figure, fix "
+            "count, or delta here as evidence about ContextLens.",
+            "",
+        ]
+    elif analysis["any_agent_unavailable"]:
+        notes += [
+            "**Some attempts never reached the coding model** "
+            "(`agent_unavailable`). Condition totals are not comparable.",
             "",
         ]
     if analysis["jev_never_scored"] and not analysis["all_agent_unavailable"]:
         notes += [
-            "**Jev never scored** (`AI_GATEWAY_API_KEY` unset), so both "
-            "candidate conditions failed open to passthrough. Any difference "
-            "between conditions is trajectory noise, not filtering.",
+            "**Jev never scored** (`AI_GATEWAY_API_KEY` unset), so every "
+            "candidate condition failed open to passthrough. Differences "
+            "between conditions are trajectory noise, not ContextLens.",
             "",
         ]
     if not analysis["complete"]:
         notes += [
             f"Incomplete run: {analysis['complete_pairs']} of "
-            f"{analysis['expected_pairs']} paired attempts finished all "
+            f"{analysis['expected_pairs']} tasks finished all "
             f"{len(CONDITIONS)} conditions.",
             "",
         ]
@@ -261,25 +366,27 @@ def _notes(report: dict[str, Any], analysis: dict[str, Any]) -> list[str]:
         if name == "baseline":
             continue
         row = conditions[name]
-        delta = analysis["deltas"][name]["input_tokens"]
-        regressions = analysis["quality_regressions"][name]
-        notes.append(
+        deltas = analysis["deltas"][name]
+        detail = (
             f"**{LABELS[name]}**: coding-model input "
-            f"{_change(delta)}; injected tool output "
-            f"{_change(analysis['deltas'][name]['injected_tool_output_tokens'])}; "
-            f"agent turns {_change(analysis['deltas'][name]['agent_turns'])}. "
-            f"Jev used {comma(row['jev_input_tokens'])} input / "
+            f"{_change(deltas['input_tokens'])}; injected tool output "
+            f"{_change(deltas['injected_tool_output_tokens'])}; agent turns "
+            f"{_change(deltas['agent_turns'])}; tool calls "
+            f"{_change(deltas['tool_calls'])}. Jev used "
+            f"{comma(row['jev_input_tokens'])} input / "
             f"{comma(row['jev_output_tokens'])} output tokens over "
             f"{comma(row['jev_requests'])} requests, cost {row['jev_cost']}. "
-            f"{comma(row['recovery_calls'])} recovery calls restored "
+            f"{comma(row['recovery_calls'])} recovery call(s) restored "
             f"{comma(row['recovered_tokens'])} tokens."
-            + (
-                f" Tasks that regressed against baseline: {', '.join(regressions)}."
-                if regressions
-                else " No task that baseline fixed regressed."
-            )
         )
-        notes.append("")
+        if name in COMPACTION_CONDITIONS:
+            detail += (
+                f" Compaction fired on {comma(row['tasks_with_compaction'])} of "
+                f"{comma(row['attempts'])} attempt(s) across "
+                f"{comma(row['compaction_events'])} event(s), removing "
+                f"{comma(row['compaction_tokens_removed'])} transcript tokens."
+            )
+        notes += [detail, ""]
     if report.get("note"):
         notes += [str(report["note"]), ""]
     notes.append(
@@ -293,12 +400,10 @@ def _change(delta: dict[str, Any]) -> str:
     absolute = delta.get("absolute")
     if absolute is None:
         return "n/a"
-    percent = delta.get("percent")
-    direction = "unchanged" if absolute == 0 else (
-        "down" if absolute < 0 else "up"
-    )
     if absolute == 0:
-        return direction
+        return "unchanged"
+    percent = delta.get("percent")
+    direction = "down" if absolute < 0 else "up"
     suffix = f" ({percent:+.1f}%)" if percent is not None else ""
     return f"{direction} {comma(abs(absolute))}{suffix}"
 

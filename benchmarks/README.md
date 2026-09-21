@@ -8,19 +8,29 @@ Three conditions share the same frozen tasks, model, reasoning effort, tools,
 prompt, repository revision, timeout, and turn limit. The agent is never told
 that ContextLens exists.
 
-| Condition | What ContextLens does |
-| --- | --- |
-| `baseline` | nothing; raw tool output, transcript grows untouched |
-| `live_pruning` | large tool results are pruned before the coding model reads them |
-| `live_and_compaction` | live pruning, plus stale tool calls and results compacted out of the transcript once it grows past a threshold |
+| Condition | Live pruning | Transcript compaction |
+| --- | --- | --- |
+| `baseline` | no | no |
+| `live_pruning` | yes | no |
+| `compaction_only` | no | yes |
+| `full_contextlens` | yes | yes |
+
+Everything else is held identical: coding model, reasoning effort, issue
+prompt, repository commit, tool set, timeout, turn limit, and hidden grader.
 
 ## Paired run (needs credentials)
 
 ```bash
 export OPENAI_API_KEY="..."        # the coding model
 export AI_GATEWAY_API_KEY="..."    # Jev, through the Vercel AI Gateway
+python -m pip install uv           # nine of the ten hidden graders shell out to uv
 python -m benchmarks.run --output benchmarks/artifacts/paired --trials 1 --timeout 300
 ```
+
+The compaction trigger is the production default (20,000 transcript tokens) and
+is never lowered to force it to fire. `Tasks Compacted` reports how many
+attempts actually reached it; zero there means the compaction layer was not
+exercised, which is a result, not a bug.
 
 Each attempt writes its own directory with the prompt, transcript shape, patch,
 verification output, and row. The run writes `report.json` after every attempt
@@ -55,5 +65,14 @@ never enter the agent's workspace. Two tasks come from SWE-bench-Live.
 
 ## Results
 
-`results/` holds measured reports. Reports for architectures that no longer
-exist are under [`docs/history/`](../docs/history/).
+`results/` holds measured reports:
+
+- `four-condition-2026-09-21-blocked.{json,md}` — the four-condition run was
+  executed and produced **no measurement**. The harness completed end to end
+  (ten repositories fetched, ten graders calibrated, forty attempts run and
+  graded) but every attempt ended `agent_unavailable` for lack of a coding-model
+  key. Saved so the failure is on the record; cite no number from it.
+- `offline.{json,md}` — the offline harness check.
+
+Reports for architectures that no longer exist are under
+[`docs/history/`](../docs/history/).

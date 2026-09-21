@@ -278,7 +278,7 @@ def test_compaction_shrinks_the_transcript(tmp_path: Path) -> None:
     compacted, compacted_transcript = run_agent(
         workspace,
         "read the log",
-        "live_and_compaction",
+        "full_contextlens",
         state=tmp_path / "compacted",
         solver=solver_for(script),
         judge=DropJudge(),
@@ -353,22 +353,34 @@ def test_local_judge_protects_diagnostics_and_task_words() -> None:
     assert probabilities["c3"] > 0.5
 
 
-def test_offline_harness_measures_both_layers(tmp_path: Path) -> None:
+def test_offline_harness_measures_all_four_conditions(tmp_path: Path) -> None:
     report = run_offline(tmp_path / "offline.json")
     rows = {row["condition"]: row for row in report["rows"]}
     assert set(rows) == set(CONDITIONS)
     baseline = rows["baseline"]
     pruned = rows["live_pruning"]
-    both = rows["live_and_compaction"]
+    compacted = rows["compaction_only"]
+    both = rows["full_contextlens"]
     assert baseline["injected_tool_output_tokens"] == baseline[
         "raw_tool_output_tokens"
     ]
     assert pruned["injected_tool_output_tokens"] < baseline[
         "injected_tool_output_tokens"
     ]
+    assert pruned["compaction_events"] == 0
+    assert compacted["injected_tool_output_tokens"] == baseline[
+        "injected_tool_output_tokens"
+    ]
+    assert compacted["compaction_events"] >= 1
+    assert compacted["final_transcript_tokens"] < baseline[
+        "final_transcript_tokens"
+    ]
     assert both["compaction_events"] >= 1
     assert both["final_transcript_tokens"] < pruned["final_transcript_tokens"]
     assert report["analysis"]["complete"] is True
+    assert report["analysis"]["conditions"]["compaction_only"][
+        "tasks_with_compaction"
+    ] == 1
     assert "no coding model" in report["note"].lower()
 
 
@@ -428,12 +440,58 @@ def test_analysis_records_quality_regressions() -> None:
         [
             row("baseline", True),
             row("live_pruning", False),
-            row("live_and_compaction", True),
+            row("compaction_only", True),
+            row("full_contextlens", True),
         ],
         1,
     )
     assert analysis["quality_regressions"]["live_pruning"] == ["a"]
-    assert analysis["quality_regressions"]["live_and_compaction"] == []
+    assert analysis["quality_regressions"]["compaction_only"] == []
+    assert analysis["quality_regressions"]["full_contextlens"] == []
+    text = markdown(
+        {
+            "started_at": "now",
+            "model": "m",
+            "reasoning": "low",
+            "trials": 1,
+            "timeout": 300,
+            "max_turns": 20,
+            "tasks": [{"case_id": "a"}],
+            "analysis": analysis,
+        }
+    )
+    assert "1 regression(s) — a" in text
+    assert "nothing a ContextLens condition could regress" not in text
+
+
+def test_markdown_does_not_claim_preserved_fixes_when_baseline_failed() -> None:
+    rows = [
+        {
+            "case": "a",
+            "trial": 0,
+            "condition": condition,
+            "status": "agent_unavailable",
+            "verified_success": False,
+            "agent_seconds": 0.1,
+            "jev_cost": "0",
+            "input_tokens": 0,
+        }
+        for condition in CONDITIONS
+    ]
+    text = markdown(
+        {
+            "started_at": "now",
+            "model": "m",
+            "reasoning": "low",
+            "trials": 1,
+            "timeout": 300,
+            "max_turns": 20,
+            "tasks": [{"case_id": "a"}],
+            "analysis": analyze(rows, 1),
+        }
+    )
+    assert "nothing a ContextLens condition could regress" in text
+    assert "No ContextLens condition lost" not in text
 
 
 def test_markdown_reports_missing_numbers_as_not_available() -> None:
