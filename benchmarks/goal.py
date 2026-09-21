@@ -886,7 +886,11 @@ def main() -> int:
     fixtures = project / "benchmarks" / "fixtures" / (
         "coding" if coding else "goal"
     )
-    manifests = [load_manifest(path) for path in sorted(fixtures.glob("*.json"))]
+    manifests = [
+        load_manifest(path)
+        for path in sorted(fixtures.glob("*.json"))
+        if path.name != "selection.json"
+    ]
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     shutil.copytree(
