@@ -1,0 +1,27 @@
+{
+  "case_id": "python-babel-parse-time",
+  "suite": "comprehensive",
+  "category": "bug_fix",
+  "repo": "python-babel/babel",
+  "commit": "f1c8633a7d765f07b94e0a6097b3f0c7912b955f",
+  "source_issue": "https://github.com/python-babel/babel/issues/1129",
+  "task": "`parse_time` raises when a format doesn't contain seconds\n\n## Overview Description\n\n`parse_time` raises a `ValueError` when the given time format doesn't contain seconds e.g. `H:mm`.\n\n## Steps to Reproduce\n\n```python\n>>> from babel.dates import parse_time\n>>> parse_time('9:30', 'cs_CZ', 'short')\nTraceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\n  File \"/dev/babel/babel/dates.py\", line 1292, in parse_time\n    sec_idx = format_str.index('s')\n              ^^^^^^^^^^^^^^^^^^^^^\nValueError: substring not found\n```\n\nThis happens because the `parse_time` function expects the format to have seconds, but some locales do not have those.\nFor example this is the CLDR definition for the `short` format in Czech:\n\n```xml\n<timeFormatLength type=\"short\">\n\t<timeFormat>\n\t\t<pattern>H:mm</pattern>\n\t\t<datetimeSkeleton>Hmm</datetimeSkeleton>\n\t</timeFormat>\n</timeFormatLength>\n```\n",
+  "setup": [],
+  "verification": {
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "pytz",
+        "--with",
+        "tzdata",
+        "python",
+        "-c",
+        "import sys; sys.path.insert(0,'.'); from datetime import time; from babel.dates import parse_time, get_time_format; assert get_time_format(format='short', locale='cs_CZ').pattern == 'H:mm'; assert parse_time('9:30', locale='cs_CZ', format='short') == time(9, 30)"
+      ]
+    ]
+  }
+}

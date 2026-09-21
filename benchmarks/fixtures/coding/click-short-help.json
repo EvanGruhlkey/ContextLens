@@ -1,0 +1,25 @@
+{
+  "case_id": "click-short-help",
+  "suite": "comprehensive",
+  "category": "bug_fix",
+  "repo": "pallets/click",
+  "commit": "30e7f76a383b7ddba23f564f96871261d6f8800e",
+  "source_issue": "https://github.com/pallets/click/issues/1849",
+  "task": "Bug: `make_default_short_help` can return strings as long as `max_length + 3`\n\n## The bug\nThe current algorithm doesn't take into account the length of \"...\" properly:\n\n```python\nfrom click.utils import make_default_short_help\n\nout = make_default_short_help('1234 67890 xxxxxx', max_length=10)\nprint(out)\nprint('Length:', len(out))\n```\nPrints:\n```\n1234 67890...\nLength: 13\n```\nExpected output: `1234...`\n\n## Environment\n- Click version: 7.2 and master\n",
+  "setup": [],
+  "verification": {
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "colorama",
+        "python",
+        "-c",
+        "import sys;sys.path.insert(0,'src');from click.utils import make_default_short_help as f;assert len(f('123 5678 xxxxxx',10))<=10;assert f('',10)=='';assert f('123 567 90',10)=='123 567 90';assert f('123 567 9. rest words',10)=='123 567 9.';assert f('123 567\\n\\nremaining paragraph',10)=='123 567';\nfor value in ('123 567 90123.','123 5678 xxxxxx','\\n\\b\\n123  5678  xxxxxx\\n'):\n out=f(value,10);assert len(out)<=10 and out.endswith('...');prefix=out[:-3].strip();assert prefix and '123 5678 xxxxxx'.startswith(prefix) if '5678' in value else prefix and '123 567 90123.'.startswith(prefix)"
+      ]
+    ]
+  }
+}

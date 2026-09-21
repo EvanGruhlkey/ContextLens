@@ -1,0 +1,9 @@
+diff --git a/aws_lambda_powertools/utilities/data_classes/event_bridge_event.py b/aws_lambda_powertools/utilities/data_classes/event_bridge_event.py
+--- a/aws_lambda_powertools/utilities/data_classes/event_bridge_event.py
++++ b/aws_lambda_powertools/utilities/data_classes/event_bridge_event.py
+@@ -68,4 +68,4 @@ def detail(self) -> dict[str, Any]:
+     @property
+     def replay_name(self) -> str | None:
+         """Identifies whether the event is being replayed and what is the name of the replay."""
+-        return self["replay-name"]
++        return self.get("replay-name")

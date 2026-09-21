@@ -1,0 +1,27 @@
+{
+  "case_id": "aws-powertools-query-merge",
+  "suite": "smoke",
+  "category": "bug_fix",
+  "repo": "aws-powertools/powertools-lambda-python",
+  "commit": "cd8829bbe34dc4163bebd340ea671b9548325317",
+  "source_issue": "https://github.com/aws-powertools/powertools-lambda-python/issues/7993",
+  "task": "Bug: `multiValueQueryStringParameters` interferes with `queryStringParameters`\n\n### Expected Behaviour\n\nWhen using both `queryStringParameters` and `multiValueQueryStringParameters` I expect all annotated query parameters to be set in my router handler.\n\n### Current Behaviour\n\nIf `multiValueQueryStringParameters` is used for one parameter and `queryStringParameters` for another, the latter will not be set in the router handler.\n\n### Code snippet\n\n```python\nfrom typing import Annotated, Optional\n\nfrom aws_lambda_powertools.event_handler.openapi.params import Query\n\n\n@router.get(\"/foobar\")\ndef foobar(\n    ids: Annotated[Optional[list[str]], Query()] = None,\n    status: Annotated[Optional[str], Query()] = None,\n):\n    assert ids  # This passes\n    assert status is not None  # This fails\n\n\ndef test_issue():\n    event = {\n        \"multiValueQueryStringParameters\": {\"ids\": [\"1\", \"2\", \"3\"]},\n        \"queryStringParameters\": {\"status\": \"fizzbuzz\"},\n    }\n\n    # Actually uses rest resolver\n    response = handler(event, lambda_context)\n```\n\n### Steps to Reproduce\n\nRun test provided in code snippet.\n\n### Powertools for AWS Lambda (Python) version\n\n3.21.0\n",
+  "setup": [],
+  "verification": {
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "jmespath",
+        "--with",
+        "typing-extensions",
+        "python",
+        "-c",
+        "from aws_lambda_powertools.utilities.data_classes.alb_event import ALBEvent; from aws_lambda_powertools.utilities.data_classes.api_gateway_proxy_event import APIGatewayProxyEvent; raw={'queryStringParameters':{'status':'active','key':'single'},'multiValueQueryStringParameters':{'ids':['1','2'],'key':['multi']}}; expected={'status':['active'],'ids':['1','2'],'key':['multi']}; assert ALBEvent(raw).resolved_query_string_parameters == expected; assert APIGatewayProxyEvent(raw).resolved_query_string_parameters == expected;\nfor cls in (ALBEvent,APIGatewayProxyEvent):\n assert cls({'queryStringParameters':{'a':'1'}}).resolved_query_string_parameters=={'a':['1']}\n assert cls({'multiValueQueryStringParameters':{'a':['1','2']}}).resolved_query_string_parameters=={'a':['1','2']}\n assert cls({'queryStringParameters':None,'multiValueQueryStringParameters':None}).resolved_query_string_parameters=={}\n assert cls({'queryStringParameters':{'a':''},'multiValueQueryStringParameters':{}}).resolved_query_string_parameters=={'a':['']}"
+      ]
+    ]
+  }
+}

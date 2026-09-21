@@ -1,0 +1,27 @@
+{
+  "case_id": "responses-query-mutation",
+  "suite": "comprehensive",
+  "category": "bug_fix",
+  "repo": "getsentry/responses",
+  "commit": "88e15db329b8731d27210fe73e11056210309829",
+  "source_issue": "https://github.com/getsentry/responses/pull/801",
+  "task": "query_param_matcher no longer mutates the caller's params dict\n\n## Problem\n\n`query_param_matcher` converts `int` and `float` values to strings so they can\nbe compared against URL query-string values (which are always strings). However,\nthis conversion was done in-place on the dict reference obtained via\n`params_dict = params or {}`, which aliases the original dict when a non-empty\nmapping is passed. As a result, every numeric value in the caller's dict is\nsilently overwritten with its string equivalent:\n\n```python\nparams = {\"page\": 1, \"ratio\": 0.5}\nmatchers.query_param_matcher(params)\n# params is now {\"page\": \"1\", \"ratio\": \"0.5\"} — mutated!\n```\n\nThis is surprising behaviour that can cause hard-to-debug failures when the\nsame dict is inspected or reused after the matcher is created.\n",
+  "setup": [],
+  "verification": {
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "requests",
+        "--with",
+        "pyyaml",
+        "python",
+        "-c",
+        "from responses import matchers;from types import SimpleNamespace as R;p={'page':1,'ratio':0.5,'name':'test'};original=p.copy();m=matchers.query_param_matcher(p);assert p==original and type(p['page']) is int and type(p['ratio']) is float;assert m(R(params={'page':'1','ratio':'0.5','name':'test'}))[0];assert not m(R(params={'page':'2','ratio':'0.5','name':'test'}))[0];assert matchers.query_param_matcher({'page':1},strict_match=False)(R(params={'page':'1','extra':'x'}))[0];assert matchers.query_param_matcher({})(R(params={}))[0]"
+      ]
+    ]
+  }
+}

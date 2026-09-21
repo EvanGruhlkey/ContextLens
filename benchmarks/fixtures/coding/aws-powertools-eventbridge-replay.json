@@ -1,0 +1,27 @@
+{
+  "case_id": "aws-powertools-eventbridge-replay",
+  "suite": "smoke",
+  "category": "bug_fix",
+  "repo": "aws-powertools/powertools-lambda-python",
+  "commit": "f8c7faf9c47c6d1ea60e50324670f1aafaa797f8",
+  "source_issue": "https://github.com/aws-powertools/powertools-lambda-python/issues/8300",
+  "task": "Bug: EventBridgeEvent dataclass has optional fields as compulsory\n\n### Expected Behaviour\n\n`replay-name` field is optional for event bridge events, that should be reflected in EventBridgeEvent data class.\n\n\n```python\nfrom aws_lambda_powertools.utilities.data_classes import EventBridgeEvent, event_source\n\n\ndef test_event_bridge_event():\n\n    @event_source(data_class=EventBridgeEvent)\n    def lambda_handler(event: EventBridgeEvent, _context):\n        source = event.source\n        _ = event.account\n        return source\n\n    event = {\n        \"version\": \"0\",\n        \"id\": \"6a7e8feb-b491-4cf7-a9f1-bf3703467718\",\n        \"detail-type\": \"EC2 Instance State-change Notification\",\n        \"source\": \"aws.ec2\",\n        \"account\": \"111122223333\",\n        \"time\": \"2017-12-22T18:43:48Z\",\n        \"region\": \"us-west-1\",\n        \"resources\": [],\n        \"detail\": {\n            \"instance_id\": \"i-1234567890abcdef0\",\n            \"state\": \"terminated\",\n        },\n    }\n\n    source = lambda_handler(event, {})\n\n    assert source == \"aws.ec2\"\n```\n\n### Current Behaviour\n\nThe above test raises `KeyError` for the `replay-name` field.\n\n### Code snippet\n\nProvided above\n\n### Steps to Reproduce\n\nRun the above test\n\n### Powertools for AWS Lambda (Python) version\n\nlatest\n",
+  "setup": [],
+  "verification": {
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "jmespath",
+        "--with",
+        "typing-extensions",
+        "python",
+        "-c",
+        "from aws_lambda_powertools.utilities.data_classes.event_bridge_event import EventBridgeEvent; base={'version':'0','id':'x','detail-type':'x','source':'x','account':'x','time':'x','region':'x','resources':[],'detail':{}}; assert EventBridgeEvent(base).replay_name is None; base['replay-name']='archive'; assert EventBridgeEvent(base).replay_name == 'archive'"
+      ]
+    ]
+  }
+}

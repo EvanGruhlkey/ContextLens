@@ -1,0 +1,31 @@
+{
+  "case_id": "spotify-luigi-bool-default",
+  "suite": "smoke",
+  "category": "bug_fix",
+  "repo": "spotify/luigi",
+  "commit": "5f4322cd479a120e4237a341770468637bad4986",
+  "source_issue": "https://github.com/spotify/luigi/pull/3416",
+  "task": "Fix BoolParameter to consider global parsing default.\n\nThe docstring of BoolParameter states that the `parsing` default value can be set globally by\n\n```python\nluigi.BoolParameter.parsing = luigi.BoolParameter.EXPLICIT_PARSING\n```\n\nHowever, this is no longer possible and breaks code since the value is never used. As before, it should be evaluated at init time. Type hints added for the 3.8.0 release break changing the parsing option of BoolParameters.\n",
+  "setup": [],
+  "verification": {
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "python-dateutil",
+        "--with",
+        "tornado",
+        "--with",
+        "tenacity",
+        "--with",
+        "typing-extensions",
+        "python",
+        "-c",
+        "import luigi; B=luigi.BoolParameter; old=B.parsing;\ntry:\n B.parsing=B.EXPLICIT_PARSING; assert B().parsing == B.EXPLICIT_PARSING; assert B(parsing=B.IMPLICIT_PARSING).parsing == B.IMPLICIT_PARSING\nfinally: B.parsing=old\nassert B().parsing == B.IMPLICIT_PARSING"
+      ]
+    ]
+  }
+}

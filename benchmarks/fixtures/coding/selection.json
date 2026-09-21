@@ -1,0 +1,15 @@
+{
+  "method": "Ten public Python GitHub issues with frozen commits and hidden executable graders. Eight cases reuse the existing repository corpus. Two additional SWE-bench-Live lite tasks (babel-1141, flask-5637) use the original issue text and a python assertion equivalent to FAIL_TO_PASS. Gold patches are host-only calibration artifacts and are never placed in the agent workspace or prompt.",
+  "tasks": [
+    {"case_id": "click-empty-default", "repo": "pallets/click", "issue": "https://github.com/pallets/click/issues/2500"},
+    {"case_id": "click-short-help", "repo": "pallets/click", "issue": "https://github.com/pallets/click/issues/1849"},
+    {"case_id": "responses-query-mutation", "repo": "getsentry/responses", "issue": "https://github.com/getsentry/responses/pull/801"},
+    {"case_id": "responses-blank-query", "repo": "getsentry/responses", "issue": "https://github.com/getsentry/responses/pull/804"},
+    {"case_id": "spotify-luigi-bool-default", "repo": "spotify/luigi", "issue": "https://github.com/spotify/luigi/pull/3416"},
+    {"case_id": "spotify-luigi-run-arguments", "repo": "spotify/luigi", "issue": "https://github.com/spotify/luigi/issues/3354"},
+    {"case_id": "aws-powertools-query-merge", "repo": "aws-powertools/powertools-lambda-python", "issue": "https://github.com/aws-powertools/powertools-lambda-python/issues/7993"},
+    {"case_id": "aws-powertools-eventbridge-replay", "repo": "aws-powertools/powertools-lambda-python", "issue": "https://github.com/aws-powertools/powertools-lambda-python/issues/8300"},
+    {"case_id": "python-babel-parse-time", "repo": "python-babel/babel", "issue": "https://github.com/python-babel/babel/issues/1129", "swe_bench_live": "python-babel__babel-1141"},
+    {"case_id": "pallets-flask-trusted-hosts", "repo": "pallets/flask", "issue": "https://github.com/pallets/flask/issues/5636", "swe_bench_live": "pallets__flask-5637"}
+  ]
+}

@@ -1,0 +1,44 @@
+diff --git a/aws_lambda_powertools/utilities/data_classes/alb_event.py b/aws_lambda_powertools/utilities/data_classes/alb_event.py
+--- a/aws_lambda_powertools/utilities/data_classes/alb_event.py
++++ b/aws_lambda_powertools/utilities/data_classes/alb_event.py
+@@ -44,7 +44,17 @@ def request_context(self) -> ALBEventRequestContext:
+ 
+     @property
+     def resolved_query_string_parameters(self) -> dict[str, list[str]]:
+-        params = self.multi_value_query_string_parameters or super().resolved_query_string_parameters
++        multi_value = self.multi_value_query_string_parameters
++        single_value = super().resolved_query_string_parameters
++
++        if not multi_value:
++            params = single_value
++        elif not single_value:
++            params = multi_value
++        else:
++            # Merge both: multi_value takes precedence, single_value fills missing keys
++            params = {**single_value, **multi_value}
++
+         if not self.decode_query_parameters:
+             return params
+ 
+diff --git a/aws_lambda_powertools/utilities/data_classes/api_gateway_proxy_event.py b/aws_lambda_powertools/utilities/data_classes/api_gateway_proxy_event.py
+--- a/aws_lambda_powertools/utilities/data_classes/api_gateway_proxy_event.py
++++ b/aws_lambda_powertools/utilities/data_classes/api_gateway_proxy_event.py
+@@ -120,7 +120,17 @@ def multi_value_headers(self) -> dict[str, list[str]]:
+ 
+     @property
+     def resolved_query_string_parameters(self) -> dict[str, list[str]]:
+-        return self.multi_value_query_string_parameters or super().resolved_query_string_parameters
++        multi_value = self.multi_value_query_string_parameters
++        single_value = super().resolved_query_string_parameters
++
++        if not multi_value:
++            return single_value
++
++        if not single_value:
++            return multi_value
++
++        # Merge both: multi_value takes precedence, single_value fills missing keys
++        return {**single_value, **multi_value}
+ 
+     @property
+     def resolved_headers_field(self) -> dict[str, Any]:

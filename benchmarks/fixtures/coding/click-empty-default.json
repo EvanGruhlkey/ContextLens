@@ -1,0 +1,25 @@
+{
+  "case_id": "click-empty-default",
+  "suite": "comprehensive",
+  "category": "bug_fix",
+  "repo": "pallets/click",
+  "commit": "c021f05c838c1d0401ebc340d1de9b663c7fb578",
+  "source_issue": "https://github.com/pallets/click/issues/2500",
+  "task": "Empty string default values are not displayed\n\nIf an option has a default value of `\"\"`, the `show_default` option does not display anything.\n\nReproducible example:\n```\nimport click\n\n@click.group()\ndef test_cli() -> None:\n    pass\n\n\n@test_cli.command(help=\"Test CLI\")\n@click.option(\"--test_value\", type=str, default=\"\", show_default=True)\ndef test_function(\n    test_value: str\n) -> None:\n    print(test_value)\n\n\n@click.group()\ndef cli() -> None:\n    pass\n\n\ncli.add_command(test_cli)\ncli()\n```\n\nExpected to see a default displayed.\n\nEnvironment:\n\n- Python version: 3.11.3\n- Click version: 8.0.3\n",
+  "setup": [],
+  "verification": {
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "colorama",
+        "python",
+        "-c",
+        "import sys;sys.path.insert(0,'src');import click;ctx=click.Context(click.Command('cli'));h=lambda **kw:click.Option(['--limit'],**kw).get_help_record(ctx)[1];assert any(marker in h(default='',show_default=True) for marker in ('[default: \"\"]', \"[default: '']\", '[default: (empty)]', '[default: (empty string)]'));assert '[default: text]' in h(default='text',show_default=True);assert '[default: 3]' in h(default=3,show_default=True);assert '[default:' not in h(show_default=True);assert '[default:' not in h(default='',show_default=False)"
+      ]
+    ]
+  }
+}

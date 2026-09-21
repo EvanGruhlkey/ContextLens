@@ -1,0 +1,27 @@
+{
+  "case_id": "responses-blank-query",
+  "suite": "comprehensive",
+  "category": "bug_fix",
+  "repo": "getsentry/responses",
+  "commit": "983a4975c969432d468c35085b613a3bec0edc46",
+  "source_issue": "https://github.com/getsentry/responses/pull/804",
+  "task": "keep blank-valued query params significant in query_string_matcher\n\n`query_string_matcher` parses both the incoming request query and the configured query with `parse_qsl()` at its default `keep_blank_values=False`, so any empty-valued parameter (`b=`, or a bare `b`) is dropped before comparison:\n\n```python\n>>> parse_qsl(\"a=1&b=\")\n[('a', '1')]          # b= vanished\n```\n\nThis matcher is auto-added for any registered URL carrying a query string. As a result `?a=1` matched a request to `?a=1&b=`, and a registration that required `b=` matched a request that omitted it. The request-param parser already uses `keep_blank_values=True`, so `query_param_matcher` treats `b=` as significant — the two query-matching paths disagreed on the same request.\n",
+  "setup": [],
+  "verification": {
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "requests",
+        "--with",
+        "pyyaml",
+        "python",
+        "-c",
+        "from responses import matchers;from types import SimpleNamespace as R;m=matchers.query_string_matcher('test=1&foo=');assert not m(R(url='http://example.com?test=1'))[0];assert m(R(url='http://example.com?foo=&test=1'))[0];assert not matchers.query_string_matcher('test=1')(R(url='http://example.com?test=1&foo='))[0];assert matchers.query_string_matcher('test=1')(R(url='http://example.com?test=1'))[0];assert matchers.query_string_matcher('')(R(url='http://example.com'))[0]"
+      ]
+    ]
+  }
+}

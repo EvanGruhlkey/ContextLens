@@ -1,0 +1,35 @@
+{
+  "case_id": "pallets-flask-trusted-hosts",
+  "suite": "comprehensive",
+  "category": "bug_fix",
+  "repo": "pallets/flask",
+  "commit": "10bdf61a0f751f3cb000f8f8ac5ac5b4bb535677",
+  "source_issue": "https://github.com/pallets/flask/issues/5636",
+  "task": "configure and check `request.trusted_hosts`\n\nIf `request.trusted_hosts` is set, it will be checked when accessing `request.host`/`url`/etc. Add `TRUSTED_HOSTS` config, and check it during routing.\n",
+  "setup": [],
+  "verification": {
+    "commands": [
+      [
+        "uv",
+        "run",
+        "--no-project",
+        "--isolated",
+        "--with",
+        "werkzeug>=3.1",
+        "--with",
+        "jinja2",
+        "--with",
+        "itsdangerous",
+        "--with",
+        "click",
+        "--with",
+        "blinker",
+        "--with",
+        "markupsafe",
+        "python",
+        "-c",
+        "import sys; sys.path.insert(0,'src'); from flask import Flask; app=Flask(__name__); app.config['TRUSTED_HOSTS']=['example.test','.other.test'];\n@app.get('/')\ndef index():\n return ''\nc=app.test_client();\nassert c.get(base_url='http://example.test').status_code==200;\nassert c.get(base_url='http://a.other.test').status_code==200;\nassert c.get(base_url='http://bad.test').status_code==400"
+      ]
+    ]
+  }
+}
