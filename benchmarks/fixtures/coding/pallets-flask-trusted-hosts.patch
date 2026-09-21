@@ -1,7 +1,8 @@
 diff --git a/src/flask/app.py b/src/flask/app.py
+index 166a129..4361180 100644
 --- a/src/flask/app.py
 +++ b/src/flask/app.py
-@@ -24,6 +24,7 @@
+@@ -24,6 +24,7 @@ from werkzeug.routing import RoutingException
  from werkzeug.routing import Rule
  from werkzeug.serving import is_running_from_reloader
  from werkzeug.wrappers import Response as BaseResponse
@@ -17,7 +18,7 @@ diff --git a/src/flask/app.py b/src/flask/app.py
              "SERVER_NAME": None,
              "APPLICATION_ROOT": "/",
              "SESSION_COOKIE_NAME": "session",
-@@ -441,6 +443,11 @@ def create_url_adapter(self, request: Request | None) -> MapAdapter | None:
+@@ -441,6 +443,11 @@ class Flask(App):
          .. versionadded:: 0.6
          """
          if request is not None:
@@ -25,6 +26,7 @@ diff --git a/src/flask/app.py b/src/flask/app.py
 +                request.trusted_hosts = trusted_hosts
 +
 +            # Check trusted_hosts here until bind_to_environ does.
-+            request.host = get_host(request.environ, request.trusted_hosts)  # pyright: ignore
++            request.host = get_host(request.environ, request.trusted_hosts)
              subdomain = None
              server_name = self.config["SERVER_NAME"]
+ 
