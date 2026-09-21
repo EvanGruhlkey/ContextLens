@@ -61,11 +61,36 @@ def test_analyze_coding_keeps_absolute_token_totals():
         "percent": -40.0,
     }
     assert result["all_agent_unavailable"] is False
+    assert result["filter_passthrough"] is False
     assert result["conditions"]["contextlens"]["tool_output_tokens_removed"] == 51
     text = markdown_report(result)
     assert "1" in text
     assert "-80" in text
     assert "repo-task" in text
+    assert "fewer coding-model input tokens" in text
+
+
+def test_markdown_report_passthrough_does_not_claim_filter_savings():
+    rows = [
+        _coding_row("baseline", tokens=200, injected=90, raw=90),
+        _coding_row("jev_filter", tokens=150, injected=90, raw=90),
+        _coding_row("contextlens", tokens=240, injected=90, raw=90),
+    ]
+    for row in rows:
+        row["jev_input_tokens"] = 0
+        row["jev_output_tokens"] = 0
+        row["jev_cost"] = "0"
+        row["tool_output_tokens_removed"] = 0
+        row["filter_calls"] = 0
+    result = analyze_coding(rows, 1)
+    assert result["filter_passthrough"] is True
+    text = markdown_report(result)
+    assert "failed open to passthrough" in text
+    assert "used 40 more coding-model input tokens" in text
+    assert "fewer coding-model input tokens" not in text
+    assert "tokens removed by filtering were 0" in text
+    assert "prevented from entering model context" not in text
+    assert "Do not treat these trajectory deltas as ContextLens filter" in text
 
 
 def test_host_agent_filters_tool_output_before_the_model(tmp_path):
