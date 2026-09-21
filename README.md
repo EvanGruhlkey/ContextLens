@@ -1,113 +1,71 @@
 # ContextLens
 
-ContextLens reduces the context coding agents have to read.
+A transparent context-reduction layer for coding agents.
 
 It filters large tool outputs and source reads before they enter the coding
-model. Jev cheaply scores semantic relevance; local structural analysis
-preserves code dependencies; omitted evidence remains recoverable.
+model. Jev cheaply scores semantic relevance. Local structural analysis keeps
+code dependencies. Omitted evidence stays recoverable.
 
-```text
-Coding agent
-    ↓
-tool call
-    ↓
-raw tool result
-    ↓
-ContextLens
-    ↓
-smaller exact/recoverable result
-    ↓
-coding agent
-```
+## How it works
 
-Jev performs relevance decisions, not reasoning for the coding agent. It does
-not choose the next action, run tools, write commands, or generate code.
-Exact original source is preserved. Anything omitted stays behind a stable
-handle. Structural support (imports, class headers, referenced constants) is
-added deterministically from the AST. The goal is lower coding-model context
-without lower task success.
+1. **Tools.** The coding agent searches, reads, tests, and patches as usual. It
+   is not told to use ContextLens.
+2. **Filter.** Large tool output is split into candidates. Jev returns KEEP or
+   DROP only. It does not pick the next action, run tools, or write code.
+3. **Structure.** For Python source, the AST adds imports, class headers, and
+   referenced constants around what Jev kept.
+4. **Recover.** Anything omitted is stored behind a stable handle. The original
+   text can be restored exactly.
+5. **Model.** Only the reduced observation is appended to the coding-model
+   transcript. Jev tokens are recorded separately and are never added to
+   coding-model input.
+
+Small files, explicit line-range reads, and known-symbol reads pass through.
+If Jev is unavailable, filtering fails open and the raw tool result is kept.
+
+## System design
 
 ContextLens is not an agent controller. The coding agent still decides what to
-do, which tools to call, what commands to run, and what edits to make.
-Filtering happens on the tool-response path so it does not add extra
+do. Filtering happens on the tool-response path so it does not add extra
 coding-model turns.
 
-## Default tools
-
-The default MCP profile exposes a small interface:
-
-- `context_filter` — reduce a raw tool observation (source, search, tests, logs)
-- `context_read` — exact current source; large files are filtered when a task is known
-- `context_recover` — restore omitted or deferred exact text
-- `context_pin` — keep an observation out of automatic garbage collection
-- `context_list` — list active, pinned, and deferred observations
-
-Pinned items, including explicit user requirements and the current task, are
-never dropped automatically. Deferred observations keep a handle and can be
-recovered exactly. ContextLens does not summarize multiple observations into a
-new synthesized observation.
-
-Small files, explicit narrow line-range reads, and known-symbol reads pass
-through. Thresholds are configurable (`CONTEXTLENS_MIN_TOKENS`,
-`CONTEXTLENS_KEEP_THRESHOLD`, and related `CONTEXTLENS_*` variables).
-
-## Run it
-
-Requires Git and Python 3.12+. Local discovery and exact reads need no model:
-
-```bash
-python -m pip install -e .
-contextlens find --root . --query "refresh-token timeout" --encoding o200k_base
-contextlens read --root . --path src/auth.py --start-line 20 --end-line 60
-contextlens recover cl_RECEIPT_ID --receipts .contextlens/source
+```mermaid
+flowchart TB
+  subgraph play["One tool call"]
+    A["Coding agent picks a tool"] --> T["read_file / grep / shell / apply_patch"]
+    T --> R["Raw tool result"]
+    R --> F["ContextLens"]
+    F --> M["Coding model sees a smaller exact or recoverable result"]
+    M --> A
+  end
+  subgraph filter["Inside ContextLens"]
+    J["Jev KEEP/DROP over already-discovered chunks"] --> S["Python AST expansion"]
+    S --> H["Receipts and recover handles"]
+  end
+  F -.-> J
 ```
 
-Jev filtering needs a Vercel AI Gateway key:
+The default MCP profile is `context_filter`, `context_read`, `context_recover`,
+`context_pin`, and `context_list`. Pinned items, including the current task,
+are never dropped automatically. A `context_next` controller profile exists
+for research; it is not the default.
 
-```bash
-export AI_GATEWAY_API_KEY="your-vercel-ai-gateway-key"
-contextlens filter --task "fix the refresh-token timeout" --kind code --input src/auth.py
-contextlens mcp --root . --state .contextlens --encoding o200k_base
-```
+## Results
 
-`--profile filter` is the default. Direct reads of small or ranged source do
-not need a gateway key.
+Ten frozen real Python GitHub issues (Click, responses, Luigi, Powertools,
+Flask, Babel), including two SWE-bench-Live lite tasks. The agent sees original
+issue text only. Gold patches and hidden tests stay on the host.
 
-Vercel Pro and Enterprise users can set `CONTEXTLENS_VERCEL_ZDR=1` for
-zero-data-retention routing. Vercel rejects that option on Hobby plans.
-
-## Real Coding-Agent Benchmark
-
-The main evaluation is a paired coding-agent run on ten frozen real Python
-GitHub issues (Click, responses, Luigi, Powertools, Flask, Babel). Two of the
-tasks are SWE-bench-Live lite instances (`python-babel__babel-1141`,
-`pallets__flask-5637`). The agent sees original issue text only. Gold patches,
-hidden tests, and relevant symbols stay on the host.
-
-Three conditions share the same model, reasoning level, prompt, commit, tools,
-timeout, environment, and max turns. ContextLens is not mentioned to the agent.
-It transforms tool results on the host before they enter the coding model:
+Three conditions share the same model, reasoning, prompt, commit, tools,
+timeout, and max turns:
 
 1. **Baseline** — raw tool outputs
-2. **Jev Filter** — KEEP/DROP relevance filtering, no AST expansion
-3. **ContextLens** — Jev filtering, structural source expansion, recovery handles
+2. **Jev Filter** — KEEP/DROP, no AST expansion
+3. **ContextLens** — Jev plus structural expansion and recovery handles
 
-```bash
-export OPENAI_API_KEY="..."          # or AI_GATEWAY_API_KEY
-export AI_GATEWAY_API_KEY="..."      # required for Jev
-python -m benchmarks.goal --output evals/artifacts/coding-agent --trials 1 --timeout 300
-```
-
-Jev tokens and cost are reported separately and are never added to coding-model
-input. `benchmarks.filter_eval` remains a component regression for the filter
-pipeline; it is not this coding-agent result.
-
-Checked-in 21 September 2026 Jev-enabled run: hidden graders calibrated
-**10/10**. The host agent completed all **30** paired attempts on
-`gpt-5.6-luna` (`reasoning.effort=low`, 20 turns, 300s). Jev scored through
-the Vercel AI Gateway. Coding-model calls stayed on OpenAI. Tool-output tokens
-removed are **21,356** (Jev Filter) and **19,877** (ContextLens). Jev tokens
-are separate: **136,505** / **124,519** input.
+21 September 2026, `gpt-5.6-luna`, `reasoning.effort=low`, 20 turns, 300s.
+Hidden graders calibrated 10/10. All 30 paired attempts completed. Jev scored
+through the Vercel AI Gateway. Coding-model calls stayed on OpenAI.
 
 | Condition   | Verified Fixes | Coding Input Tokens | Uncached Input | Cached Input | Output Tokens | Total Coding Tokens | Raw Tool Output | Injected Tool Output | Tokens Removed | Agent Turns | Recoveries | Jev Input |
 | ----------- | -------------: | ------------------: | -------------: | -----------: | ------------: | ------------------: | --------------: | -------------------: | -------------: | ----------: | ---------: | --------: |
@@ -137,71 +95,67 @@ are separate: **136,505** / **124,519** input.
 | spotify-luigi-run-arguments         | ❌        | ✅          | ❌           |         81,371 |           28,680 |           264,521 |
 
 Verified fixes: Baseline **5/10**, Jev Filter **7/10**, ContextLens **5/10**.
-Jev Filter used **203,743** fewer coding-model input tokens (-34.9%) and
-**2** fewer agent turns (-1.5%). Injected tool output fell from **46,950** to
-**26,920**. Jev Filter extra fixes were Flask trusted-hosts and Luigi run
-arguments; both still failed under ContextLens. This is one trial of ten
-tasks, not a statistical quality claim.
+This is one trial of ten tasks, not a statistical quality claim.
 
-ContextLens used **522,156** more coding-model input tokens (+89.5%). Two
-trajectories dominate that total: `click-short-help` ingested **65,113** raw
-tool-output tokens unreduced (**490,067** coding-model input vs **27,291**
-baseline), and `spotify-luigi-run-arguments` used **264,521** coding-model
-input after still dropping **11,593** tool tokens. ContextLens filtering
-removed **19,877** tokens from its own raw tool output (**138,931 → 119,054**),
-but the agent fetched much more raw output than baseline, so coding-model
-input rose. Recoveries: **0**. Jev cost recorded by the gateway: **0**.
+The live gate is: task success does not regress, coding-model input decreases
+meaningfully, and agent turns do not materially increase. On this trial, Jev
+Filter met those three numbers. ContextLens did not.
 
-The component filter fixture is unchanged: injected tool-output tokens fell
-from **1,004** to **418** (58.37%), with Jev scored separately (**60** input /
-**12** output). That is not this coding-agent result.
+## What the numbers mean
 
-The live paired coding-agent gate remains:
+- **Jev Filter used 203,743 fewer coding-model input tokens (-34.9%)** and two
+  fewer turns. Injected tool output fell from **46,950** to **26,920**. Extra
+  fixes were Flask trusted-hosts and Luigi run arguments.
+- **ContextLens used 522,156 more coding-model input tokens (+89.5%)**. Two
+  trajectories dominate: `click-short-help` ingested **65,113** raw tool-output
+  tokens unreduced (**490,067** coding-model input vs **27,291** baseline), and
+  `spotify-luigi-run-arguments` used **264,521**. Filtering still dropped
+  **19,877** tokens from ContextLens's own raw tool output
+  (**138,931 → 119,054**); the agent fetched much more than baseline.
+- Jev usage is separate: **136,505** input / **24,232** output on Jev Filter,
+  **124,519** / **21,914** on ContextLens. Gateway-reported cost: **0**.
+- A local fixture, not this coding-agent run, cut injected tool-output tokens
+  from **1,004** to **418** (58.37%), with Jev scored separately (**60** input /
+  **12** output).
 
-```text
-task success does not regress
-AND
-coding-model input decreases meaningfully
-AND
-agent turns do not materially increase
-```
+Do not average ContextLens with Jev Filter. Full ContextLens is the product
+path with structural expansion.
 
-On this single trial, **Jev Filter met those three numbers** (5/10 → 7/10,
--34.9% coding-model input, -1.5% turns). **ContextLens did not**: success
-held at 5/10, coding-model input rose 89.5%, turns rose 3.7%. Do not treat
-the Jev Filter totals as a shipping gate without more trials, and do not
-average ContextLens with Jev Filter: full ContextLens is the product path
-with structural expansion, and it lost to the outliers above.
+A `context_next` loop that chose the agent's next capability before ordinary
+tool use kept **2/3 verified fixes**, timed out once, and used **156.21% more
+complete input** on finished pairs. That extra decision point increased agent
+input and turns, so it is not the shipping path.
 
-## Experimental / research
+## Run it
 
-Mandatory controller routing was tested and removed from the default
-architecture. A `context_next` loop that chose the agent's next capability
-before ordinary tool use kept **2/3 verified fixes**, timed out once, and used
-**156.21% more complete input** across the two finished pairs. That extra
-decision point increased agent input and turns, so it is not the shipping
-path.
-
-Keep those experiments with:
+Requires Git and Python 3.12+. Local discovery and exact reads need no model:
 
 ```bash
-contextlens mcp --profile controller
-# aliases: --profile jev
+python -m pip install -e .
+contextlens find --root . --query "refresh-token timeout" --encoding o200k_base
+contextlens read --root . --path src/auth.py --start-line 20 --end-line 60
+contextlens recover cl_RECEIPT_ID --receipts .contextlens/source
 ```
 
-Historical measurements stay in place:
+Jev filtering needs a Vercel AI Gateway key:
 
-- [controller trajectory](docs/controller-trajectory-benchmark-2026-09-20.md)
-- [controller loop](docs/controller-loop-benchmark-2026-09-20.md)
-- [action selection](docs/action-selection-benchmark-2026-09-20.md)
-- [Jev evidence](docs/jev-benchmark-2026-09-20.md)
-- [older whole-agent pilot](benchmarks/results/goal-e2e-2026-09-18/README.md)
+```bash
+export AI_GATEWAY_API_KEY="your-vercel-ai-gateway-key"
+contextlens filter --task "fix the refresh-token timeout" --kind code --input src/auth.py
+contextlens mcp --root . --state .contextlens --encoding o200k_base
+```
 
-A compact find-and-read profile (`--profile compact`) and the neural SWE-Pruner
-path (`--profile legacy` / `contextlens prune`) remain available for research.
-Install `.[neural]` only for that older scorer.
+`--profile filter` is the default. Direct reads of small or ranged source do
+not need a gateway key. Vercel Pro and Enterprise users can set
+`CONTEXTLENS_VERCEL_ZDR=1` for zero-data-retention routing.
 
-## Develop it
+Paired coding-agent benchmark:
+
+```bash
+export OPENAI_API_KEY="..."
+export AI_GATEWAY_API_KEY="..."
+python -m benchmarks.goal --output evals/artifacts/coding-agent --trials 1 --timeout 300
+```
 
 ```bash
 python -m pip install -e ".[dev]"
@@ -214,7 +168,24 @@ mypy
 | --- | --- |
 | [`src/contextlens/`](src/contextlens/) | Observation filtering, exact-source recovery, optional Jev scoring, MCP |
 | [`tests/`](tests/) | Filter, recovery, MCP, and provider-validation coverage |
-| [`benchmarks/`](benchmarks/) | Fixture filter eval plus historical controller and evidence reports |
-| [`docs/`](docs/) | Architecture, research notes, and measured reports |
+| [`benchmarks/`](benchmarks/) | Frozen coding-agent tasks, the paired harness, and measured reports |
+| [`docs/`](docs/) | Architecture, research notes, and historical measurements |
+
+Historical reports: [controller trajectory](docs/controller-trajectory-benchmark-2026-09-20.md),
+[controller loop](docs/controller-loop-benchmark-2026-09-20.md),
+[action selection](docs/action-selection-benchmark-2026-09-20.md),
+[Jev evidence](docs/jev-benchmark-2026-09-20.md).
 
 Released under the [MIT License](LICENSE).
+
+## Credits
+
+Jev by [TypeSafe AI](https://www.typesafe.ai) through the
+[Vercel AI Gateway](https://vercel.com/ai-gateway/models/jev). Frozen tasks
+from [Click](https://github.com/pallets/click),
+[responses](https://github.com/getsentry/responses),
+[Luigi](https://github.com/spotify/luigi),
+[Powertools](https://github.com/aws-powertools/powertools-lambda-python),
+[Flask](https://github.com/pallets/flask), and
+[Babel](https://github.com/python-babel/babel). Two tasks from
+[SWE-bench-Live](https://github.com/SWE-bench/SWE-bench-Live).

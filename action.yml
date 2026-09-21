@@ -1,6 +1,6 @@
 name: ContextLens Agent Context Regression
 description: Static or verified CI checks for changes to AI-agent repository context
-author: ContextLens contributors
+author: Evan Gruhlkey
 
 inputs:
   mode:

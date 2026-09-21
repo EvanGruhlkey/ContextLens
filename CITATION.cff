@@ -5,6 +5,7 @@ version: 0.1.0
 date-released: 2026-07-27
 license: MIT
 authors:
-  - name: "ContextLens contributors"
+  - family-names: Gruhlkey
+    given-names: Evan
 repository-code: "https://github.com/EvanGruhlkey/ContextLens"
 type: software
