@@ -67,14 +67,15 @@ never enter the agent's workspace. Two tasks come from SWE-bench-Live.
 
 `results/` holds measured reports:
 
-- `four-condition-2026-09-21.{json,md}` — the measured four-condition run.
-  `gpt-5.6-luna` at `reasoning.effort=low`, 20 turns, 300 s, one trial, ten
-  tasks, 39 of 40 attempts completed. Verified fixes 5 / 5 / 7 / 5. **Neither
-  layer engaged materially**: compaction never fired (largest transcript 14,022
-  tokens against the 20,000-token trigger) and live pruning removed 2.7% of raw
-  tool output (average tool result about 500 tokens against a 1,500-token gate).
-  `compaction_only` was mechanically identical to baseline and still scored +2
-  fixes and +3.0% input, which is this suite's noise floor.
+- `four-condition-2026-09-21-tuned.{json,md}` — **the current measured run.**
+  Verified fixes 5 / 5 / 5 / 4. Live pruning held baseline's fix count while
+  cutting injected tool output 36.2% and uncached coding-model input 24.8%, with
+  agent turns unchanged. Compaction never fired: the largest transcript reached
+  14,178 tokens against the 20,000-token trigger, which was not lowered.
+- `four-condition-2026-09-21.{json,md}` — the same four conditions with the
+  earlier over-conservative defaults (`minimum_tokens=1500`, uncertainty floor
+  `0.1`), where live pruning removed only 2.7% of raw tool output. Kept because
+  it is the measurement that found the mis-set defaults.
 - `offline.{json,md}` — the offline harness check.
 
 Reports for architectures that no longer exist are under

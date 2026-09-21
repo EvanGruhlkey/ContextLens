@@ -109,13 +109,14 @@ user constraints, every edit, and recent failures. See
 ### Measured four-condition run, 21 September 2026
 
 Ten frozen real Python GitHub issues (Click, responses, Luigi, Powertools,
-Flask, Babel), two from SWE-bench-Live. `gpt-5.6-luna` at
+Flask, Babel), two of them from SWE-bench-Live. `gpt-5.6-luna` at
 `reasoning.effort=low`, 20 turns, 300 s, one trial. All four conditions share
 the coding model, reasoning effort, issue prompt, repository commit, tool set,
-timeout, turn limit, and hidden grader; only the ContextLens layers differ. The
-agent is never told ContextLens exists. Hidden graders calibrated 10/10; 39 of
-40 attempts completed (one baseline attempt hit the turn limit). Jev scored
-through the Vercel AI Gateway; coding-model calls went to OpenAI.
+timeout, turn limit, and hidden grader; only the ContextLens layers differ, and
+the agent is never told ContextLens exists. Hidden graders calibrated 10/10. Jev
+scored through the Vercel AI Gateway; coding-model calls went to OpenAI. 36 of
+40 attempts completed: three hit the 20-turn limit and one died on an OpenAI
+HTTP 503.
 
 | Condition | Live pruning | Compaction |
 | --- | --- | --- |
@@ -126,59 +127,58 @@ through the Vercel AI Gateway; coding-model calls went to OpenAI.
 
 | Condition | Verified Fixes | Coding Input | Uncached | Cached | Output | Total Coding | Raw Tool Output | Injected Tool Output | Tokens Removed | Agent Turns | Tool Calls | Compaction Events | Tasks Compacted | Recoveries | Jev Input | Jev Output | Jev Cost | Wall Clock |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Baseline | 5 | 463,023 | 55,593 | 407,430 | 17,974 | 480,997 | 44,533 | 44,533 | 0 | 135 | 126 | 0 | 0 | 0 | 0 | 0 | 0 | 403.3 s |
-| Live Pruning | 5 | 447,362 | 61,704 | 385,658 | 16,283 | 463,645 | 55,279 | 53,798 | 1,481 | 120 | 110 | 0 | 0 | 0 | 22,079 | 799 | 0 | 327.6 s |
-| Compaction Only | 7 | 476,918 | 53,818 | 423,100 | 17,177 | 494,095 | 56,801 | 56,801 | 0 | 117 | 107 | 0 | 0 | 0 | 0 | 0 | 0 | 390.1 s |
-| Full ContextLens | 5 | 479,354 | 61,744 | 417,610 | 19,207 | 498,561 | 53,426 | 52,743 | 683 | 127 | 117 | 0 | 0 | 0 | 19,105 | 512 | 0 | 353.1 s |
+| Baseline | 5 | 622,586 | 69,094 | 553,492 | 18,702 | 641,288 | 60,844 | 60,844 | 0 | 137 | 129 | 0 | 0 | 0 | 0 | 0 | 0 | 445.9 s |
+| Live Pruning | 5 | 435,221 | 51,955 | 383,266 | 19,595 | 454,816 | 57,647 | 38,791 | 18,856 | 137 | 127 | 0 | 0 | 0 | 71,895 | 2,457 | 0 | 535.3 s |
+| Compaction Only | 5 | 480,956 | 66,484 | 414,472 | 14,765 | 495,721 | 60,596 | 60,596 | 0 | 116 | 107 | 0 | 0 | 0 | 0 | 0 | 0 | 356.4 s |
+| Full ContextLens | 4 | 496,496 | 60,163 | 436,333 | 17,436 | 513,932 | 60,626 | 47,836 | 12,790 | 132 | 123 | 0 | 0 | 0 | 72,938 | 2,297 | 0 | 431.3 s |
 
 | Metric vs Baseline | Live Pruning | Compaction Only | Full ContextLens |
 | --- | ---: | ---: | ---: |
-| Verified fixes | +0 | +2 | +0 |
-| Coding-model input tokens | -15,661 (-3.4%) | +13,895 (+3.0%) | +16,331 (+3.5%) |
-| Uncached coding-model input | +6,111 (+11.0%) | -1,775 (-3.2%) | +6,151 (+11.1%) |
-| Cached coding-model input | -21,772 (-5.3%) | +15,670 (+3.8%) | +10,180 (+2.5%) |
-| Output tokens | -1,691 (-9.4%) | -797 (-4.4%) | +1,233 (+6.9%) |
-| Total coding-model tokens | -17,352 (-3.6%) | +13,098 (+2.7%) | +17,564 (+3.7%) |
-| Raw tool output | +10,746 (+24.1%) | +12,268 (+27.5%) | +8,893 (+20.0%) |
-| Injected tool output | +9,265 (+20.8%) | +12,268 (+27.5%) | +8,210 (+18.4%) |
-| Agent turns | -15 (-11.1%) | -18 (-13.3%) | -8 (-5.9%) |
-| Tool calls | -16 (-12.7%) | -19 (-15.1%) | -9 (-7.1%) |
-| Wall clock | -75.7 s (-18.8%) | -13.2 s (-3.3%) | -50.2 s (-12.4%) |
+| Verified fixes | +0 | +0 | -1 |
+| Coding-model input tokens | -187,365 (-30.1%) | -141,630 (-22.7%) | -126,090 (-20.3%) |
+| Uncached coding-model input | -17,139 (-24.8%) | -2,610 (-3.8%) | -8,931 (-12.9%) |
+| Cached coding-model input | -170,226 (-30.8%) | -139,020 (-25.1%) | -117,159 (-21.2%) |
+| Output tokens | +893 (+4.8%) | -3,937 (-21.1%) | -1,266 (-6.8%) |
+| Total coding-model tokens | -186,472 (-29.1%) | -145,567 (-22.7%) | -127,356 (-19.9%) |
+| Injected tool output | -22,053 (-36.2%) | -248 (-0.4%) | -13,008 (-21.4%) |
+| Agent turns | +0 (+0.0%) | -21 (-15.3%) | -5 (-3.6%) |
+| Tool calls | -2 (-1.6%) | -22 (-17.1%) | -6 (-4.7%) |
+| Wall clock | +89.4 s (+20.0%) | -89.5 s (-20.1%) | -14.6 s (-3.3%) |
 
 | Task | Base | Live | Compact | Full | Base Input | Live Input | Compact Input | Full Input |
 | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: |
-| aws-powertools-eventbridge-replay | ✅ | ❌ | ✅ | ❌ | 26,084 | 57,670 | 77,805 | 52,262 |
-| aws-powertools-query-merge | ❌ | ❌ | ❌ | ❌ | 82,705 | 58,357 | 41,511 | 98,385 |
-| click-empty-default | ❌ | ❌ | ❌ | ❌ | 40,411 | 34,185 | 40,033 | 34,293 |
-| click-short-help | ❌ | ❌ | ❌ | ❌ | 19,518 | 31,285 | 24,670 | 35,513 |
-| pallets-flask-trusted-hosts | ❌ | ✅ | ✅ | ✅ | 80,186 | 88,309 | 96,772 | 69,388 |
-| python-babel-parse-time | ✅ | ✅ | ✅ | ✅ | 42,228 | 28,888 | 27,450 | 23,725 |
-| responses-blank-query | ✅ | ✅ | ✅ | ✅ | 22,653 | 29,837 | 16,977 | 21,893 |
-| responses-query-mutation | ✅ | ❌ | ✅ | ✅ | 19,953 | 17,913 | 28,659 | 32,162 |
-| spotify-luigi-bool-default | ✅ | ✅ | ✅ | ✅ | 47,921 | 42,532 | 42,302 | 32,301 |
-| spotify-luigi-run-arguments | ❌ | ✅ | ✅ | ❌ | 81,364 | 58,386 | 80,739 | 79,432 |
+| aws-powertools-eventbridge-replay | ❌ | ✅ | ✅ | ❌ | 47,840 | 33,360 | 77,937 | 25,193 |
+| aws-powertools-query-merge | ❌ | ❌ | ❌ | ❌ | 149,710 | 70,334 | 84,515 | 104,300 |
+| click-empty-default | ❌ | ❌ | ❌ | ❌ | 36,848 | 31,359 | 25,059 | 41,202 |
+| click-short-help | ❌ | ❌ | ❌ | ❌ | 32,469 | 29,319 | 28,672 | 28,096 |
+| pallets-flask-trusted-hosts | ❌ | ❌ | ❌ | ❌ | 135,474 | 104,507 | 106,276 | 88,108 |
+| python-babel-parse-time | ✅ | ✅ | ✅ | ✅ | 35,132 | 29,900 | 34,992 | 22,551 |
+| responses-blank-query | ✅ | ✅ | ✅ | ✅ | 27,183 | 23,846 | 29,483 | 28,113 |
+| responses-query-mutation | ✅ | ✅ | ✅ | ✅ | 28,988 | 23,836 | 24,286 | 20,615 |
+| spotify-luigi-bool-default | ✅ | ✅ | ✅ | ✅ | 46,449 | 38,152 | 62,918 | 58,796 |
+| spotify-luigi-run-arguments | ✅ | ❌ | ❌ | ❌ | 82,493 | 50,608 | 6,818 | 79,522 |
 
-Regressions, where baseline fixed a task and a ContextLens condition did not:
-
-- **Live Pruning** — 2: `aws-powertools-eventbridge-replay`,
-  `responses-query-mutation`. Newly fixed: `pallets-flask-trusted-hosts`,
-  `spotify-luigi-run-arguments`.
-- **Compaction Only** — none. Newly fixed: `pallets-flask-trusted-hosts`,
-  `spotify-luigi-run-arguments`.
-- **Full ContextLens** — 1: `aws-powertools-eventbridge-replay`. Newly fixed:
-  `pallets-flask-trusted-hosts`.
+Every condition, **including the inert `compaction_only` control**, failed
+`spotify-luigi-run-arguments`, so that regression is task flakiness rather than
+pruning. `compaction_only`'s attempt on it is also the one that died on the 503.
 
 Full report:
+[`benchmarks/results/four-condition-2026-09-21-tuned.md`](benchmarks/results/four-condition-2026-09-21-tuned.md).
+
+### Two earlier runs, for contrast
+
+**Over-conservative defaults, same tasks.** An earlier run of the same four
+conditions used `minimum_tokens=1500` and an uncertainty floor of `0.1`, copied
+from `jev-pruner` (whose own gate is 10,000 tokens). That made live pruning
+almost inert on this workload: it removed **1,481 of 55,279** raw tool-output
+tokens (2.7%) and moved coding-model input by **-3.4%**, inside the noise floor.
+Verified fixes were 5 / 5 / 7 / 5. Report:
 [`benchmarks/results/four-condition-2026-09-21.md`](benchmarks/results/four-condition-2026-09-21.md).
 
-### Earlier run, previous architecture
-
-The 21 September run that retired AST structural expansion measured Baseline
-**583,459** coding-model input tokens and 5/10 fixes, Jev filtering alone
-**379,716** and 7/10, and Jev filtering plus AST expansion **1,105,615** and
-5/10. That filtering condition used a lower minimum-size threshold and removed
-**21,356** tool-output tokens, which is why it showed a large input reduction the
-run above does not reproduce. Full report:
+**Previous architecture.** The run that retired AST structural expansion
+measured Baseline **583,459** coding-model input tokens with 5/10 fixes, Jev
+filtering alone **379,716** with 7/10, and Jev filtering plus AST expansion
+**1,105,615** with 5/10. Report:
 [`docs/history/coding-agent-2026-09-21.md`](docs/history/coding-agent-2026-09-21.md).
 
 ### Offline harness check
@@ -203,59 +203,73 @@ deliberately lowered because the scripted transcript is tiny. Raw rows:
 
 ## What the numbers mean
 
-The honest reading of the four-condition run: **at their default thresholds,
-neither layer engaged enough on these tasks to move the coding model's token
-count, so this run does not show ContextLens reducing context.** It also does
-not show it costing fixes. Both layers were effectively idle.
+**Live pruning met the goal on this trial. Transcript compaction was never
+exercised.**
 
-- **Transcript compaction never fired.** Zero events across all 20 attempts in
-  the two compaction conditions. The largest transcript in the whole run reached
-  **14,022** estimated tokens against the production trigger of **20,000**, with
-  a median around **5,600**. Twenty turns on a single-file bug fix simply does
-  not produce a long transcript. The threshold was not lowered to force it.
-- **Therefore `compaction_only` was mechanically identical to `baseline`** — same
-  raw tool output, no pruning, no compaction — and it still scored **7/10 against
-  baseline's 5/10**, differing by **+3.0%** coding-model input. That is the most
-  useful number in the run: it measures the noise floor of this suite directly.
-  A ±2 fix swing and a ±3% token swing here mean nothing. Read every other
-  comparison against that.
-- **Live pruning barely fired.** It requested Jev on 3 of 10 tasks (4 requests
-  total) and removed **1,481 of 55,279** raw tool-output tokens, **2.7%**. The
-  cause is mechanical: the average tool result was about **500 tokens** against
-  the **1,500-token** minimum-size gate, so almost nothing was eligible. Its
-  -3.4% coding-model input is inside the noise floor above, not a saving.
-- **Injected tool output rose in every candidate condition** (+18% to +28%).
-  ContextLens cannot add text, and it removed tokens where it ran. Those agents
-  simply took different, longer tool sequences — visible in raw tool output
-  rising by a nearly identical amount. This is trajectory variance.
-- **Jev is cheap and separate.** 22,079 input / 799 output tokens for live
-  pruning, 19,105 / 512 for full ContextLens, gateway-reported cost 0, and never
-  added to coding-model input in any table.
-- **No recovery was ever needed.** 0 recovery calls in every condition, so the
-  pruning that did happen never removed something the agent had to ask for back.
-- **Wall clock fell in every candidate condition** (-3% to -19%), tracking the
-  lower turn and tool-call counts rather than anything ContextLens did.
-- The earlier run's **-34.9%** input reduction came from a filtering condition
-  with a lower size gate that removed **21,356** tool-output tokens, 14× more
-  than live pruning removed here. The reduction was real; the current default
-  threshold is what prevents reproducing it.
-- **AST structural expansion** remains retired: **+522,156** input tokens
-  (+89.5%) against baseline, driven by two runaway trajectories
-  (`click-short-help` 490,067, `spotify-luigi-run-arguments` 264,521). See
+- **Live pruning held verified fixes at 5/10, the same as baseline, while
+  cutting injected tool output 36.2%** (60,844 → 38,791 tokens), uncached
+  coding-model input **24.8%** (69,094 → 51,955), and total coding-model input
+  **30.1%** (622,586 → 435,221). Agent turns were identical (137 vs 137) and
+  tool calls fell 1.6%, so it did not push the agent into extra work.
+- **Read total-input deltas with care.** `compaction_only` fired zero compaction
+  events, making it mechanically identical to baseline, and it still shows
+  **-22.7%** total input. That is this suite's noise floor, inflated because one
+  of its attempts died on an OpenAI 503 after two turns. The comparisons that
+  survive that control are **injected tool output** (-36.2% for live pruning
+  against -0.4% for the inert control) and **uncached input** (-24.8% against
+  -3.8%) — both direct, mechanical effects of pruning.
+- **Compaction never triggered.** Zero events in 20 attempts. The largest
+  transcript reached **14,178** estimated tokens against the 20,000-token
+  production trigger, which was not lowered. Ten single-file bug fixes at 20
+  turns do not build a long enough session. The layer is implemented and tested
+  but remains unmeasured against a real coding model.
+- **`full_contextlens` is live pruning plus an inert layer**, and it fixed one
+  task fewer (4/10) while pruning less (12,790 vs 18,856 tokens removed). With
+  compaction doing nothing, that gap is trajectory variance, not composition.
+- **The one regression is task flakiness.** Every condition failed
+  `spotify-luigi-run-arguments`, including the inert control, and baseline
+  passed it. No condition-specific cause.
+- **Where live pruning engaged, it engaged rarely and precisely.** Of 204
+  observations: 103 were below the size gate, 33 had too few chunks, 33 were
+  scored and kept whole, **22 were pruned**, 7 hit gateway failures and failed
+  open, and 6 were structured documents skipped by design. Recovery calls: **0**
+  — nothing it dropped was ever asked for back.
+- **Jev is cheap and separate.** 71,895 input / 2,457 output tokens for live
+  pruning at a gateway-reported cost of 0, never added to coding-model input.
+- **It costs latency.** Live pruning's wall clock rose 20.0% (445.9 s → 535.3 s)
+  because each large observation waits on Jev before the model sees it.
+
+### What I got wrong first, and how it was found
+
+The first run of this benchmark showed live pruning removing 2.7% of tool output
+and changing input by -3.4%. Three settings carried over from `jev-pruner`, whose
+gate is tuned for 10,000-token shell logs, were wrong for this workload:
+
+| Setting | Was | Now | Why |
+| --- | --- | --- | --- |
+| `minimum_tokens` | 1,500 | **256** | Average tool result here is ~500 tokens, so almost nothing was eligible |
+| `uncertain_keep_probability` | 0.1 | **0.0** | Measured against real Jev, disposable output scores 0.1–0.2, so a 0.1 floor keeps everything and pruning never happens |
+| `max_chunks` | 200 | **32** | 200 chunks meant ~14 Jev requests per observation; the gateway answered HTTP 429 "providers at capacity" and every rate-limited batch failed the whole observation open |
+| `max_state_tokens` | 25,000 | **12,000** | Measured: ~25,000-token states are refused with 429, everything at or below ~16,000 succeeds |
+
+The gateway now retries 429 and 5xx with backoff instead of silently failing
+open, and every run records why each observation was or was not pruned — without
+that, "Jev kept everything" and "the gateway rate limited us" produce identical
+zeros.
+
+### Still open
+
+- Compaction is unproven. It needs sessions long enough to reach its trigger.
+- One trial of ten tasks cannot resolve a ±2 fix difference, as the inert control
+  demonstrates. Reduction claims rest on the mechanical metrics, not fix counts.
+- The 20% latency cost of live pruning is real and unoptimized.
+- **AST structural expansion** remains retired: +522,156 input tokens (+89.5%)
+  against baseline, driven by two runaway trajectories. See
   [`experiments/structural_expansion/`](experiments/structural_expansion/).
 - **A `context_next` loop** in which Jev chose the agent's next capability kept
   2/3 verified fixes, timed out once, and used 156.21% more complete input.
   Deciding for the agent cost input and turns, which is why Jev only decides
   relevance.
-
-**Answer to the main question, as measured:** on ten single-file Python bug
-fixes at 20 turns, ContextLens neither reduced the tokens the coding model
-processed nor cost verified fixes, because its triggers are set for workloads
-with far more tool output and far longer transcripts than these tasks produce.
-The next step is not to tune thresholds until the table looks better — it is to
-measure on a workload that actually generates large tool outputs and long
-sessions, and to report threshold sensitivity as its own labelled experiment.
-One trial of ten tasks is not a statistical claim in either direction.
 
 ## Run it
 

@@ -32,20 +32,19 @@ agent turns and no drop in task success.
 
 ## Next
 
-1. Benchmark on a workload that actually produces large tool outputs and long
-   sessions. The 21 September four-condition run showed both layers idle on
-   ten single-file Python bug fixes: compaction never reached its 20,000-token
-   trigger (largest transcript 14,022 tokens) and live pruning found only 2.7%
-   of raw tool output above its 1,500-token gate.
-2. Establish the noise floor before claiming anything. In that run the
-   `compaction_only` condition was mechanically identical to baseline and still
-   differed by +2 fixes and +3.0% coding-model input.
-3. Report threshold sensitivity as its own labelled experiment. Do not tune
-   `minimum_tokens` or `trigger_tokens` inside the headline benchmark.
-4. Decide whether compaction should run on a token trigger, a turn cadence, or
-   both, from measurements.
+1. Measure transcript compaction. It has never fired in a real run: the longest
+   transcript on the benchmark reached 14,178 tokens against its 20,000-token
+   trigger. It needs sessions long enough to reach that, or a trigger chosen from
+   evidence rather than intuition.
+2. Keep a mechanically inert control condition in every run. On the 21 September
+   run `compaction_only` did nothing and still showed -22.7% total coding-model
+   input, which is the only honest way to see this suite's noise floor.
+3. Cut live pruning's latency. It cost 20.0% more wall clock because every large
+   observation waits on Jev.
+4. Reduce the share of observations that fall below the size gate. 103 of 204
+   were ineligible; smaller eligible outputs may still be worth chunking.
 5. Report recovery rate as a quality signal: frequent recovery means pruning is
-   too aggressive. It was zero in the measured run.
+   too aggressive. It was zero across every measured run so far.
 
 ## Explicitly out of scope
 
