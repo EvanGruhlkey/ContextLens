@@ -2,118 +2,57 @@
 
 ## Unreleased
 
-- Added a paired real coding-agent benchmark as the main evaluation: ten
-  frozen Python GitHub issues, three transparent conditions (baseline / Jev
-  filter / ContextLens), and host-side tool-result filtering. The Jev-enabled
-  21 September 2026 gpt-5.6-luna run completed 30/30 attempts. Verified fixes
-  were Baseline 5/10, Jev Filter 7/10, ContextLens 5/10. Jev Filter used
-  203,743 fewer coding-model input tokens (-34.9%). ContextLens used 522,156
-  more, dominated by two unreduced trajectories. Jev tokens are reported
-  separately (136,505 / 124,519 input).
-- Kept `benchmarks.filter_eval` as the component regression for injected
-  tool-output filtering.
-
-- Made transparent observation filtering the default product: Jev scores
-  already-discovered source, search, test, and log candidates; AST expansion
-  stays local; omitted exact text remains recoverable.
-- Replaced the default MCP surface with `context_filter`, `context_read`,
-  `context_recover`, `context_pin`, and `context_list`.
-- Moved mandatory `context_next` controller routing to `--profile controller`
-  after the paired pilot increased agent input and turns.
-- Added configurable bypass thresholds and a local three-condition filter
-  evaluation that reports injected tool-output tokens separately from Jev.
-
-- Made the released SWE-Pruner 0.6B checkpoint the default line scorer, added
-  self-contained per-observation goal generation, and retained an explicit HTTP
-  backend for remote model serving.
-- Added LaMR-style Python dependency closure after learned evidence selection,
-  with parse/size validation, exact receipts, and auditable retention reasons.
-- Added a reproducible real-source benchmark and refused accidental CPU model
-  inference after an observed eight-minute, near-memory-capacity smoke test.
-- Added a first-class paired-agent experiment runner shared by `verify`,
-  verified `minimize`, and historical case studies, with fresh isolated agent
-  executions, alternating order, native-context suppression, explicit pairing,
-  reproducibility manifests, raw telemetry, and infrastructure-error retention.
-- Kept historical hidden grader definitions outside agent-visible workspaces,
-  required prior buggy/fixed grader validation, and added JSON plus Markdown
-  study outputs.
-- Made verified evaluation task-effective: each task now resolves base and
-  candidate context independently from `target_paths` and `context_provider`,
-  and persists exact sources, effective tokens, resolution mode, and warnings.
-- Added a reproducible six-task historical bug-fix study across Browser Use,
-  Infisical, and Langfuse with pinned commits, deterministic candidates,
-  host-staged hidden graders, raw validation reports, and honest blocked/zero-run
-  status when agent infrastructure is unavailable.
-- Added Git-symlink-aware context scanning for both worktrees and immutable refs.
-- Fixed clean editable installs so the development-only `evals` harness is
-  importable without shipping it in the production wheel or mutating `sys.path`.
-- Added `contextlens init` with conservative ecosystem, check, context, and
-  agent detection plus explicit non-runnable TODO fallbacks.
-- Split repository footprint from target-effective context and added Codex,
-  Claude, Copilot, and Cursor scope resolvers with accuracy labels.
-- Hardened minimization with prioritized deduplicate/remove/scope proposals,
-  isolated candidate screening, and a separate final combined verification.
-- Added effective-context CI reporting, cross-platform argument generation,
-  and robust action result output on failing gates.
-- Added a pinned seven-change public repository corpus and a checked-in,
-  reproducible static VS Code report without inventing agent results.
-- Repositioned ContextLens as CI and regression testing for repository-owned
-  agent context: "test your AGENTS.md like you test your code."
-- Added credential-free repository discovery and static `scan` for AGENTS.md,
-  CLAUDE.md, Copilot/Cursor rules, skills, MCP configs, and tool schemas.
-- Added Git-aware `diff` that compares the worktree with an immutable base tree
-  and reports footprint, duplicate, and stale-reference deltas.
-- Added matched `verify` trials with mechanical evaluation, fail-closed
-  PASS/WARN/CONTEXT REGRESSION/INCONCLUSIVE verdicts, and separate quality,
-  economics, behavior, and latency reporting.
-- Added provider-usage normalization for cached, uncached, cache-write, output,
-  and reasoning categories plus explicit historical pricing snapshots.
-- Added conservative `minimize`: static evidence generates in-memory
-  candidates, isolated and combined verification gates them, and source files
-  are never edited.
-- Added static and verified `ci` modes, stable exit codes, JSON/Markdown
-  artifacts, a composite GitHub Action, and path-filtered workflow examples.
-- Added `profile` as the explicit trace-profiler command while preserving
-  `scan trace.jsonl` compatibility.
-- Added migration, CI, adapter, architecture, and deterministic local-demo
-  documentation.
-- Added complete agent-run and step records alongside structured context JSONL.
-- Added content hashing, expanded coding-agent source kinds, and built-in secret
-  redaction.
-- Added normalized project-scoped SQLite storage and an initial migration.
-- Added explicit remove, summarize, lazy-load, and scope mutations.
-- Added deterministic budgeted paired planning and validated replay lifecycle
-  transitions.
-- Added coding-task evaluation dimensions, effect evidence labels, policy
-  export/reapplication, richer HTML context breakdowns, and an end-to-end
-  fixture repository.
-- Made real-repository evaluation use three trials by default and report
-  injected context separately from provider input usage.
-- Added a post-control deployment gate that refuses to export pruning after any
-  observed final regression.
-- Fixed matched-random controls so they match the target token total without
-  overshooting or duplicating the ContextLens candidate subset.
-- Previously made fail-closed deployable injected-context reduction the eval
-  harness headline metric; the repository-regression pivot now retains it as a
-  compatibility footprint field rather than an economic-savings claim.
-- Added a production `trim` command and runtime API that apply policies before
-  an agent request, emit prompt and lazy-load payloads, report context savings,
-  enforce token/reduction thresholds, and fail closed on policy drift.
-
-All notable project changes will be documented here. The format follows Keep a
-Changelog principles, and releases use semantic versioning.
-
-## [0.1.0] - 2026-07-27
+Rewrote ContextLens around two layers and deleted everything else.
 
 ### Added
 
-- Versioned JSONL context traces and content-addressed artifacts.
-- Deterministic one-run utilization profiler.
-- Isolated parallel replay workers and subprocess agent contract.
-- Adaptive group ablation with budget-aware stopping.
-- Built-in evaluators, paired bootstrap analysis, and cost accounting.
-- Context optimization with combined verification and learned predictions.
-- Terminal, JSON, CSV, and self-contained HTML reports.
-- Real-agent keep/remove/investigate decisions and workload savings projections.
-- `record`, `scan`, `analyze`, `optimize`, and `report` CLI workflows.
-- Deterministic adaptive-versus-exhaustive benchmark.
+- **Live tool-output pruning** (`contextlens.filtering`): a configurable
+  minimum-size gate, line chunking capped at 200 chunks, deterministic
+  protection of diagnostics and results and their neighbours, batched Jev
+  KEEP/DROP over the remaining chunks, a state split into bounded groups so
+  every chunk is scored with the same task in view, an uncertainty safeguard
+  that keeps anything not confidently disposable, and receipts for everything
+  omitted.
+- **Transcript compaction** (`contextlens.compaction`): tool calls paired with
+  their results, compact descriptors instead of payloads, two Jev questions per
+  interaction, and a deterministic KEEP / TRUNCATE / DROP table. The original
+  task, recent messages, host-pinned content, every edit, and recent failures
+  are protected. A pass that would not produce a meaningful reduction keeps the
+  original transcript. Modelled on `tamaratran/fast-jev-compaction`.
+- A `prune` / `compact` / `recover` / `mcp` CLI and a two-tool MCP server
+  (`context_prune`, `context_recover`).
+- A rebuilt paired coding-agent benchmark with three conditions -- baseline,
+  live pruning, live pruning plus compaction -- over the same ten frozen real
+  GitHub issues, and an offline harness check that needs no credentials and
+  makes no network request.
+
+### Changed
+
+- The package has no runtime dependencies. `tiktoken`, `tree-sitter`, `torch`,
+  `transformers`, and `swe-pruner` are gone.
+- `src/contextlens/` is seven modules instead of eighty-two files.
+- The Jev client validates every response strictly and raises on anything
+  unexpected, so both layers fail open.
+
+### Removed
+
+- Structural Python AST expansion from the default path, after it measured
+  1,105,615 coding-model input tokens against 379,716 for Jev filtering alone
+  and 583,459 for baseline. It is retired to
+  `experiments/structural_expansion/` with the measurement that retired it.
+- The `context_next` action controller, bounded next-action routing, controller
+  sessions, and Jev-chosen capabilities.
+- The repository evidence index, adaptive search, AST-based expansion
+  infrastructure, and evidence-selection abstractions.
+- SWE-Pruner neural line scoring and its model server.
+- The observation working set with mandatory Jev garbage collection.
+- The trace format, replay workers, SQLite storage, telemetry, reports,
+  profiler, context-optimization solver, regression CLI, and GitHub Action.
+- Benchmark and eval infrastructure for all of the above.
+
+Measured results and design notes for the removed architectures are preserved
+under `docs/history/`; no negative result was deleted.
+
+## Earlier history
+
+Entries for the architectures above are in the Git history of this file.
