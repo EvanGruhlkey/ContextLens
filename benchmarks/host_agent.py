@@ -514,11 +514,13 @@ def run_host_agent(
         filter_session=session,
         tools=_filter_tools(policy, workspace_tools(workspace)),
     )
-    worker = solver or http_solver(model, timeout=timeout, usage=usage)
+    worker = solver
     prompt = coding_prompt(task)
     started = time.perf_counter()
     status = "completed"
     try:
+        if worker is None:
+            worker = http_solver(model, timeout=timeout, usage=usage)
         adapter.run(worker, prompt, max_turns=max_turns)
     except TurnLimitExceeded:
         status = "turn_limit"
