@@ -266,47 +266,21 @@ def _filter_tools(policy: str, tools: dict[str, HostTool]) -> dict[str, HostTool
     }
 
 
-def _messages_for_api(history: Sequence[Message]) -> list[dict[str, Any]]:
-    payload: list[dict[str, Any]] = []
-    pending_id: str | None = None
-    for index, message in enumerate(history):
-        if message.role == "system":
-            if message.content.strip():
-                payload.append({"role": "system", "content": message.content})
+def _response_tools() -> list[dict[str, Any]]:
+    converted = []
+    for schema in TOOL_SCHEMAS:
+        function = schema.get("function")
+        if not isinstance(function, dict):
             continue
-        if message.role == "user":
-            payload.append({"role": "user", "content": message.content})
-            continue
-        if message.role == "assistant" and message.tool:
-            pending_id = f"call_{index}"
-            payload.append(
-                {
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {
-                            "id": pending_id,
-                            "type": "function",
-                            "function": {
-                                "name": message.tool,
-                                "arguments": json.dumps(dict(message.arguments)),
-                            },
-                        }
-                    ],
-                }
-            )
-            continue
-        if message.role == "tool":
-            payload.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": pending_id or f"call_{index}",
-                    "content": message.content,
-                }
-            )
-            continue
-        payload.append({"role": "assistant", "content": message.content})
-    return payload
+        converted.append(
+            {
+                "type": "function",
+                "name": function["name"],
+                "description": function.get("description", ""),
+                "parameters": function.get("parameters") or {"type": "object"},
+            }
+        )
+    return converted
 
 
 def _usage_from_response(data: Mapping[str, Any]) -> dict[str, int]:
@@ -355,6 +329,43 @@ def _endpoint() -> tuple[str, str]:
     )
 
 
+def _post_json(
+    url: str, key: str, payload: dict[str, Any], timeout: int
+) -> dict[str, Any]:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload, ensure_ascii=False).encode(),
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.loads(response.read().decode())
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode(errors="replace")[:400]
+        raise AgentUnavailable(f"coding model HTTP {error.code}: {detail}") from None
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        raise AgentUnavailable("coding model request failed") from error
+    if not isinstance(data, dict):
+        raise AgentUnavailable("coding model returned invalid JSON")
+    return data
+
+
+def _parse_function_arguments(raw_args: Any) -> dict[str, Any]:
+    if isinstance(raw_args, dict):
+        return raw_args
+    if not isinstance(raw_args, str) or not raw_args.strip():
+        return {}
+    try:
+        parsed = json.loads(raw_args)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
 def http_solver(
     model: str,
     *,
@@ -362,54 +373,80 @@ def http_solver(
     usage: dict[str, int],
 ) -> Callable[[Sequence[Message]], ToolCall | Answer]:
     url, key = _endpoint()
+    state: dict[str, str | None] = {"response_id": None, "call_id": None}
+    deadline = time.perf_counter() + timeout
 
     def solver(history: Sequence[Message]) -> ToolCall | Answer:
-        request = urllib.request.Request(
-            url + "/chat/completions",
-            data=json.dumps(
+        remaining = deadline - time.perf_counter()
+        if remaining <= 1:
+            raise TimeoutError("coding model timeout")
+        last = history[-1]
+        payload: dict[str, Any] = {
+            "model": model,
+            "tools": _response_tools(),
+            "parallel_tool_calls": False,
+            "store": True,
+            "reasoning": {"effort": "low"},
+        }
+        if last.role == "tool":
+            if not state["response_id"] or not state["call_id"]:
+                raise AgentUnavailable("missing previous response for tool output")
+            payload["previous_response_id"] = state["response_id"]
+            payload["input"] = [
                 {
-                    "model": model,
-                    "messages": _messages_for_api(history),
-                    "tools": list(TOOL_SCHEMAS),
-                    "tool_choice": "auto",
-                },
-                ensure_ascii=False,
-            ).encode(),
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
+                    "type": "function_call_output",
+                    "call_id": state["call_id"],
+                    "output": last.content,
+                }
+            ]
+        else:
+            instructions = ""
+            user = ""
+            for message in history:
+                if message.role == "system" and message.content.strip():
+                    instructions = message.content
+                if message.role == "user":
+                    user = message.content
+            if instructions:
+                payload["instructions"] = instructions
+            payload["input"] = [{"role": "user", "content": user}]
+        data = _post_json(
+            url + "/responses",
+            key,
+            payload,
+            max(5, min(int(remaining), 180)),
         )
-        try:
-            with urllib.request.urlopen(request, timeout=min(timeout, 120)) as response:
-                data = json.loads(response.read().decode())
-        except urllib.error.HTTPError as error:
-            raise AgentUnavailable(f"coding model HTTP {error.code}") from None
-        except (OSError, ValueError) as error:
-            raise AgentUnavailable("coding model request failed") from error
         for field, value in _usage_from_response(data).items():
             usage[field] = usage.get(field, 0) + value
-        choices = data.get("choices")
-        if not isinstance(choices, list) or not choices:
-            raise AgentUnavailable("coding model returned no choices")
-        message = choices[0].get("message") if isinstance(choices[0], dict) else None
-        if not isinstance(message, dict):
-            raise AgentUnavailable("coding model returned an invalid message")
-        tool_calls = message.get("tool_calls")
-        if isinstance(tool_calls, list) and tool_calls:
-            first = tool_calls[0] if isinstance(tool_calls[0], dict) else {}
-            function = first.get("function") if isinstance(first, dict) else {}
-            name = function.get("name") if isinstance(function, dict) else None
-            raw_args = function.get("arguments") if isinstance(function, dict) else "{}"
-            try:
-                parsed = json.loads(raw_args or "{}")
-            except json.JSONDecodeError:
-                parsed = {}
+        response_id = data.get("id")
+        if isinstance(response_id, str) and response_id:
+            state["response_id"] = response_id
+        output = data.get("output")
+        if not isinstance(output, list):
+            raise AgentUnavailable("coding model returned no output")
+        for item in output:
+            if not isinstance(item, dict) or item.get("type") != "function_call":
+                continue
+            name = item.get("name")
+            call_id = item.get("call_id")
+            if isinstance(call_id, str) and call_id:
+                state["call_id"] = call_id
             if not isinstance(name, str) or not name:
-                return Answer(str(message.get("content") or ""))
-            return ToolCall(name, parsed if isinstance(parsed, dict) else {})
-        return Answer(str(message.get("content") or ""))
+                break
+            return ToolCall(name, _parse_function_arguments(item.get("arguments")))
+        texts: list[str] = []
+        for item in output:
+            if not isinstance(item, dict) or item.get("type") != "message":
+                continue
+            content = item.get("content")
+            if isinstance(content, str):
+                texts.append(content)
+                continue
+            if isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict) and isinstance(part.get("text"), str):
+                        texts.append(part["text"])
+        return Answer("\n".join(texts).strip() or str(data.get("status") or "done"))
 
     return solver
 
@@ -524,6 +561,8 @@ def run_host_agent(
         adapter.run(worker, prompt, max_turns=max_turns)
     except TurnLimitExceeded:
         status = "turn_limit"
+    except TimeoutError:
+        status = "timeout"
     except AgentUnavailable as error:
         status = "agent_unavailable"
         (state / "error.txt").write_text(str(error), encoding="utf-8")
