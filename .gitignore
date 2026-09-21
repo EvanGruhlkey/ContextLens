@@ -7,10 +7,8 @@ __pycache__/
 .ruff_cache/
 .venv/
 .release-smoke*/
-evals/artifacts/
-evals/runner-logs/
-evals/real-repos/
-evals/preflight-*/
+benchmarks/artifacts/
+.contextlens/
 build/
 dist/
 .env
