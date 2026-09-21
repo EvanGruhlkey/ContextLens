@@ -41,11 +41,16 @@ from contextlens.models import (
 )
 from contextlens.receipts import ReceiptStore
 
-DEFAULT_MINIMUM_TOKENS = 1_500
+DEFAULT_MINIMUM_TOKENS = 256
 DEFAULT_CHUNK_LINES = 20
 DEFAULT_KEEP_THRESHOLD = 0.5
-DEFAULT_UNCERTAIN_KEEP_PROBABILITY = 0.1
-MAX_CHUNKS = 200
+# Real Jev returns roughly 0.1-0.2 for output it considers disposable, so an
+# uncertainty floor above 0 blocks almost every drop. Opt in deliberately.
+DEFAULT_UNCERTAIN_KEEP_PROBABILITY = 0.0
+# Chunks per observation. One observation should cost one or two Jev requests:
+# a high cap multiplies requests, and one rate-limited batch fails the whole
+# observation open. The measured predecessor capped candidates at 16.
+DEFAULT_MAX_CHUNKS = 32
 MAX_LINE_CHARS = 2_000
 MIN_CHUNKS_TO_PRUNE = 3
 
@@ -153,6 +158,7 @@ class PruneConfig:
     chunk_lines: int = DEFAULT_CHUNK_LINES
     keep_threshold: float = DEFAULT_KEEP_THRESHOLD
     uncertain_keep_probability: float = DEFAULT_UNCERTAIN_KEEP_PROBABILITY
+    max_chunks: int = DEFAULT_MAX_CHUNKS
     max_state_tokens: int = DEFAULT_MAX_STATE_TOKENS
     max_request_tokens: int = DEFAULT_MAX_REQUEST_TOKENS
 
@@ -161,6 +167,8 @@ class PruneConfig:
             raise ValueError("minimum_tokens cannot be negative")
         if self.chunk_lines < 1:
             raise ValueError("chunk_lines must be positive")
+        if self.max_chunks < MIN_CHUNKS_TO_PRUNE:
+            raise ValueError(f"max_chunks must be at least {MIN_CHUNKS_TO_PRUNE}")
         if not 0 <= self.keep_threshold <= 1:
             raise ValueError("keep_threshold must be between zero and one")
         if not 0 <= self.uncertain_keep_probability <= 1:
@@ -173,6 +181,7 @@ class PruneConfig:
         return cls(
             minimum_tokens=_env_int("CONTEXTLENS_MIN_TOKENS", DEFAULT_MINIMUM_TOKENS),
             chunk_lines=_env_int("CONTEXTLENS_CHUNK_LINES", DEFAULT_CHUNK_LINES),
+            max_chunks=_env_int("CONTEXTLENS_MAX_CHUNKS", DEFAULT_MAX_CHUNKS),
             keep_threshold=_env_float(
                 "CONTEXTLENS_KEEP_THRESHOLD", DEFAULT_KEEP_THRESHOLD
             ),
@@ -317,7 +326,9 @@ class OutputPruner:
             return passthrough("binary")
         if category is OutputCategory.STRUCTURED:
             return passthrough("structured")
-        chunks = split_chunks(request.output, self.config.chunk_lines)
+        chunks = split_chunks(
+            request.output, self.config.chunk_lines, self.config.max_chunks
+        )
         if len(chunks) < MIN_CHUNKS_TO_PRUNE:
             return passthrough("few_chunks", len(chunks))
         scores: dict[str, float] = {}
@@ -443,10 +454,21 @@ class OutputPruner:
                 or protected_line(chunk.text)
                 or any(protected_line(line) for group in neighbours for line in group)
                 or score >= self.config.keep_threshold
-                or score > self.config.uncertain_keep_probability
+                or self._uncertain(score)
             ):
                 kept.add(chunk.id)
         return kept
+
+    def _uncertain(self, score: float) -> bool:
+        """Keep a chunk whose score is low but not confidently disposable.
+
+        A floor of zero disables the safeguard, which is the default: measured
+        against real Jev, disposable output scores around 0.1-0.2, so any floor
+        in that range keeps everything and pruning never happens.
+        """
+
+        floor = self.config.uncertain_keep_probability
+        return floor > 0 and score > floor
 
 
 class PruneSession:
@@ -491,6 +513,19 @@ class PruneSession:
     def recover(self, handle: str) -> str:
         return self.receipts.read(handle.strip())
 
+    def reasons(self) -> dict[str, int]:
+        """How many observations ended in each outcome, for diagnosis.
+
+        A run whose reduction is zero is otherwise indistinguishable from a run
+        where Jev kept everything, where nothing was eligible, and where the
+        gateway rate limited us.
+        """
+
+        counts: dict[str, int] = {}
+        for item in self.outcomes:
+            counts[item.reason] = counts.get(item.reason, 0) + 1
+        return dict(sorted(counts.items()))
+
     def metrics(self) -> dict[str, Any]:
         raw = sum(item.original_tokens for item in self.outcomes)
         injected = sum(item.retained_tokens for item in self.outcomes)
@@ -514,6 +549,7 @@ class PruneSession:
             ),
             "recovery_calls": self.receipts.recoveries,
             "recovered_tokens": self.receipts.recovered_tokens,
+            "prune_reasons": self.reasons(),
             **usage.to_dict(),
         }
 
@@ -581,11 +617,17 @@ def looks_binary(output: str) -> bool:
     return control > len(sample) * 0.05
 
 
-def split_chunks(output: str, chunk_lines: int) -> tuple[Chunk, ...]:
-    """Group lines into at most ``MAX_CHUNKS`` chunks, splitting long lines."""
+def split_chunks(
+    output: str, chunk_lines: int, max_chunks: int = DEFAULT_MAX_CHUNKS
+) -> tuple[Chunk, ...]:
+    """Group lines into at most ``max_chunks`` chunks, splitting long lines.
+
+    Chunks grow for a large observation rather than multiplying, so the number
+    of Jev requests per observation stays bounded.
+    """
 
     lines = _split_long_lines(output)
-    per_chunk = max(chunk_lines, -(-len(lines) // MAX_CHUNKS))
+    per_chunk = max(chunk_lines, -(-len(lines) // max(1, max_chunks)))
     chunks: list[Chunk] = []
     for start in range(0, len(lines), per_chunk):
         group = lines[start : start + per_chunk]

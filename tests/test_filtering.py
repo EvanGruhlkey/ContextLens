@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from contextlens.filtering import (
-    MAX_CHUNKS,
+    DEFAULT_MAX_CHUNKS,
     STATE_CONTEXT,
     OutputPruner,
     PruneConfig,
@@ -83,7 +83,8 @@ def test_split_chunks_covers_every_line_once() -> None:
 
 def test_split_chunks_caps_the_chunk_count() -> None:
     output = "\n".join("x" for _ in range(10_000))
-    assert len(split_chunks(output, 1)) <= MAX_CHUNKS
+    assert len(split_chunks(output, 1)) <= DEFAULT_MAX_CHUNKS
+    assert len(split_chunks(output, 1, 8)) <= 8
 
 
 def test_split_chunks_breaks_up_very_long_lines() -> None:
@@ -218,12 +219,18 @@ def test_first_and_last_chunks_always_survive(tmp_path: Path) -> None:
     assert lines[-1] in outcome.text
 
 
-def test_uncertain_scores_keep_content(tmp_path: Path) -> None:
-    outcome = pruner(tmp_path, FakeJudge(0.2)).prune(
+def test_uncertainty_floor_is_opt_in(tmp_path: Path) -> None:
+    """By default a low score drops; an explicit floor keeps it instead."""
+
+    default = pruner(tmp_path, FakeJudge(0.2)).prune(
         PruneRequest(task="t", output=noise(), tool="shell")
     )
-    assert not outcome.pruned
-    assert outcome.reason == "kept_all"
+    assert default.pruned
+    guarded = pruner(
+        tmp_path, FakeJudge(0.2), uncertain_keep_probability=0.1
+    ).prune(PruneRequest(task="t", output=noise(), tool="shell"))
+    assert not guarded.pruned
+    assert guarded.reason == "kept_all"
 
 
 def test_confident_keeps_return_the_original(tmp_path: Path) -> None:
@@ -378,6 +385,7 @@ def test_session_requires_a_task(tmp_path: Path) -> None:
         {"chunk_lines": 0},
         {"keep_threshold": 2.0},
         {"uncertain_keep_probability": -0.5},
+        {"max_chunks": 2},
         {"max_state_tokens": 0},
     ],
 )

@@ -145,6 +145,8 @@ class RunMetrics:
     final_transcript_tokens: int = 0
     recovery_calls: int = 0
     recovered_tokens: int = 0
+    prune_reasons: dict[str, int] = field(default_factory=dict)
+    compaction_reasons: dict[str, int] = field(default_factory=dict)
     usage: dict[str, int] = field(default_factory=dict)
     jev: dict[str, Any] = field(default_factory=dict)
 
@@ -172,6 +174,8 @@ class RunMetrics:
             "final_transcript_tokens": self.final_transcript_tokens,
             "recovery_calls": self.recovery_calls,
             "recovered_tokens": self.recovered_tokens,
+            "prune_reasons": dict(self.prune_reasons),
+            "compaction_reasons": dict(self.compaction_reasons),
             **{
                 key: self.usage.get(key, 0)
                 for key in (
@@ -394,6 +398,8 @@ def run_agent(
     metrics.recovery_calls = receipts.recoveries
     metrics.recovered_tokens = receipts.recovered_tokens
     metrics.usage = dict(usage)
+    if session is not None:
+        metrics.prune_reasons = session.reasons()
     metrics.jev = _jev_totals(session, metrics)
     return metrics, tuple(messages)
 
@@ -444,6 +450,9 @@ def _compact(
         task=task,
     )
     metrics.jev.setdefault("compaction", []).append(result.usage.to_dict())
+    metrics.compaction_reasons[result.reason] = (
+        metrics.compaction_reasons.get(result.reason, 0) + 1
+    )
     if not result.compacted:
         return messages
     metrics.compaction_events += 1

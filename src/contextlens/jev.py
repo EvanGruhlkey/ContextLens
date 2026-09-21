@@ -23,13 +23,20 @@ ENDPOINT = "https://ai-gateway.vercel.sh/v1/evaluate"
 MODEL = "typesafe-ai/jev"
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
-DEFAULT_MAX_STATE_TOKENS = 25_000
+# Measured against the Vercel gateway on 21 September 2026: requests with a
+# ~25,000-token state are refused with HTTP 429 "providers ... at capacity",
+# while everything at or below ~16,000 succeeds. 12,000 leaves headroom.
+DEFAULT_MAX_STATE_TOKENS = 12_000
 DEFAULT_MAX_REQUEST_TOKENS = 30_000
 REQUEST_OVERHEAD_TOKENS = 20
 
 
 class JevError(RuntimeError):
     """Sanitized provider failure; it never carries a raw response body."""
+
+
+class _Retryable(RuntimeError):
+    """A rate-limited or transient gateway failure, worth one more attempt."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,15 +168,45 @@ def gateway_options() -> dict[str, Any]:
     return options
 
 
-class JevGateway:
-    """One bounded evaluation request; credentials come only from the host."""
+RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
+DEFAULT_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 1.0
 
-    def __init__(self, *, timeout: float = 20.0) -> None:
+
+class JevGateway:
+    """One bounded evaluation request; credentials come only from the host.
+
+    A rate-limited or transient response is retried with exponential backoff.
+    Without that, one 429 in a batch makes the caller fail open and discard an
+    entire observation's decisions, which looks exactly like "Jev kept
+    everything" and is impossible to tell apart after the fact.
+    """
+
+    def __init__(
+        self, *, timeout: float = 20.0, retries: int = DEFAULT_RETRIES
+    ) -> None:
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("gateway timeout must be positive and finite")
+        if retries < 0:
+            raise ValueError("retries cannot be negative")
         self.timeout = timeout
+        self.retries = retries
 
     def evaluate(
+        self, state: Mapping[str, Any], questions: Mapping[str, Any]
+    ) -> Evaluation:
+        delay = RETRY_BACKOFF_SECONDS
+        for attempt in range(self.retries + 1):
+            try:
+                return self._evaluate_once(state, questions)
+            except _Retryable as error:
+                if attempt == self.retries:
+                    raise JevError(str(error)) from None
+                time.sleep(delay)
+                delay *= 2
+        raise JevError("Jev evaluation failed.")
+
+    def _evaluate_once(
         self, state: Mapping[str, Any], questions: Mapping[str, Any]
     ) -> Evaluation:
         key = os.environ.get("AI_GATEWAY_API_KEY", "").strip()
@@ -202,10 +239,17 @@ class JevGateway:
                 raise JevError("Jev returned an oversized response.")
             data = json.loads(raw)
         except urllib.error.HTTPError as error:
+            if error.code in RETRY_STATUSES:
+                raise _Retryable(
+                    f"Jev evaluation failed (HTTP {error.code}) after retries; "
+                    "the gateway is rate limiting or unavailable."
+                ) from None
             raise JevError(
                 f"Jev evaluation failed (HTTP {error.code}); check gateway "
                 "credentials, credits, and model availability."
             ) from None
+        except TimeoutError:
+            raise _Retryable("Jev evaluation timed out after retries.") from None
         except (OSError, ValueError):
             raise JevError("Jev evaluation failed or timed out.") from None
         return parse_evaluation(
