@@ -682,6 +682,7 @@ def analyze_coding(
 
     complete = len(pairs) == expected_pairs and len(rows) == expected_pairs * 3
     statuses = [row.get("status") for row in rows]
+    filter_rows = [row for row in rows if row.get("policy") != "baseline"]
     return {
         "conditions": conditions,
         "complete_pairs": len(pairs),
@@ -689,6 +690,13 @@ def analyze_coding(
         "complete": complete,
         "all_agent_unavailable": bool(rows)
         and all(status == "agent_unavailable" for status in statuses),
+        "filter_passthrough": bool(filter_rows)
+        and all(
+            (row.get("jev_input_tokens") or 0) == 0
+            and (row.get("tool_output_tokens_removed") or 0) == 0
+            and row.get("status") != "agent_unavailable"
+            for row in filter_rows
+        ),
         "deltas": {
             "jev_filter": {field: delta(field, "jev_filter") for field in fields},
             "contextlens": {field: delta(field, "contextlens") for field in fields},
@@ -830,6 +838,55 @@ def markdown_report(analysis: dict[str, Any]) -> str:
             "AI_GATEWAY_API_KEY). The zeros below are that blocked run, not a "
             "measured ContextLens saving or quality result.",
         ]
+    if analysis.get("filter_passthrough"):
+        lines += [
+            "",
+            "Jev did not score (`AI_GATEWAY_API_KEY` unset). Jev Filter and "
+            "ContextLens failed open to passthrough, so tool-output tokens "
+            "removed are 0. Condition totals differ because each attempt is "
+            "an independent coding-agent trajectory, not because ContextLens "
+            "filtered context.",
+        ]
+    input_absolute = input_delta["absolute"]
+    if input_absolute is None:
+        input_line = "ContextLens coding-model input change is n/a."
+    elif input_absolute < 0:
+        input_line = (
+            f"ContextLens used {comma(-input_absolute)} fewer coding-model "
+            "input tokens"
+            + (
+                f" ({input_delta['percent']:+.1f}%)."
+                if input_delta["percent"] is not None
+                else "."
+            )
+        )
+    elif input_absolute > 0:
+        input_line = (
+            f"ContextLens used {comma(input_absolute)} more coding-model "
+            "input tokens"
+            + (
+                f" ({input_delta['percent']:+.1f}%)."
+                if input_delta["percent"] is not None
+                else "."
+            )
+        )
+    else:
+        input_line = "ContextLens coding-model input tokens did not change."
+    if analysis.get("filter_passthrough"):
+        tool_line = (
+            "Injected tool-output tokens differed by "
+            f"{comma(tool_delta['absolute'])} "
+            f"(injected {comma(full['injected_tool_output_tokens'])} vs baseline "
+            f"{comma(baseline['injected_tool_output_tokens'])}); "
+            "tokens removed by filtering were 0."
+        )
+    else:
+        tool_line = (
+            "Tool-output tokens prevented from entering model context: "
+            f"{comma(-(tool_delta['absolute'] or 0))} "
+            f"(injected {comma(full['injected_tool_output_tokens'])} vs baseline "
+            f"{comma(baseline['injected_tool_output_tokens'])})."
+        )
     lines += [
         "",
         "Verified fixes: "
@@ -837,15 +894,7 @@ def markdown_report(analysis: dict[str, Any]) -> str:
         f"Jev Filter {comma(jev['passed'])}/{comma(jev['attempts'])}, "
         f"ContextLens {comma(full['passed'])}/{comma(full['attempts'])}.",
         "",
-        (
-            f"ContextLens saved {comma(-(input_delta['absolute'] or 0))} coding-model "
-            f"input tokens"
-            + (
-                f" ({input_delta['percent']:+.1f}%)."
-                if input_delta["percent"] is not None
-                else "."
-            )
-        ),
+        input_line,
         (
             f"Uncached coding-model input changed by "
             f"{comma(uncached_delta['absolute'])}"
@@ -855,12 +904,7 @@ def markdown_report(analysis: dict[str, Any]) -> str:
                 else "."
             )
         ),
-        (
-            f"Tool-output tokens prevented from entering model context: "
-            f"{comma(-(tool_delta['absolute'] or 0))} "
-            f"(injected {comma(full['injected_tool_output_tokens'])} vs baseline "
-            f"{comma(baseline['injected_tool_output_tokens'])})."
-        ),
+        tool_line,
         f"Agent turns {turns_text}.",
         (
             f"Recoveries: {comma(full['recovery_calls'])} calls restoring "
@@ -877,6 +921,11 @@ def markdown_report(analysis: dict[str, Any]) -> str:
         lines.append(
             "Do not treat these zeros as evidence that ContextLens preserved "
             "fixes or reduced frontier-model context."
+        )
+    if analysis.get("filter_passthrough"):
+        lines.append(
+            "Do not treat these trajectory deltas as ContextLens filter "
+            "savings or as a measured quality regression from filtering."
         )
     return "\n".join(lines) + "\n"
 
